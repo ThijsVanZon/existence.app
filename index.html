@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline</title>
+  <style>
+    .timeline {
+      display: flex;
+      justify-content: space-around;
+      margin: 20px;
+    }
+
+    .decade {
+      text-align: center;
+      position: relative;
+    }
+
+    .main-decade, .sub-decade {
+      display: block;
+      padding: 10px;
+      transition: color 0.3s, font-size 0.3s;
+    }
+
+    .main-decade {
+      font-size: 2em;
+      color: black;
+    }
+
+    .sub-decade {
+      font-size: 1em;
+      color: grey;
+    }
+
+    .decade:hover .main-decade,
+    .decade:hover .sub-decade {
+      color: blue;
+    }
+
+    .decade:hover .main-decade {
+      font-size: 2.5em;
+    }
+
+    .decade:hover .sub-decade {
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div class="timeline">
+    <div class="decade" id="decade-2000">
+      <span class="sub-decade" id="sub-decade-1995">1995</span>
+      <span class="main-decade" id="main-decade-2000">2000</span>
+      <span class="sub-decade" id="sub-decade-2005">2005</span>
+    </div>
+    <div class="decade" id="decade-2010">
+      <span class="main-decade" id="main-decade-2010">2010</span>
+      <span class="sub-decade" id="sub-decade-2015">2015</span>
+    </div>
+    <div class="decade" id="decade-2020">
+      <span class="main-decade" id="main-decade-2020">2020</span>
+      <span class="sub-decade" id="sub-decade-2025">2025</span>
+    </div>
+    <div class="decade" id="decade-2030">
+      <span class="main-decade" id="main-decade-2030">2030</span>
+      <span class="sub-decade" id="sub-decade-2035">2035</span>
+    </div>
+    <div class="decade" id="decade-2040">
+      <span class="main-decade" id="main-decade-2040">2040</span>
+      <span class="sub-decade" id="sub-decade-2045">2045</span>
+    </div>
+    <div class="decade" id="decade-2050">
+      <span class="main-decade" id="main-decade-2050">2050</span>
+      <span class="sub-decade" id="sub-decade-2055">2055</span>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.main-decade').forEach(mainDecade => {
+      mainDecade.addEventListener('mouseenter', () => {
+        const mainDecadeValue = parseInt(mainDecade.id.split('-')[2]);
+        const subDecades = [mainDecadeValue - 5, mainDecadeValue + 5];
+
+        // Highlight the main decade
+        mainDecade.style.color = 'blue';
+        mainDecade.style.fontSize = '2.5em';
+
+        // Highlight the sub-decades
+        subDecades.forEach(sub => {
+          const subDecadeElement = document.getElementById(`sub-decade-${sub}`);
+          if (subDecadeElement) {
+            subDecadeElement.style.color = 'blue';
+            subDecadeElement.style.fontSize = '1.2em';
+          }
+        });
+      });
+
+      mainDecade.addEventListener('mouseleave', () => {
+        const mainDecadeValue = parseInt(mainDecade.id.split('-')[2]);
+        const subDecades = [mainDecadeValue - 5, mainDecadeValue + 5];
+
+        // Revert the main decade
+        mainDecade.style.color = 'black';
+        mainDecade.style.fontSize = '2em';
+
+        // Revert the sub-decades
+        subDecades.forEach(sub => {
+          const subDecadeElement = document.getElementById(`sub-decade-${sub}`);
+          if (subDecadeElement) {
+            subDecadeElement.style.color = 'grey';
+            subDecadeElement.style.fontSize = '1em';
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
