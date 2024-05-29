@@ -4,47 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timeline</title>
-  <style>
-    .timeline {
-      display: flex;
-      justify-content: space-around;
-      margin: 20px;
-    }
-
-    .decade {
-      text-align: center;
-      position: relative;
-    }
-
-    .main-decade, .sub-decade {
-      display: block;
-      padding: 10px;
-      transition: color 0.3s, font-size 0.3s;
-    }
-
-    .main-decade {
-      font-size: 2em;
-      color: black;
-    }
-
-    .sub-decade {
-      font-size: 1em;
-      color: grey;
-    }
-
-    .decade:hover .main-decade,
-    .decade:hover .sub-decade {
-      color: blue;
-    }
-
-    .decade:hover .main-decade {
-      font-size: 2.5em;
-    }
-
-    .decade:hover .sub-decade {
-      font-size: 1.2em;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="timeline">
@@ -75,44 +35,6 @@
     </div>
   </div>
 
-  <script>
-    document.querySelectorAll('.main-decade').forEach(mainDecade => {
-      mainDecade.addEventListener('mouseenter', () => {
-        const mainDecadeValue = parseInt(mainDecade.id.split('-')[2]);
-        const subDecades = [mainDecadeValue - 5, mainDecadeValue + 5];
-
-        // Highlight the main decade
-        mainDecade.style.color = 'blue';
-        mainDecade.style.fontSize = '2.5em';
-
-        // Highlight the sub-decades
-        subDecades.forEach(sub => {
-          const subDecadeElement = document.getElementById(`sub-decade-${sub}`);
-          if (subDecadeElement) {
-            subDecadeElement.style.color = 'blue';
-            subDecadeElement.style.fontSize = '1.2em';
-          }
-        });
-      });
-
-      mainDecade.addEventListener('mouseleave', () => {
-        const mainDecadeValue = parseInt(mainDecade.id.split('-')[2]);
-        const subDecades = [mainDecadeValue - 5, mainDecadeValue + 5];
-
-        // Revert the main decade
-        mainDecade.style.color = 'black';
-        mainDecade.style.fontSize = '2em';
-
-        // Revert the sub-decades
-        subDecades.forEach(sub => {
-          const subDecadeElement = document.getElementById(`sub-decade-${sub}`);
-          if (subDecadeElement) {
-            subDecadeElement.style.color = 'grey';
-            subDecadeElement.style.fontSize = '1em';
-          }
-        });
-      });
-    });
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
