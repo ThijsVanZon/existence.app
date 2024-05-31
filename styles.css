@@ -44,63 +44,70 @@ body {
 .highlight .sub-decade {
   font-size: 1.2em;
 }
+
 body {
-    font-family: Arial, sans-serif;
-  }
-  
-  .timeline {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    margin: 20px;
-  }
-  
-  .main-decade-container,
-  .sub-decade-container {
-    text-align: center;
-    position: relative;
-  }
-  
-  .main-decade,
-  .sub-decade {
-    display: block;
-    padding: 10px;
-    transition: color 0.3s, font-size 0.3s;
-  }
-  
-  .main-decade {
-    font-size: 2em;
-    color: black;
-  }
-  
-  .sub-decade {
-    font-size: 1em;
-    color: grey;
-  }
-  
-  .highlight .main-decade,
-  .highlight .sub-decade {
-    color: blue;
-  }
-  
-  .highlight .main-decade {
-    font-size: 2.5em;
-  }
-  
-  .highlight .sub-decade {
-    font-size: 1.2em;
-  }
+  font-family: Arial, sans-serif;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  margin: 20px;
+}
+
+.main-decade-container,
+.sub-decade-container {
+  text-align: center;
+  position: relative;
+}
+
+.main-decade,
+.sub-decade {
+  display: block;
+  padding: 10px;
+  transition: color 0.3s, font-size 0.3s;
+}
+
+.main-decade {
+  font-size: 2em;
+  color: black;
+}
+
+.sub-decade {
+  font-size: 1em;
+  color: grey;
+}
+
+.highlight .main-decade,
+.highlight .sub-decade {
+  color: blue;
+}
+
+.highlight .main-decade {
+  font-size: 2.5em;
+}
+
+.highlight .sub-decade {
+  font-size: 1.2em;
+}
 
 a {
-    text-decoration: none;
+  text-decoration: none;
+}
+
+.videos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
 }
 
 .playlists {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px; /* Adds space between the iframes */
-  }
-  
-  iframe {
-    flex: 1;
-  }
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+iframe {
+  flex: 1;
+}
