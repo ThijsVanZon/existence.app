@@ -25,6 +25,32 @@
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 
+  <button onclick="startScraping()">Scrape Jobs</button>
+  <div id="results"></div>
+
+  <script>
+    function startScraping() {
+      fetch('/scrape')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          let resultsDiv = document.getElementById('results');
+          resultsDiv.innerHTML = '';
+          data.forEach(job => {
+            resultsDiv.innerHTML += `<p>Title: ${job.title}, Company: ${job.company}, Location: ${job.location}, Link: <a href="${job.link}" target="_blank">Job Link</a></p>`;
+          });
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // Handle the error here
+        });
+    }
+  </script>
+
 </body>
 
 </html>
