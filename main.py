@@ -67,8 +67,8 @@ def read_form():
         try:
             # Convert the comic_id to an integer
             comic_id = int(comic_id)
-            # Check if the comic_id is in the range 1 to 2877
-            if not 1 <= comic_id <= 2877:
+            # Check if the comic_id is in the range 1 to 2940
+            if not 1 <= comic_id <= 2940:
                 # If not, assign value "True" to variable invalid_id and raise a ValueError
                 invalid_id = "True"
                 raise ValueError(
@@ -80,12 +80,12 @@ def read_form():
             # If an invalid or out-of-range comid_id was given, raise a ValueError that is printed in the console, assign value "True" to variable invalid_id and generate a random comic_id
             print("Invalid input detected for comic_id")
             invalid_id = "True"
-            comic_id = random.randint(1, 2877)
+            comic_id = random.randint(1, 2940)
     else:
         # If no input was given for comic_id, print that in the console, assign value "True" to invalid_id and generate a random comic_id
         print("No input detected for comic_id")
         invalid_id = "True"
-        comic_id = random.randint(1, 2877)
+        comic_id = random.randint(1, 2940)
     # Rendering of the following webpage is handled by the show_comic function, so send the comic_id to that function
     # The user is immediately redirected to the comic/comic_id url via the /comic url, so the /comic url never displays a webpage
     return redirect(url_for('show_comic', comic_id=comic_id))
