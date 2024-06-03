@@ -6,6 +6,7 @@ from scrapy_career.career_spiders.spiders.career_spiders import CareerSpiderInde
 import scrapy
 import requests
 import random
+import threading
 
 # Create an instance of the Flask class, which represents the Flask application
 app = Flask(__name__)
@@ -34,7 +35,11 @@ def decade_2010():
 
 @app.route('/enlightenment')
 def decade_2020():
-    return render_template('2020.html')
+    global scraped_items
+    error = None
+    if not scraped_items:
+        error = "No jobs found or an error occurred."
+    return render_template('2020.html', jobs=scraped_items, error=error)
 
 @app.route('/synergy')
 def decade_2030():
@@ -110,15 +115,17 @@ def scrape():
     dispatcher.connect(crawler_results, signal=scrapy.signals.item_passed)
 
     runner = CrawlerRunner()
-    
+
     @defer.inlineCallbacks
     def crawl():
         yield runner.crawl(CareerSpiderIndeed)
         yield runner.crawl(CareerSpiderLinkedIn)
-        reactor.stop()
-    
-    crawl()
-    reactor.run()
+
+    # Ensure the reactor is running
+    if not reactor.running:
+        threading.Thread(target=lambda: reactor.run(installSignalHandlers=False)).start()
+    else:
+        reactor.callFromThread(lambda: defer.ensureDeferred(crawl()))
 
     return jsonify(scraped_items)
 

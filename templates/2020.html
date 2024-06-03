@@ -25,8 +25,33 @@
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 
+  <br><br>
+
+  <h1>Scraped Jobs</h1>
+
   <button onclick="startScraping()">Scrape Jobs</button>
-  <div id="results"></div>
+
+  <br><br>
+
+  <!-- Display the scraped data if it exists -->
+  {% if jobs %}
+  <div id="results">
+    {% for job in jobs %}
+    <p>Title: {{ job.title }}, Company: {{ job.company }}, Location: {{ job.location }}, Link: <a href="{{ job.link }}" target="_blank">Job Link</a></p>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div id="error">
+    <p>No jobs found.</p>
+  </div>
+  {% endif %}
+
+  <!-- Display the error message if an error occurred -->
+  {% if error %}
+  <div id="error">
+    <p>An error occurred while scraping jobs: {{ error }}</p>
+  </div>
+  {% endif %}
 
   <script>
     function startScraping() {
@@ -43,10 +68,14 @@
           data.forEach(job => {
             resultsDiv.innerHTML += `<p>Title: ${job.title}, Company: ${job.company}, Location: ${job.location}, Link: <a href="${job.link}" target="_blank">Job Link</a></p>`;
           });
+          let errorDiv = document.getElementById('error');
+          errorDiv.style.display = 'none';
         })
         .catch(error => {
-          console.error('Error:', error);
-          // Handle the error here
+          console.error('An error occurred while scraping jobs:', error.message);
+          let errorDiv = document.getElementById('error');
+          errorDiv.textContent = 'An error occurred while scraping jobs: ' + error.message;
+          errorDiv.style.display = 'block';
         });
     }
   </script>
