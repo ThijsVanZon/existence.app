@@ -1,5 +1,6 @@
 import scrapy
 
+
 class CareerSpiderIndeed(scrapy.Spider):
     name = 'career_spider_indeed'
     start_urls = ['https://www.indeed.com/jobs?q=developer&l=']
@@ -10,8 +11,10 @@ class CareerSpiderIndeed(scrapy.Spider):
                 'title': job.css('a.jobtitle::text').get(),
                 'company': job.css('span.company::text').get(),
                 'location': job.css('div.location::text').get(),
-                'link': job.css('a.jobtitle::attr(href)').get()
+                'link':
+                response.urljoin(job.css('a.jobtitle::attr(href)').get())
             }
+
 
 class CareerSpiderLinkedIn(scrapy.Spider):
     name = 'career_spider_linkedin'
@@ -22,6 +25,8 @@ class CareerSpiderLinkedIn(scrapy.Spider):
             yield {
                 'title': job.css('h3.result-card__title::text').get(),
                 'company': job.css('h4.result-card__subtitle::text').get(),
-                'location': job.css('span.job-result-card__location::text').get(),
-                'link': job.css('a.result-card__full-card-link::attr(href)').get()
+                'location':
+                job.css('span.job-result-card__location::text').get(),
+                'link':
+                job.css('a.result-card__full-card-link::attr(href)').get()
             }

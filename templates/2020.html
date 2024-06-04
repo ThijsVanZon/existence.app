@@ -33,25 +33,9 @@
 
   <br><br>
 
-  <!-- Display the scraped data if it exists -->
-  {% if jobs %}
-  <div id="results">
-    {% for job in jobs %}
-    <p>Title: {{ job.title }}, Company: {{ job.company }}, Location: {{ job.location }}, Link: <a href="{{ job.link }}" target="_blank">Job Link</a></p>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div id="error">
-    <p>No jobs found.</p>
-  </div>
-  {% endif %}
-
-  <!-- Display the error message if an error occurred -->
-  {% if error %}
-  <div id="error">
-    <p>An error occurred while scraping jobs: {{ error }}</p>
-  </div>
-  {% endif %}
+  <!-- Placeholder divs for scraped job results and errors -->
+  <div id="results"></div>
+  <div id="error" style="display: none;"></div>
 
   <script>
     function startScraping() {
