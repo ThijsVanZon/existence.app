@@ -80,18 +80,35 @@
       const resultsDiv = document.getElementById('results');
       const errorDiv = document.getElementById('error');
       const status = document.getElementById('status');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 70000);
 
       resultsDiv.innerHTML = '';
       errorDiv.style.display = 'none';
       status.textContent = 'Scraping jobs... this may take a moment.';
 
-      fetch('/scrape')
-        .then(response => {
+      fetch('/scrape', { signal: controller.signal })
+        .then(async response => {
+          const contentType = (response.headers.get('content-type') || '').toLowerCase();
+          const isJson = contentType.includes('application/json');
+
           if (!response.ok) {
-            return response.json().then(payload => {
-              throw new Error(payload.error || 'Network response was not ok');
-            });
+            if (isJson) {
+              const payload = await response.json();
+              throw new Error(payload.error || `HTTP ${response.status}`);
+            }
+
+            const bodyText = await response.text();
+            const compact = bodyText.replace(/\s+/g, ' ').trim().slice(0, 180);
+            throw new Error(`HTTP ${response.status}: non-JSON response (${compact || 'empty body'})`);
           }
+
+          if (!isJson) {
+            const bodyText = await response.text();
+            const compact = bodyText.replace(/\s+/g, ' ').trim().slice(0, 180);
+            throw new Error(`Expected JSON but received non-JSON response (${compact || 'empty body'})`);
+          }
+
           return response.json();
         })
         .then(data => {
@@ -107,8 +124,14 @@
         })
         .catch(error => {
           status.textContent = '';
-          errorDiv.textContent = `An error occurred while scraping jobs: ${error.message}`;
+          const isTimeout = error.name === 'AbortError';
+          errorDiv.textContent = isTimeout
+            ? 'Scrape timed out after 70 seconds. Try again or narrow your search.'
+            : `An error occurred while scraping jobs: ${error.message}`;
           errorDiv.style.display = 'block';
+        })
+        .finally(() => {
+          clearTimeout(timeoutId);
         });
     }
   </script>

@@ -20,7 +20,7 @@ app = Flask(__name__)
 latest_comic_cache = {"id": None, "fetched_at": 0}
 CACHE_TTL_SECONDS = 3600
 DEFAULT_COMIC_ID = 3000
-SCRAPE_TIMEOUT_SECONDS = 60
+SCRAPE_TIMEOUT_SECONDS = 45
 
 SLEEVE_KEYWORDS = {
     "A": [
@@ -291,8 +291,11 @@ def run_scrapers(result_queue):
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/123.0.0.0 Safari/537.36"
             ),
-            "DOWNLOAD_TIMEOUT": 20,
-            "CLOSESPIDER_TIMEOUT": 25,
+            "DOWNLOAD_TIMEOUT": 12,
+            "RETRY_ENABLED": False,
+            "CONCURRENT_REQUESTS": 8,
+            "CLOSESPIDER_PAGECOUNT": 40,
+            "CLOSESPIDER_TIMEOUT": 20,
         }
     )
     dispatcher.connect(crawler_results, signal=signals.item_scraped)

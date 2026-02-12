@@ -2,27 +2,25 @@ import scrapy
 from urllib.parse import quote_plus
 
 
-SEARCH_TERMS = [
-    "av technician",
-    "field service engineer",
-    "solutions engineer",
-    "creative producer",
-    "community manager",
+QUERIES = [
+    ("av technician", "Netherlands"),
+    ("field service engineer", "Netherlands"),
+    ("solutions engineer", "Remote"),
+    ("creative producer", "Europe"),
+    ("community manager events", "Europe"),
+    ("technical operations", "Netherlands"),
 ]
-
-LOCATIONS = ["Netherlands", "Europe", "Remote"]
 
 
 class CareerSpiderIndeed(scrapy.Spider):
     name = "career_spider_indeed"
 
     def start_requests(self):
-        for term in SEARCH_TERMS:
-            for location in LOCATIONS:
-                term_q = quote_plus(term)
-                loc_q = quote_plus(location)
-                url = f"https://www.indeed.com/jobs?q={term_q}&l={loc_q}"
-                yield scrapy.Request(url=url, callback=self.parse)
+        for term, location in QUERIES:
+            term_q = quote_plus(term)
+            loc_q = quote_plus(location)
+            url = f"https://www.indeed.com/jobs?q={term_q}&l={loc_q}"
+            yield scrapy.Request(url=url, callback=self.parse)
 
     def parse(self, response):
         job_cards = response.css(
@@ -73,15 +71,14 @@ class CareerSpiderLinkedIn(scrapy.Spider):
     name = "career_spider_linkedin"
 
     def start_requests(self):
-        for term in SEARCH_TERMS:
-            for location in LOCATIONS:
-                term_q = quote_plus(term)
-                loc_q = quote_plus(location)
-                url = (
-                    "https://www.linkedin.com/jobs/search/"
-                    f"?keywords={term_q}&location={loc_q}"
-                )
-                yield scrapy.Request(url=url, callback=self.parse)
+        for term, location in QUERIES:
+            term_q = quote_plus(term)
+            loc_q = quote_plus(location)
+            url = (
+                "https://www.linkedin.com/jobs/search/"
+                f"?keywords={term_q}&location={loc_q}"
+            )
+            yield scrapy.Request(url=url, callback=self.parse)
 
     def parse(self, response):
         job_cards = response.css("div.base-card, li.base-card, div.result-card")
