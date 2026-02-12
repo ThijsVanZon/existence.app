@@ -1,33 +1,36 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
-  <!-- Display notification message if invalid input was given for user_id -->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XKCD Comic</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+
   {% if invalid_id %}
-    <h2>The comic you requested doesn't exist, so you received a random one instead.</h2>
-  {% else %}
+  <h2>The comic you requested doesn't exist, so you received a random one instead.</h2>
   {% endif %}
 
-  <!-- Display input form from index.html with slightly altered h1 -->
-  <h1>Which XKCD Comic would you like to see next?</h1>
-  <body>
-    <form action="{{url_for('read_form')}}" method="post">
-      <label for="comic_id">Comic ID:</label>
-      <input type="text" name="comic_id" placeholder="Enter XKCD Comic ID">
-      <br><br>
-      <input type="submit" value="Submit">
-    </form>
-  </body>
+  <h2>Which XKCD Comic would you like to see next?</h2>
+  <form action="{{ url_for('read_form') }}" method="post">
+    <label for="comic_id">Comic ID:</label>
+    <input id="comic_id" type="text" name="comic_id" placeholder="Enter XKCD Comic ID">
+    <br><br>
+    <input type="submit" value="Submit">
+  </form>
 
-  <br><br>
-
-  <!-- Display data from the JSON file -->
-  <h1>XKCD Comic {{ data.num }}</h1>
-  <h2>{{ data.title }}</h2>
-  <body>
-    <img src="{{ data.img }}" alt="{{ data.alt }}">
-    <p>{{ data.alt }}</p>
-  </body>
-
-  <br><br>
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% elif data %}
+  <h2>XKCD Comic {{ data.num }}</h2>
+  <h3>{{ data.title }}</h3>
+  <img src="{{ data.img }}" alt="{{ data.alt }}" loading="lazy">
+  <p>{{ data.alt }}</p>
+  {% endif %}
+</body>
 
 </html>

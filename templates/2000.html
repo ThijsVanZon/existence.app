@@ -9,9 +9,8 @@
 </head>
 
 <body>
-
-  <a href="index.html"><h1>Timeline</h1></a>
-  <div class="timeline">
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <nav class="timeline" aria-label="genesis timeline">
     <div class="sub-decade-container" id="decade-1995">
       <span class="sub-decade" id="sub-decade-1995">1995</span>
     </div>
@@ -21,10 +20,9 @@
     <div class="sub-decade-container" id="decade-2005">
       <span class="sub-decade" id="sub-decade-2005">2005</span>
     </div>
-  </div>
+  </nav>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-
 </body>
 
 </html>

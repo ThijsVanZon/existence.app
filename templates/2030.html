@@ -9,11 +9,8 @@
 </head>
 
 <body>
-
-  <a href="index.html">
-    <h1>Timeline</h1>
-  </a>
-  <div class="timeline">
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <nav class="timeline" aria-label="synergy timeline">
     <div class="sub-decade-container" id="decade-2025">
       <span class="sub-decade" id="sub-decade-2025">2025</span>
     </div>
@@ -23,11 +20,15 @@
     <div class="sub-decade-container" id="decade-2035">
       <span class="sub-decade" id="sub-decade-2035">2035</span>
     </div>
-  </div>
-
-  <br><br>
+  </nav>
 
   <div class="videos">
+    <iframe style="border-radius:12px"
+      src="https://open.spotify.com/embed/track/72H4SoqYjuTf4gxm3pRKjT?utm_source=generator" width="100%"
+      height="352" frameBorder="0" allowfullscreen=""
+      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+      loading="lazy">
+    </iframe>
     <iframe style="border-radius:12px" width="100%" height="352"
       src="https://www.youtube.com/embed/3qaxklDCOLQ?si=uZFy5ujy31QndJ0K" title="YouTube video player" frameborder="0"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -44,8 +45,6 @@
       referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
     </iframe>
   </div>
-
-  <br><br>
 
   <div class="playlists">
     <iframe style="border-radius:12px"
@@ -101,7 +100,6 @@
   </div>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-
 </body>
 
 </html>

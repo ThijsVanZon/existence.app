@@ -9,62 +9,65 @@
 </head>
 
 <body>
+  <header>
+    <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  </header>
 
-  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
-  <div class="timeline">
-    <div class="sub-decade-container" id="decade-1995">
-      <span class="sub-decade" id="sub-decade-1995">1995</span>
-    </div>
-    <div class="main-decade-container" id="decade-2000">
-      <a href="{{ url_for('decade_2000') }}"><span class="main-decade" id="main-decade-2000">GENESIS</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2005">
-      <span class="sub-decade" id="sub-decade-2005">2005</span>
-    </div>
-    <div class="main-decade-container" id="decade-2010">
-      <a href="{{ url_for('decade_2010') }}"><span class="main-decade" id="main-decade-2010">ASPIRATION</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2015">
-      <span class="sub-decade" id="sub-decade-2015">2015</span>
-    </div>
-    <div class="main-decade-container" id="decade-2020">
-      <a href="{{ url_for('decade_2020') }}"><span class="main-decade" id="main-decade-2020">ENLIGHTENMENT</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2025">
-      <span class="sub-decade" id="sub-decade-2025">2025</span>
-    </div>
-    <div class="main-decade-container" id="decade-2030">
-      <a href="{{ url_for('decade_2030') }}"><span class="main-decade" id="main-decade-2030">SYNERGY</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2035">
-      <span class="sub-decade" id="sub-decade-2035">2035</span>
-    </div>
-    <div class="main-decade-container" id="decade-2040">
-      <a href="{{ url_for('decade_2040') }}"><span class="main-decade" id="main-decade-2040">IMMERSION</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2045">
-      <span class="sub-decade" id="sub-decade-2045">2045</span>
-    </div>
-    <div class="main-decade-container" id="decade-2050">
-      <a href="{{ url_for('decade_2050') }}"><span class="main-decade" id="main-decade-2050">TRANSCENDENCE</span></a>
-    </div>
-    <div class="sub-decade-container" id="decade-2055">
-      <span class="sub-decade" id="sub-decade-2055">2055</span>
-    </div>
-  </div>
+  <main>
+    <nav class="timeline" aria-label="existence timeline">
+      <div class="sub-decade-container" id="decade-1995">
+        <span class="sub-decade" id="sub-decade-1995">1995</span>
+      </div>
+      <div class="main-decade-container" id="decade-2000">
+        <a href="{{ url_for('decade_2000') }}" aria-label="Go to Genesis"><span class="main-decade" id="main-decade-2000">GENESIS</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2005">
+        <span class="sub-decade" id="sub-decade-2005">2005</span>
+      </div>
+      <div class="main-decade-container" id="decade-2010">
+        <a href="{{ url_for('decade_2010') }}" aria-label="Go to Aspiration"><span class="main-decade" id="main-decade-2010">ASPIRATION</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2015">
+        <span class="sub-decade" id="sub-decade-2015">2015</span>
+      </div>
+      <div class="main-decade-container" id="decade-2020">
+        <a href="{{ url_for('decade_2020') }}" aria-label="Go to Enlightenment"><span class="main-decade" id="main-decade-2020">ENLIGHTENMENT</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2025">
+        <span class="sub-decade" id="sub-decade-2025">2025</span>
+      </div>
+      <div class="main-decade-container" id="decade-2030">
+        <a href="{{ url_for('decade_2030') }}" aria-label="Go to Synergy"><span class="main-decade" id="main-decade-2030">SYNERGY</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2035">
+        <span class="sub-decade" id="sub-decade-2035">2035</span>
+      </div>
+      <div class="main-decade-container" id="decade-2040">
+        <a href="{{ url_for('decade_2040') }}" aria-label="Go to Immersion"><span class="main-decade" id="main-decade-2040">IMMERSION</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2045">
+        <span class="sub-decade" id="sub-decade-2045">2045</span>
+      </div>
+      <div class="main-decade-container" id="decade-2050">
+        <a href="{{ url_for('decade_2050') }}" aria-label="Go to Transcendence"><span class="main-decade" id="main-decade-2050">TRANSCENDENCE</span></a>
+      </div>
+      <div class="sub-decade-container" id="decade-2055">
+        <span class="sub-decade" id="sub-decade-2055">2055</span>
+      </div>
+    </nav>
 
-  <br><br>
-
-  <h1>Hello, which XKCD Comic would you like to see?</h1>
-   <form action="{{url_for('read_form')}}" method="post">
-     <label for="comic_id">Comic ID:</label>
-     <input type="text" name="comic_id" placeholder="Enter XKCD Comic ID">
-     <br><br>
-     <input type="submit" value="Submit">
-   </form>
+    <section class="xkcd-form">
+      <h2>Hello, which XKCD Comic would you like to see?</h2>
+      <form action="{{ url_for('read_form') }}" method="post">
+        <label for="comic_id">Comic ID:</label>
+        <input id="comic_id" type="text" name="comic_id" placeholder="Enter XKCD Comic ID">
+        <br><br>
+        <input type="submit" value="Submit">
+      </form>
+    </section>
+  </main>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-
 </body>
 
 </html>

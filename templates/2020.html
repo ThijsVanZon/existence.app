@@ -9,9 +9,8 @@
 </head>
 
 <body>
-
-  <a href="index.html"><h1>Timeline</h1></a>
-  <div class="timeline">
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <nav class="timeline" aria-label="enlightenment timeline">
     <div class="sub-decade-container" id="decade-2015">
       <span class="sub-decade" id="sub-decade-2015">2015</span>
     </div>
@@ -21,49 +20,75 @@
     <div class="sub-decade-container" id="decade-2025">
       <span class="sub-decade" id="sub-decade-2025">2025</span>
     </div>
-  </div>
+  </nav>
 
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
-
-  <br><br>
-
-  <h1>Scraped Jobs</h1>
-
+  <h2>Scraped Jobs</h2>
   <button onclick="startScraping()">Scrape Jobs</button>
 
-  <br><br>
-
-  <!-- Placeholder divs for scraped job results and errors -->
+  <p id="status" aria-live="polite"></p>
   <div id="results"></div>
-  <div id="error" style="display: none;"></div>
+  <div id="error" class="error" style="display: none;"></div>
 
   <script>
+    function createJobResult(job) {
+      const row = document.createElement('p');
+
+      const title = document.createElement('strong');
+      title.textContent = `Title: ${job.title || 'Unknown'}`;
+      row.appendChild(title);
+
+      const details = document.createElement('span');
+      details.textContent = `, Company: ${job.company || 'Unknown'}, Location: ${job.location || 'Unknown'}, Link: `;
+      row.appendChild(details);
+
+      const link = document.createElement('a');
+      link.href = job.link || '#';
+      link.textContent = 'Job Link';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      row.appendChild(link);
+
+      return row;
+    }
+
     function startScraping() {
+      const resultsDiv = document.getElementById('results');
+      const errorDiv = document.getElementById('error');
+      const status = document.getElementById('status');
+
+      resultsDiv.innerHTML = '';
+      errorDiv.style.display = 'none';
+      status.textContent = 'Scraping jobs... this may take a moment.';
+
       fetch('/scrape')
         .then(response => {
           if (!response.ok) {
-            throw new Error('Network response was not ok');
+            return response.json().then(payload => {
+              throw new Error(payload.error || 'Network response was not ok');
+            });
           }
           return response.json();
         })
         .then(data => {
-          let resultsDiv = document.getElementById('results');
-          resultsDiv.innerHTML = '';
+          status.textContent = `Finished scraping. Found ${data.length} jobs.`;
+          if (!data.length) {
+            resultsDiv.textContent = 'No jobs were found this time. Try again later.';
+            return;
+          }
+
           data.forEach(job => {
-            resultsDiv.innerHTML += `<p>Title: ${job.title}, Company: ${job.company}, Location: ${job.location}, Link: <a href="${job.link}" target="_blank">Job Link</a></p>`;
+            resultsDiv.appendChild(createJobResult(job));
           });
-          let errorDiv = document.getElementById('error');
-          errorDiv.style.display = 'none';
         })
         .catch(error => {
-          console.error('An error occurred while scraping jobs:', error.message);
-          let errorDiv = document.getElementById('error');
-          errorDiv.textContent = 'An error occurred while scraping jobs: ' + error.message;
+          status.textContent = '';
+          errorDiv.textContent = `An error occurred while scraping jobs: ${error.message}`;
           errorDiv.style.display = 'block';
         });
     }
   </script>
 
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 
 </html>
