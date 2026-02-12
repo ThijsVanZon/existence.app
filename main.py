@@ -96,6 +96,20 @@ JOB_SOURCE_NAME = "Remotive"
 JOB_SOURCE_API = "https://remotive.com/api/remote-jobs"
 ARBEITNOW_SOURCE_NAME = "Arbeitnow"
 ARBEITNOW_API = "https://www.arbeitnow.com/api/job-board-api"
+NETHERLANDS_KEYWORDS = [
+    "netherlands", "nederland", "dutch", "holland",
+    "amsterdam", "rotterdam", "utrecht", "the hague", "den haag",
+    "eindhoven", "groningen", "tilburg", "breda", "arnhem",
+    "nijmegen", "haarlem", "leiden", "maastricht", "zwolle",
+    "almere", "delft", "s-hertogenbosch", "den bosch", "enschede",
+]
+OTHER_COUNTRY_KEYWORDS = [
+    "germany", "deutschland", "berlin", "munich", "frankfurt",
+    "belgium", "france", "spain", "portugal", "italy",
+    "poland", "romania", "hungary", "czech republic",
+    "united kingdom", "uk", "england", "ireland", "sweden",
+    "norway", "denmark", "finland", "austria", "switzerland",
+]
 
 
 def _normalize_text(*parts):
@@ -126,6 +140,19 @@ def _clean_value(value, fallback="Unknown"):
 def _strip_html(value):
     text = re.sub(r"<[^>]+>", " ", str(value or ""))
     return _clean_value(text, "")
+
+
+def _is_netherlands_job(*parts):
+    text = _normalize_text(*parts)
+    has_nl_signal = any(keyword in text for keyword in NETHERLANDS_KEYWORDS)
+    has_other_country_signal = any(keyword in text for keyword in OTHER_COUNTRY_KEYWORDS)
+    has_nl_code = bool(re.search(r"\b(nl|netherlands)\b", text))
+
+    if has_nl_signal or has_nl_code:
+        return True
+    if has_other_country_signal:
+        return False
+    return False
 
 
 def _score_sleeve(text, title_text, sleeve_keywords):
@@ -294,17 +321,21 @@ def fetch_jobs_for_sleeve(sleeve_key):
         link = _clean_value(job.get("url"), "")
         if not link or link in seen:
             continue
-        seen.add(link)
         location = _clean_value(job.get("candidate_required_location"), "")
         category = _clean_value(job.get("category"), "")
         tags = " ".join(job.get("tags") or [])
+        title = _clean_value(job.get("title"), "")
+        description = _strip_html(job.get("description"))
+        if not _is_netherlands_job(title, location, category, tags, description):
+            continue
+        seen.add(link)
         items.append(
             {
-                "title": _clean_value(job.get("title"), ""),
+                "title": title,
                 "company": _clean_value(job.get("company_name"), ""),
                 "location": location,
                 "link": link,
-                "snippet": _strip_html(job.get("description")),
+                "snippet": description,
                 "salary": _clean_value(job.get("salary"), "Not listed"),
                 "date": _clean_value(job.get("publication_date"), "Unknown"),
                 "work_mode_hint": _normalize_text(job.get("job_type"), location, category, tags),
@@ -318,7 +349,6 @@ def fetch_jobs_for_sleeve(sleeve_key):
         link = _clean_value(job.get("url"), "")
         if not link or link in seen:
             continue
-        seen.add(link)
         created_at = job.get("created_at")
         if isinstance(created_at, int):
             date_value = time.strftime("%Y-%m-%d", time.gmtime(created_at))
@@ -328,13 +358,18 @@ def fetch_jobs_for_sleeve(sleeve_key):
         job_types = " ".join(job.get("job_types") or [])
         location = _clean_value(job.get("location"), "")
         remote_flag = "remote" if job.get("remote") else ""
+        title = _clean_value(job.get("title"), "")
+        description = _strip_html(job.get("description"))
+        if not _is_netherlands_job(title, location, tags, job_types, description):
+            continue
+        seen.add(link)
         items.append(
             {
-                "title": _clean_value(job.get("title"), ""),
+                "title": title,
                 "company": _clean_value(job.get("company_name"), ""),
                 "location": location,
                 "link": link,
-                "snippet": _strip_html(job.get("description")),
+                "snippet": description,
                 "salary": "Not listed",
                 "date": date_value,
                 "work_mode_hint": _normalize_text(remote_flag, location, tags, job_types),
