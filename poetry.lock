@@ -2,7 +2,7 @@
 
 [[package]]
 name = "aiohttp"
-version = "3.9.5"
+version = "3.10.11"
 description = "Async http client/server framework (asyncio)"
 optional = false
 python-versions = ">=3.8"
@@ -230,7 +230,7 @@ files = [
 
 [[package]]
 name = "certifi"
-version = "2024.6.2"
+version = "2025.1.31"
 description = "Python package for providing Mozilla's CA Bundle."
 optional = false
 python-versions = ">=3.6"
@@ -440,7 +440,7 @@ files = [
 
 [[package]]
 name = "cryptography"
-version = "42.0.7"
+version = "44.0.1"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
 optional = false
 python-versions = ">=3.7"
@@ -574,7 +574,7 @@ typing = ["typing-extensions (>=4.8)"]
 
 [[package]]
 name = "flask"
-version = "2.3.3"
+version = "3.1.0"
 description = "A simple framework for building complex web applications."
 optional = false
 python-versions = ">=3.8"
@@ -810,7 +810,7 @@ testing = ["Django", "attrs", "colorama", "docopt", "pytest (<7.0.0)"]
 
 [[package]]
 name = "jinja2"
-version = "3.1.4"
+version = "3.1.6"
 description = "A very fast and expressive template engine."
 optional = false
 python-versions = ">=3.7"
@@ -1250,7 +1250,7 @@ files = [
 
 [[package]]
 name = "protobuf"
-version = "4.25.3"
+version = "5.29.5"
 description = ""
 optional = false
 python-versions = ">=3.8"
@@ -1527,7 +1527,7 @@ Werkzeug = ">=2,<4"
 
 [[package]]
 name = "requests"
-version = "2.32.3"
+version = "2.32.4"
 description = "Python HTTP for Humans."
 optional = false
 python-versions = ">=3.8"
@@ -1581,7 +1581,7 @@ release = ["pip-tools (>=6.12.1)", "toml (>=0.10.2)", "twine (>=4.0.2)"]
 
 [[package]]
 name = "scrapy"
-version = "2.11.2"
+version = "2.13.3"
 description = "A high-level Web Crawling and Web Scraping framework"
 optional = false
 python-versions = ">=3.8"
@@ -1637,7 +1637,7 @@ tests = ["coverage[toml] (>=5.0.2)", "pytest"]
 
 [[package]]
 name = "setuptools"
-version = "70.0.0"
+version = "78.1.1"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 optional = false
 python-versions = ">=3.8"
@@ -1706,7 +1706,7 @@ files = [
 
 [[package]]
 name = "twisted"
-version = "21.7.0"
+version = "24.11.0"
 description = "An asynchronous networking framework written in Python"
 optional = false
 python-versions = ">=3.6.7"
@@ -1868,7 +1868,7 @@ files = [
 
 [[package]]
 name = "urllib3"
-version = "2.2.1"
+version = "2.5.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.8"
@@ -1896,7 +1896,7 @@ files = [
 
 [[package]]
 name = "werkzeug"
-version = "3.0.3"
+version = "3.0.6"
 description = "The comprehensive WSGI web application library."
 optional = false
 python-versions = ">=3.8"

@@ -63,7 +63,8 @@ SLEEVE_KEYWORDS = {
         "no-code", "low-code", "rpa", "integrations", "zapier", "make",
         "make.com", "airtable", "notion", "data operations",
         "analytics ops", "tooling", "systems", "jira", "confluence",
-        "business analyst", "implementation",
+        "business analyst", "implementation", "procurement", "buyer",
+        "purchasing", "strategic sourcing", "inkoper",
     ],
     "C": [
         "experience design", "experience designer", "immersive",
@@ -73,6 +74,9 @@ SLEEVE_KEYWORDS = {
         "event producer", "festival production", "exhibition", "museum",
         "theme park creative", "scenography", "interactive installation",
         "creative technologist", "installation", "storytelling",
+        "projectmanager", "projectmanager events", "projectmanager audio",
+        "event project manager", "audio project manager",
+        "nachtcultuur", "programmeur", "programmering",
     ],
     "D": [
         "field service engineer", "service engineer", "service technician",
@@ -81,7 +85,8 @@ SLEEVE_KEYWORDS = {
         "technical support", "onsite support", "on-site support",
         "systems engineer", "service coordinator", "werkvoorbereider",
         "technical operations", "field engineer", "site visits",
-        "klantlocatie",
+        "klantlocatie", "servicecoordinator", "service coördinator",
+        "reizend", "reiziger", "internationaal reizen",
     ],
     "E": [
         "partnership manager", "partnerships manager", "community manager",
@@ -89,16 +94,18 @@ SLEEVE_KEYWORDS = {
         "alliances", "bookings", "promoter", "venue relations",
         "program coordinator", "talent relations", "artist relations",
         "sponsorship", "festival partnerships", "event manager",
+        "eventmanager", "internationale events", "nightlife",
+        "nachtcultuur", "cultural programmer", "program curator",
     ],
 }
 VALID_SLEEVES = set(SLEEVE_KEYWORDS.keys())
 
 SLEEVE_CONTEXT_KEYWORDS = {
     "A": ["festival", "venue", "theater", "concert", "tour", "touring", "events", "livemuziek"],
-    "B": ["saas", "platform", "b2b software", "integrations", "tooling", "enablement"],
-    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation"],
-    "D": ["site visits", "travel", "op locatie", "klantlocatie", "field"],
-    "E": ["music", "festival", "nightlife", "culture", "events", "creator economy"],
+    "B": ["saas", "platform", "b2b software", "integrations", "tooling", "enablement", "supply chain", "procurement"],
+    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation", "projectdelivery", "audio"],
+    "D": ["site visits", "travel", "op locatie", "klantlocatie", "field", "storingen", "service"],
+    "E": ["music", "festival", "nightlife", "culture", "events", "creator economy", "programmeur", "curation"],
 }
 
 SLEEVE_B_TOOLING_KEYWORDS = [
@@ -172,10 +179,10 @@ SYNERGY_KEYWORDS = [
 
 SLEEVE_SEARCH_TERMS = {
     "A": ["av technician", "event technician", "stagehand", "live sound"],
-    "B": ["solutions engineer", "workflow automation", "product operations", "ai workflow"],
-    "C": ["creative producer", "experience design", "event producer", "immersive installation"],
-    "D": ["field service engineer", "technical operations", "commissioning engineer", "service technician"],
-    "E": ["community manager events", "partnerships manager", "event marketing", "festival partnerships"],
+    "B": ["solutions engineer", "workflow automation", "product operations", "inkoper"],
+    "C": ["creative producer", "projectmanager events", "projectmanager audio", "experience design"],
+    "D": ["servicecoordinator", "field service engineer", "commissioning engineer", "reizend technicus"],
+    "E": ["event manager", "programmer nightlife", "nachtcultuur programmeur", "festival partnerships"],
 }
 
 NETHERLANDS_KEYWORDS = [
