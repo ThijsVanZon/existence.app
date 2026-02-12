@@ -50,12 +50,34 @@ def fetch_comic(comic_id):
 def run_scrapers(result_queue):
     """Run Scrapy spiders in a child process so each request has a fresh reactor."""
     items = []
+    crawl_errors = []
+    spider_stats = {}
 
     def crawler_results(item, response, spider):
         items.append(dict(item))
 
-    process = CrawlerProcess(settings={"LOG_ENABLED": False})
+    def crawler_error(failure, response, spider):
+        crawl_errors.append(f"{spider.name}: {failure.getErrorMessage()}")
+
+    def spider_closed(spider, reason):
+        spider_stats[spider.name] = {"reason": reason}
+
+    process = CrawlerProcess(
+        settings={
+            "LOG_ENABLED": False,
+            "ROBOTSTXT_OBEY": False,
+            "USER_AGENT": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/123.0.0.0 Safari/537.36"
+            ),
+            "DOWNLOAD_TIMEOUT": 20,
+            "CLOSESPIDER_TIMEOUT": 25,
+        }
+    )
     dispatcher.connect(crawler_results, signal=signals.item_scraped)
+    dispatcher.connect(crawler_error, signal=signals.spider_error)
+    dispatcher.connect(spider_closed, signal=signals.spider_closed)
 
     try:
         process.crawl(CareerSpiderIndeed)
@@ -66,8 +88,16 @@ def run_scrapers(result_queue):
         return
     finally:
         dispatcher.disconnect(crawler_results, signal=signals.item_scraped)
+        dispatcher.disconnect(crawler_error, signal=signals.spider_error)
+        dispatcher.disconnect(spider_closed, signal=signals.spider_closed)
 
-    result_queue.put({"items": items})
+    result_queue.put(
+        {
+            "items": items,
+            "errors": crawl_errors,
+            "spider_stats": spider_stats,
+        }
+    )
 
 
 # Root URL maps to this function
@@ -176,7 +206,27 @@ def scrape():
     if "error" in result:
         return jsonify(result), 500
 
-    return jsonify(result.get("items", []))
+    items = result.get("items", [])
+    if items:
+        return jsonify(items)
+
+    details = []
+    crawl_errors = result.get("errors", [])
+    if crawl_errors:
+        details.extend(crawl_errors)
+
+    spider_stats = result.get("spider_stats", {})
+    if spider_stats:
+        reasons = ", ".join(
+            f"{name} ({data.get('reason', 'unknown')})"
+            for name, data in spider_stats.items()
+        )
+        details.append(f"Spider close reasons: {reasons}")
+
+    message = "Scraping completed but returned no jobs."
+    if details:
+        message = f"{message} " + " | ".join(details)
+    return jsonify({"error": message}), 502
 
 
 # Main driver function
