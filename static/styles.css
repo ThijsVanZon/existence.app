@@ -65,6 +65,22 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.job-card {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #ffffff;
+}
+
+.job-card h3 {
+  margin: 0 0 8px;
+}
+
+.job-card p {
+  margin: 6px 0;
+}
+
 .videos,
 .playlists {
   display: grid;

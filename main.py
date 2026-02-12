@@ -11,6 +11,7 @@ from queue import Empty
 import random
 import requests
 import time
+import re
 
 # Create an instance of the Flask class
 app = Flask(__name__)
@@ -20,6 +21,225 @@ latest_comic_cache = {"id": None, "fetched_at": 0}
 CACHE_TTL_SECONDS = 3600
 DEFAULT_COMIC_ID = 3000
 SCRAPE_TIMEOUT_SECONDS = 60
+
+SLEEVE_KEYWORDS = {
+    "A": [
+        "av technician", "audiovisueel", "event technician", "showtechniek",
+        "stage crew", "foh", "boh", "monitor engineer", "lighting technician",
+        "licht", "geluid", "rigging", "led wall", "projection", "stagehand",
+        "production technician", "venue technician", "theater techniek",
+        "festival production",
+    ],
+    "B": [
+        "operations", "revenue ops", "product ops", "customer success",
+        "solutions engineer", "implementation consultant", "enablement",
+        "workflow", "automation", "ai tooling", "process improvement",
+        "no-code", "low-code", "integrations", "zapier", "make",
+        "data operations", "analytics ops", "tooling", "systems",
+        "jira", "confluence",
+    ],
+    "C": [
+        "experience design", "immersive", "creative producer",
+        "content producer", "production coordinator", "project manager",
+        "brand experience", "activation", "exhibition", "museum",
+        "theme park creative", "scenography", "interactive installation",
+    ],
+    "D": [
+        "field service engineer", "service engineer", "commissioning",
+        "installation", "maintenance", "troubleshooting",
+        "technical support", "onsite support", "systems engineer",
+        "service coordinator", "werkvoorbereider", "technical operations",
+    ],
+    "E": [
+        "partnership manager", "community manager", "event marketer",
+        "brand partnerships", "alliances", "bookings", "promoter",
+        "venue relations", "program coordinator", "talent relations",
+        "account manager", "festival partnerships",
+    ],
+}
+
+NEGATIVE_KEYWORDS = [
+    "cashier", "kassa", "vakkenvuller", "orderpicker", "telemarketing",
+    "callcenter", "geen reizen mogelijk", "alleen op locatie in nl",
+    "must live within", "commission only", "commission-only",
+]
+
+FOREIGN_KEYWORDS = [
+    "remote", "work from abroad", "work-from-abroad", "anywhere",
+    "hybrid", "international travel", "travel", "reizen", "site visit",
+    "site visits", "on-site at client", "onsite at client", "rotatie",
+    "rotation", "workation", "global", "international", "emea",
+]
+
+TRAVEL_ROLETYPE_KEYWORDS = [
+    "field service", "service engineer", "technical operations",
+    "production technician", "event technician", "venue technician",
+    "installation", "commissioning", "festival", "touring",
+]
+
+GROWTH_KEYWORDS = [
+    "owner", "ownership", "lead", "coordinate", "coordinator",
+    "project", "delivery", "stakeholder", "process improvement",
+    "automation", "technical depth", "implementation", "client impact",
+    "verantwoordelijkheid", "coordinatie",
+]
+
+SYNERGY_KEYWORDS = [
+    "event", "festival", "live", "music", "creative", "experience",
+    "immersive", "av", "audio", "video", "automation", "ai", "workflow",
+    "tooling", "systems", "production",
+]
+
+
+def _normalize_text(*parts):
+    return " ".join(str(part or "") for part in parts).lower()
+
+
+def _find_hits(text, keywords):
+    return [keyword for keyword in keywords if keyword in text]
+
+
+def _infer_work_mode(text):
+    if "remote" in text:
+        return "Remote"
+    if "hybrid" in text:
+        return "Hybrid"
+    if "on-site" in text or "onsite" in text:
+        return "On-site"
+    return "Unknown"
+
+
+def _clean_value(value, fallback="Unknown"):
+    if value is None:
+        return fallback
+    cleaned = re.sub(r"\s+", " ", str(value)).strip()
+    return cleaned if cleaned else fallback
+
+
+def _score_sleeve(text, title_text, sleeve_keywords):
+    text_hits = _find_hits(text, sleeve_keywords)
+    title_hits = _find_hits(title_text, sleeve_keywords)
+    raw_hits = len(set(text_hits)) + len(set(title_hits))
+
+    if raw_hits >= 4:
+        return 5
+    if raw_hits == 3:
+        return 4
+    if raw_hits == 2:
+        return 3
+    if raw_hits == 1:
+        return 2
+    return 0
+
+
+def rank_and_filter_jobs(items):
+    ranked = []
+    seen = set()
+
+    for job in items:
+        title = _clean_value(job.get("title"), "")
+        company = _clean_value(job.get("company"), "")
+        location = _clean_value(job.get("location"), "")
+        snippet = _clean_value(job.get("snippet"), "")
+        link = _clean_value(job.get("link"), "")
+        source = _clean_value(job.get("source"), "unknown")
+        date_posted = _clean_value(job.get("date"), "Unknown")
+        salary = _clean_value(job.get("salary"), "Not listed")
+
+        dedupe_key = (
+            title.lower(),
+            company.lower(),
+            link.lower() if link and link != "Unknown" else "",
+        )
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+
+        full_text = _normalize_text(
+            title, company, location, snippet,
+            job.get("work_mode_hint"), job.get("employment_type"), source,
+        )
+        title_text = _normalize_text(title)
+
+        if _find_hits(full_text, NEGATIVE_KEYWORDS):
+            continue
+
+        sleeve_scores = {
+            sleeve: _score_sleeve(full_text, title_text, keywords)
+            for sleeve, keywords in SLEEVE_KEYWORDS.items()
+        }
+        primary_sleeve, primary_score = max(
+            sleeve_scores.items(),
+            key=lambda pair: pair[1],
+        )
+
+        foreign_hits = _find_hits(full_text, FOREIGN_KEYWORDS)
+        explicit_foreign = bool(foreign_hits)
+        inferred_foreign = bool(_find_hits(full_text, TRAVEL_ROLETYPE_KEYWORDS))
+        has_foreign_mechanism = explicit_foreign or inferred_foreign
+
+        growth_hits = _find_hits(full_text, GROWTH_KEYWORDS)
+        has_growth = bool(growth_hits)
+        has_strong_sleeve = primary_score >= 4
+
+        if not has_foreign_mechanism:
+            continue
+        if sum([has_foreign_mechanism, has_strong_sleeve, has_growth]) < 2:
+            continue
+        if primary_score <= 2:
+            continue
+
+        synergy_hits = _find_hits(full_text, SYNERGY_KEYWORDS)
+        synergy_score = min(5, len(set(synergy_hits)))
+        ownership_score = min(5, len(set(growth_hits)))
+        abroad_clarity = 2 if explicit_foreign else 1
+
+        work_mode = _infer_work_mode(full_text)
+        if explicit_foreign:
+            foreign_label = "Explicit remote/hybrid/travel signal"
+        else:
+            foreign_label = "Inferred travel-compatible role type"
+
+        why = [
+            f"Sleeve {primary_sleeve} fit {primary_score}/5 "
+            f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} C:{sleeve_scores['C']} "
+            f"D:{sleeve_scores['D']} E:{sleeve_scores['E']})",
+            f"Buitenland-mechanisme: {foreign_label}",
+            (
+                "Groeipad: ownership/impact signal gevonden"
+                if has_growth
+                else "Groeipad: beperkte ownership signalen"
+            ),
+        ]
+
+        ranked.append(
+            {
+                "title": title or "Unknown role",
+                "company": company or "Unknown company",
+                "location": location or "Unknown",
+                "work_mode": work_mode,
+                "foreign_mechanism": foreign_label,
+                "sleeve_scores": sleeve_scores,
+                "primary_sleeve": primary_sleeve,
+                "primary_sleeve_score": primary_score,
+                "why_relevant": why,
+                "link": link,
+                "date": date_posted,
+                "salary": salary,
+                "source": source,
+                "_rank": (
+                    abroad_clarity,
+                    primary_score,
+                    synergy_score,
+                    ownership_score,
+                ),
+            }
+        )
+
+    ranked.sort(key=lambda job: job["_rank"], reverse=True)
+    for job in ranked:
+        job.pop("_rank", None)
+    return ranked
 
 
 def fetch_latest_comic_id():
@@ -207,8 +427,9 @@ def scrape():
         return jsonify(result), 500
 
     items = result.get("items", [])
-    if items:
-        return jsonify(items)
+    ranked_items = rank_and_filter_jobs(items)
+    if ranked_items:
+        return jsonify(ranked_items)
 
     details = []
     crawl_errors = result.get("errors", [])
@@ -223,7 +444,10 @@ def scrape():
         )
         details.append(f"Spider close reasons: {reasons}")
 
-    message = "Scraping completed but returned no jobs."
+    message = (
+        "Scraping completed but no jobs passed your filter "
+        "(foreign mechanism + sleeve fit + growth)."
+    )
     if details:
         message = f"{message} " + " | ".join(details)
     return jsonify({"error": message}), 502

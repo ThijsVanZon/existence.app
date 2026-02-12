@@ -1,9 +1,28 @@
 import scrapy
+from urllib.parse import quote_plus
+
+
+SEARCH_TERMS = [
+    "av technician",
+    "field service engineer",
+    "solutions engineer",
+    "creative producer",
+    "community manager",
+]
+
+LOCATIONS = ["Netherlands", "Europe", "Remote"]
 
 
 class CareerSpiderIndeed(scrapy.Spider):
-    name = 'career_spider_indeed'
-    start_urls = ['https://www.indeed.com/jobs?q=software+developer&l=United+States']
+    name = "career_spider_indeed"
+
+    def start_requests(self):
+        for term in SEARCH_TERMS:
+            for location in LOCATIONS:
+                term_q = quote_plus(term)
+                loc_q = quote_plus(location)
+                url = f"https://www.indeed.com/jobs?q={term_q}&l={loc_q}"
+                yield scrapy.Request(url=url, callback=self.parse)
 
     def parse(self, response):
         job_cards = response.css(
@@ -15,48 +34,88 @@ class CareerSpiderIndeed(scrapy.Spider):
                 or job.css("a.jcs-JobTitle::attr(href)").get()
                 or job.css("a[data-jk]::attr(href)").get()
             )
+            snippet = (
+                job.css("div.job-snippet::text").getall()
+                or job.css("[data-testid='text-snippet']::text").getall()
+            )
+            work_mode_hint = " ".join(snippet) if snippet else ""
+
             yield {
-                'title': (
+                "title": (
                     job.css("h2.jobTitle span::text").get()
                     or job.css("a.jcs-JobTitle span::text").get()
                     or job.css("h2 a::text").get()
                 ),
-                'company': (
+                "company": (
                     job.css("[data-testid='company-name']::text").get()
                     or job.css("span.companyName::text").get()
                 ),
-                'location': (
+                "location": (
                     job.css("[data-testid='text-location']::text").get()
                     or job.css("div.companyLocation::text").get()
                 ),
-                'link': response.urljoin(link) if link else None,
+                "link": response.urljoin(link) if link else None,
+                "snippet": " ".join(part.strip() for part in snippet if part.strip()),
+                "salary": (
+                    job.css("span.salary-snippet::text").get()
+                    or job.css("[data-testid='attribute_snippet_testid']::text").get()
+                ),
+                "date": (
+                    job.css("span.date::text").get()
+                    or job.css("span[data-testid='myJobsStateDate']::text").get()
+                ),
+                "work_mode_hint": work_mode_hint,
+                "source": "Indeed",
             }
 
 
 class CareerSpiderLinkedIn(scrapy.Spider):
-    name = 'career_spider_linkedin'
-    start_urls = [
-        'https://www.linkedin.com/jobs/search/?keywords=software%20developer&location=United%20States'
-    ]
+    name = "career_spider_linkedin"
+
+    def start_requests(self):
+        for term in SEARCH_TERMS:
+            for location in LOCATIONS:
+                term_q = quote_plus(term)
+                loc_q = quote_plus(location)
+                url = (
+                    "https://www.linkedin.com/jobs/search/"
+                    f"?keywords={term_q}&location={loc_q}"
+                )
+                yield scrapy.Request(url=url, callback=self.parse)
 
     def parse(self, response):
         job_cards = response.css("div.base-card, li.base-card, div.result-card")
         for job in job_cards:
+            metadata = " ".join(
+                job.css(
+                    "div.base-search-card__metadata *::text, "
+                    "ul.job-search-card__job-insight *::text, "
+                    "div.result-card__meta *::text"
+                ).getall()
+            )
             yield {
-                'title': (
+                "title": (
                     job.css("h3.base-search-card__title::text").get()
                     or job.css("h3.result-card__title::text").get()
                 ),
-                'company': (
+                "company": (
                     job.css("h4.base-search-card__subtitle::text").get()
                     or job.css("h4.result-card__subtitle::text").get()
                 ),
-                'location': (
+                "location": (
                     job.css("span.job-search-card__location::text").get()
                     or job.css("span.job-result-card__location::text").get()
                 ),
-                'link': (
+                "link": (
                     job.css("a.base-card__full-link::attr(href)").get()
                     or job.css("a.result-card__full-card-link::attr(href)").get()
                 ),
+                "snippet": metadata,
+                "salary": None,
+                "date": (
+                    job.css("time::attr(datetime)").get()
+                    or job.css("time::text").get()
+                ),
+                "work_mode_hint": metadata,
+                "source": "LinkedIn",
             }

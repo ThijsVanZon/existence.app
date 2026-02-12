@@ -31,24 +31,49 @@
 
   <script>
     function createJobResult(job) {
-      const row = document.createElement('p');
+      const card = document.createElement('article');
+      card.className = 'job-card';
 
-      const title = document.createElement('strong');
-      title.textContent = `Title: ${job.title || 'Unknown'}`;
-      row.appendChild(title);
+      const title = document.createElement('h3');
+      title.textContent = `${job.title || 'Unknown'} - ${job.company || 'Unknown'}`;
+      card.appendChild(title);
 
-      const details = document.createElement('span');
-      details.textContent = `, Company: ${job.company || 'Unknown'}, Location: ${job.location || 'Unknown'}, Link: `;
-      row.appendChild(details);
+      const meta = document.createElement('p');
+      meta.textContent = `Location: ${job.location || 'Unknown'} | Mode: ${job.work_mode || 'Unknown'} | Primary sleeve: ${job.primary_sleeve || '-'} (${job.primary_sleeve_score || 0}/5)`;
+      card.appendChild(meta);
+
+      const mechanism = document.createElement('p');
+      mechanism.textContent = `Buitenland-mechanisme: ${job.foreign_mechanism || 'Unknown'}`;
+      card.appendChild(mechanism);
+
+      if (job.sleeve_scores) {
+        const sleeves = document.createElement('p');
+        sleeves.textContent = `Sleeves A-E: A:${job.sleeve_scores.A ?? 0} B:${job.sleeve_scores.B ?? 0} C:${job.sleeve_scores.C ?? 0} D:${job.sleeve_scores.D ?? 0} E:${job.sleeve_scores.E ?? 0}`;
+        card.appendChild(sleeves);
+      }
+
+      if (Array.isArray(job.why_relevant) && job.why_relevant.length) {
+        const whyList = document.createElement('ul');
+        job.why_relevant.slice(0, 3).forEach(reason => {
+          const li = document.createElement('li');
+          li.textContent = reason;
+          whyList.appendChild(li);
+        });
+        card.appendChild(whyList);
+      }
+
+      const aux = document.createElement('p');
+      aux.textContent = `Date: ${job.date || 'Unknown'} | Salary: ${job.salary || 'Not listed'} | Source: ${job.source || 'Unknown'}`;
+      card.appendChild(aux);
 
       const link = document.createElement('a');
       link.href = job.link || '#';
-      link.textContent = 'Job Link';
+      link.textContent = 'Open vacature';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      row.appendChild(link);
+      card.appendChild(link);
 
-      return row;
+      return card;
     }
 
     function startScraping() {
@@ -70,7 +95,7 @@
           return response.json();
         })
         .then(data => {
-          status.textContent = `Finished scraping. Found ${data.length} jobs.`;
+          status.textContent = `Finished scraping. Found ${data.length} relevant jobs.`;
           if (!data.length) {
             resultsDiv.textContent = 'No jobs were found this time. Try again later.';
             return;
