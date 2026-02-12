@@ -103,6 +103,46 @@ a:focus-visible {
   margin-top: 0;
 }
 
+.scrape-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.scrape-controls select {
+  width: 100%;
+  max-width: 280px;
+}
+
+.control-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-title {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.source-toggle-group {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.source-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-reason {
+  color: #6b7280;
+  font-size: 0.9em;
+}
+
 .videos,
 .playlists {
   display: grid;

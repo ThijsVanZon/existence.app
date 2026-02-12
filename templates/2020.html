@@ -23,11 +23,12 @@
   </nav>
 
   <h2>Scraped Jobs Per Sleeve</h2>
-  <p>Click a sleeve to scrape only that direction. You can run multiple sleeves one after another.</p>
+  <p>Click a sleeve to scrape only that direction. Use the toggles per sleeve to choose sources, location scope, strictness, and speed.</p>
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
       <h3>Sleeve A - Live Entertainment / AV Ops</h3>
+      <div id="controls-A" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="error-A" class="error" style="display: none;"></div>
@@ -36,6 +37,7 @@
 
     <section class="sleeve-panel" id="panel-B">
       <h3>Sleeve B - Tech/Software + AI Workflow</h3>
+      <div id="controls-B" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="error-B" class="error" style="display: none;"></div>
@@ -44,6 +46,7 @@
 
     <section class="sleeve-panel" id="panel-C">
       <h3>Sleeve C - Experience / Creative Production</h3>
+      <div id="controls-C" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="error-C" class="error" style="display: none;"></div>
@@ -52,6 +55,7 @@
 
     <section class="sleeve-panel" id="panel-D">
       <h3>Sleeve D - Field Service / Technical Ops</h3>
+      <div id="controls-D" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="error-D" class="error" style="display: none;"></div>
@@ -60,6 +64,7 @@
 
     <section class="sleeve-panel" id="panel-E">
       <h3>Sleeve E - Community / Partnerships / Event Marketing</h3>
+      <div id="controls-E" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="error-E" class="error" style="display: none;"></div>
@@ -68,6 +73,27 @@
   </div>
 
   <script>
+    const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
+    const sleeveControllers = {};
+    const fallbackConfig = {
+      sources: [
+        { id: 'remotive', label: 'Remotive', available: true, default_enabled: true, reason: '' },
+        { id: 'remoteok', label: 'RemoteOK', available: true, default_enabled: true, reason: '' },
+        { id: 'themuse', label: 'The Muse', available: true, default_enabled: true, reason: '' },
+        { id: 'arbeitnow', label: 'Arbeitnow', available: true, default_enabled: false, reason: '' },
+        { id: 'adzuna', label: 'Adzuna (API key)', available: false, default_enabled: false, reason: '' },
+        { id: 'serpapi', label: 'SerpApi Google Jobs (API key)', available: false, default_enabled: false, reason: '' },
+      ],
+      defaults: {
+        sources: ['remotive', 'remoteok', 'themuse'],
+        location_mode: 'nl_eu',
+        strict: true,
+        max_results: 20,
+        use_cache: true
+      }
+    };
+    let scrapeConfig = fallbackConfig;
+
     function createJobResult(job) {
       const card = document.createElement('article');
       card.className = 'job-card';
@@ -101,7 +127,10 @@
       }
 
       const aux = document.createElement('p');
-      aux.textContent = `Date: ${job.date || 'Unknown'} | Salary: ${job.salary || 'Not listed'} | Source: ${job.source || 'Unknown'}`;
+      const distanceText = typeof job.distance_km === 'number'
+        ? ` | Approx. distance: ${job.distance_km} km from Den Bosch`
+        : '';
+      aux.textContent = `Date: ${job.date || 'Unknown'} | Salary: ${job.salary || 'Not listed'} | Source: ${job.source || 'Unknown'}${distanceText}`;
       card.appendChild(aux);
 
       const link = document.createElement('a');
@@ -114,7 +143,99 @@
       return card;
     }
 
-    const sleeveControllers = {};
+    async function loadScrapeConfig() {
+      try {
+        const response = await fetch('/scrape-config');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        if (payload && Array.isArray(payload.sources) && payload.defaults) {
+          scrapeConfig = payload;
+        }
+      } catch (error) {
+        scrapeConfig = fallbackConfig;
+      } finally {
+        renderControls();
+      }
+    }
+
+    function renderControls() {
+      sleeveKeys.forEach(sleeveKey => {
+        const controls = document.getElementById(`controls-${sleeveKey}`);
+        if (!controls) return;
+
+        controls.innerHTML = `
+          <label for="location-${sleeveKey}">Location scope</label>
+          <select id="location-${sleeveKey}">
+            <option value="nl_only">Netherlands only</option>
+            <option value="nl_eu">Netherlands + EU remote</option>
+            <option value="global">Global</option>
+          </select>
+          <label class="control-inline">
+            <input type="checkbox" id="strict-${sleeveKey}" checked>
+            Strict sleeve matching
+          </label>
+          <label class="control-inline">
+            <input type="checkbox" id="cache-${sleeveKey}" checked>
+            Use cache (faster)
+          </label>
+          <label for="max-${sleeveKey}">Max results</label>
+          <select id="max-${sleeveKey}">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+          </select>
+          <div class="source-title">Sources</div>
+          <div id="sources-${sleeveKey}" class="source-toggle-group"></div>
+        `;
+
+        const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
+        const locationSelect = document.getElementById(`location-${sleeveKey}`);
+        locationSelect.value = defaults.location_mode || 'nl_eu';
+        document.getElementById(`strict-${sleeveKey}`).checked = defaults.strict !== false;
+        document.getElementById(`cache-${sleeveKey}`).checked = defaults.use_cache !== false;
+        document.getElementById(`max-${sleeveKey}`).value = String(defaults.max_results || 20);
+
+        const sourceWrap = document.getElementById(`sources-${sleeveKey}`);
+        (scrapeConfig.sources || []).forEach(source => {
+          const label = document.createElement('label');
+          label.className = 'source-option';
+          const checkedByDefault = (defaults.sources || []).includes(source.id);
+          label.innerHTML = `
+            <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault && source.available ? 'checked' : ''} ${source.available ? '' : 'disabled'}>
+            ${source.label}
+          `;
+          if (!source.available && source.reason) {
+            const reason = document.createElement('span');
+            reason.className = 'source-reason';
+            reason.textContent = ` (${source.reason})`;
+            label.appendChild(reason);
+          }
+          sourceWrap.appendChild(label);
+        });
+      });
+    }
+
+    function selectedSourcesForSleeve(sleeveKey) {
+      const wrap = document.getElementById(`sources-${sleeveKey}`);
+      if (!wrap) return [];
+      return Array.from(wrap.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(input => input.getAttribute('data-source-id'))
+        .filter(Boolean);
+    }
+
+    function buildScrapeUrl(sleeveKey) {
+      const params = new URLSearchParams();
+      params.set('sleeve', sleeveKey);
+      params.set('location_mode', document.getElementById(`location-${sleeveKey}`).value);
+      params.set('strict', document.getElementById(`strict-${sleeveKey}`).checked ? '1' : '0');
+      params.set('max_results', document.getElementById(`max-${sleeveKey}`).value);
+      params.set('refresh', document.getElementById(`cache-${sleeveKey}`).checked ? '0' : '1');
+      params.set('sources', selectedSourcesForSleeve(sleeveKey).join(','));
+      return `/scrape?${params.toString()}`;
+    }
 
     function startScraping(sleeveKey) {
       const resultsDiv = document.getElementById(`results-${sleeveKey}`);
@@ -132,9 +253,9 @@
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
       errorDiv.style.display = 'none';
-      status.textContent = `Scraping sleeve ${sleeveKey}... this may take a moment.`;
+      status.textContent = `Scraping sleeve ${sleeveKey} with selected filters...`;
 
-      fetch(`/scrape?sleeve=${encodeURIComponent(sleeveKey)}`, { signal: controller.signal })
+      fetch(buildScrapeUrl(sleeveKey), { signal: controller.signal })
         .then(async response => {
           const contentType = (response.headers.get('content-type') || '').toLowerCase();
           const isJson = contentType.includes('application/json');
@@ -156,12 +277,17 @@
             throw new Error(`Expected JSON but received non-JSON response (${compact || 'empty body'})`);
           }
 
-          return response.json();
+          const payload = await response.json();
+          return {
+            jobs: Array.isArray(payload) ? payload : [],
+            sourcesUsed: response.headers.get('x-sources-used') || 'none'
+          };
         })
-        .then(data => {
-          status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs.`;
+        .then(payload => {
+          const data = payload.jobs;
+          status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
           if (!data.length) {
-            resultsDiv.textContent = 'No jobs were found this time. Try again later.';
+            resultsDiv.textContent = 'No jobs matched this sleeve with the current toggles.';
             return;
           }
 
@@ -185,6 +311,8 @@
           }
         });
     }
+
+    document.addEventListener('DOMContentLoaded', loadScrapeConfig);
   </script>
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
