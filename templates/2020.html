@@ -25,11 +25,12 @@
   <h2>Scraped Jobs Per Sleeve</h2>
   <section class="scrape-toolbar">
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
+    <p class="toolbar-hint">For Indeed and LinkedIn results, enable the SerpApi-based sources after adding your `SERPAPI_API_KEY` on the server.</p>
     <div class="toolbar-grid">
       <div class="toolbar-field">
         <label for="global-location">Location scope</label>
         <select id="global-location">
-          <option value="nl_only">Netherlands only</option>
+          <option value="nl_only">Netherlands focus</option>
           <option value="nl_eu">Netherlands + EU remote</option>
           <option value="global">Global</option>
         </select>
@@ -117,16 +118,20 @@
       sources: [
         { id: 'remotive', label: 'Remotive', available: true, default_enabled: true, reason: '' },
         { id: 'remoteok', label: 'RemoteOK', available: true, default_enabled: true, reason: '' },
-        { id: 'themuse', label: 'The Muse', available: true, default_enabled: true, reason: '' },
+        { id: 'jobicy', label: 'Jobicy', available: true, default_enabled: true, reason: '' },
+        { id: 'himalayas', label: 'Himalayas', available: true, default_enabled: true, reason: '' },
+        { id: 'themuse', label: 'The Muse', available: true, default_enabled: false, reason: '' },
         { id: 'arbeitnow', label: 'Arbeitnow', available: true, default_enabled: false, reason: '' },
         { id: 'adzuna', label: 'Adzuna (API key)', available: false, default_enabled: false, reason: '' },
-        { id: 'serpapi', label: 'SerpApi Google Jobs (API key)', available: false, default_enabled: false, reason: '' },
+        { id: 'indeed_serpapi', label: 'Indeed via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
+        { id: 'linkedin_serpapi', label: 'LinkedIn via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
+        { id: 'serpapi', label: 'Google Jobs via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
       ],
       defaults: {
-        sources: ['remotive', 'remoteok', 'themuse'],
+        sources: ['remotive', 'remoteok', 'jobicy', 'himalayas'],
         location_mode: 'nl_eu',
-        strict: true,
-        max_results: 20,
+        strict: false,
+        max_results: 30,
         use_cache: true
       }
     };
@@ -201,7 +206,7 @@
     function renderControls() {
       const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
       const locationModes = scrapeConfig.location_modes || [
-        { id: 'nl_only', label: 'Netherlands only' },
+        { id: 'nl_only', label: 'Netherlands focus' },
         { id: 'nl_eu', label: 'Netherlands + EU remote' },
         { id: 'global', label: 'Global' }
       ];
@@ -333,7 +338,7 @@
           const data = payload.jobs;
           status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
           if (!data.length) {
-            resultsDiv.textContent = 'No jobs matched this sleeve with the current toggles.';
+            resultsDiv.textContent = 'No jobs matched this sleeve with the current filters. Try disabling strict matching or enabling Indeed/LinkedIn via SerpApi.';
             return;
           }
 

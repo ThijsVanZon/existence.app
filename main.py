@@ -15,6 +15,9 @@ CACHE_TTL_SECONDS = 3600
 DEFAULT_COMIC_ID = 3000
 JOBS_CACHE_TTL_SECONDS = 600
 source_cache = {}
+source_health = {}
+SOURCE_FAILURE_THRESHOLD = 3
+SOURCE_FAILURE_COOLDOWN_SECONDS = 900
 
 # Location anchor: Copernicuslaan 105, 's-Hertogenbosch
 HOME_LAT = 51.6978
@@ -41,41 +44,88 @@ CITY_COORDS_NL = {
 
 SLEEVE_KEYWORDS = {
     "A": [
-        "av technician", "audiovisueel", "event technician", "showtechniek",
-        "stage crew", "foh", "boh", "monitor engineer", "lighting technician",
-        "licht", "geluid", "rigging", "led wall", "projection", "stagehand",
-        "production technician", "venue technician", "theater techniek",
-        "festival production", "audio", "video", "broadcast", "streaming",
-        "media production", "sound", "live production",
+        "av technician", "audiovisual technician", "audiovisueel",
+        "event technician", "show technician", "showtechniek",
+        "stage crew", "stagehand", "showcrew", "foh", "boh",
+        "monitor engineer", "live sound", "sound technician",
+        "lighting technician", "lichttechnicus", "geluidstechnicus",
+        "podiumtechniek", "licht", "geluid", "rigging", "led wall",
+        "projection", "video technician", "production technician",
+        "venue technician", "theater techniek", "festival production",
+        "festival", "venue", "touring", "concert",
+        "audio", "video", "broadcast", "streaming", "live production",
     ],
     "B": [
-        "operations", "revenue ops", "product ops", "customer success",
-        "solutions engineer", "implementation consultant", "enablement",
-        "workflow", "automation", "ai tooling", "process improvement",
-        "no-code", "low-code", "integrations", "zapier", "make",
-        "data operations", "analytics ops", "tooling", "systems",
-        "jira", "confluence",
+        "operations", "operations specialist", "ops manager",
+        "revenue ops", "product ops", "customer success", "solutions engineer",
+        "implementation consultant", "enablement", "workflow",
+        "automation", "ai tooling", "ai workflow", "process improvement",
+        "no-code", "low-code", "rpa", "integrations", "zapier", "make",
+        "make.com", "airtable", "notion", "data operations",
+        "analytics ops", "tooling", "systems", "jira", "confluence",
+        "business analyst", "implementation",
     ],
     "C": [
-        "experience design", "immersive", "creative producer",
+        "experience design", "experience designer", "immersive",
+        "creative producer", "producer", "project producer",
         "content producer", "production coordinator", "project manager",
-        "brand experience", "activation", "exhibition", "museum",
+        "project manager creative", "brand experience", "activation",
+        "event producer", "festival production", "exhibition", "museum",
         "theme park creative", "scenography", "interactive installation",
+        "creative technologist", "installation", "storytelling",
     ],
     "D": [
-        "field service engineer", "service engineer", "commissioning",
-        "installation", "maintenance", "troubleshooting",
-        "technical support", "onsite support", "systems engineer",
-        "service coordinator", "werkvoorbereider", "technical operations",
+        "field service engineer", "service engineer", "service technician",
+        "commissioning", "inbedrijfstelling", "installation", "installateur",
+        "maintenance", "troubleshooting", "support engineer",
+        "technical support", "onsite support", "on-site support",
+        "systems engineer", "service coordinator", "werkvoorbereider",
+        "technical operations", "field engineer", "site visits",
+        "klantlocatie",
     ],
     "E": [
-        "partnership manager", "community manager", "event marketer",
-        "brand partnerships", "alliances", "bookings", "promoter",
-        "venue relations", "program coordinator", "talent relations",
-        "account manager", "festival partnerships",
+        "partnership manager", "partnerships manager", "community manager",
+        "event marketer", "event marketing", "brand partnerships",
+        "alliances", "bookings", "promoter", "venue relations",
+        "program coordinator", "talent relations", "artist relations",
+        "sponsorship", "festival partnerships", "event manager",
     ],
 }
 VALID_SLEEVES = set(SLEEVE_KEYWORDS.keys())
+
+SLEEVE_CONTEXT_KEYWORDS = {
+    "A": ["festival", "venue", "theater", "concert", "tour", "touring", "events", "livemuziek"],
+    "B": ["saas", "platform", "b2b software", "integrations", "tooling", "enablement"],
+    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation"],
+    "D": ["site visits", "travel", "op locatie", "klantlocatie", "field"],
+    "E": ["music", "festival", "nightlife", "culture", "events", "creator economy"],
+}
+
+SLEEVE_B_TOOLING_KEYWORDS = [
+    "automation", "ai tooling", "ai workflow", "no-code", "low-code", "rpa",
+    "integrations", "zapier", "make", "make.com", "airtable", "notion",
+    "jira", "confluence", "tooling", "systems",
+]
+
+SLEEVE_D_FIELD_KEYWORDS = [
+    "field service", "service engineer", "service technician", "commissioning",
+    "installation", "inbedrijfstelling", "maintenance", "troubleshooting",
+    "onsite support", "on-site support", "technical operations", "field engineer",
+]
+
+SLEEVE_C_STRONG_KEYWORDS = [
+    "creative producer", "content producer", "event producer", "project producer",
+    "experience design", "experience designer", "immersive", "brand experience",
+    "exhibition", "museum", "scenography", "interactive installation",
+    "creative technologist", "production coordinator",
+]
+
+SLEEVE_E_MUST_HAVE_KEYWORDS = [
+    "community manager", "partnership manager", "partnerships manager",
+    "brand partnerships", "event marketing", "event marketer",
+    "sponsorship", "festival partnerships", "event manager",
+    "promoter", "bookings", "artist relations",
+]
 
 NEGATIVE_KEYWORDS = [
     "cashier", "kassa", "vakkenvuller", "orderpicker", "telemarketing",
@@ -86,6 +136,7 @@ GLOBAL_NEGATIVE_KEYWORDS = [
     "technical account manager", "account executive", "inside sales",
     "sales development", "b2c sales", "recruiter", "callcenter",
     "verzekering", "hypotheek", "sales only", "commission-only",
+    "door to door", "cold calling", "tele-sales",
 ]
 GERMAN_EXCLUSION_KEYWORDS = [
     "german required", "must speak german", "german speaker",
@@ -120,14 +171,13 @@ SYNERGY_KEYWORDS = [
 ]
 
 SLEEVE_SEARCH_TERMS = {
-    "A": ["av technician", "event technician", "production technician", "live sound"],
-    "B": ["solutions engineer", "workflow automation", "product operations", "ai tooling"],
-    "C": ["creative producer", "experience design", "immersive design", "brand activation"],
-    "D": ["field service engineer", "technical operations", "commissioning engineer", "onsite support"],
-    "E": ["community manager events", "partnership manager", "event marketing", "festival partnerships"],
+    "A": ["av technician", "event technician", "stagehand", "live sound"],
+    "B": ["solutions engineer", "workflow automation", "product operations", "ai workflow"],
+    "C": ["creative producer", "experience design", "event producer", "immersive installation"],
+    "D": ["field service engineer", "technical operations", "commissioning engineer", "service technician"],
+    "E": ["community manager events", "partnerships manager", "event marketing", "festival partnerships"],
 }
 
-ARBEITNOW_API = "https://www.arbeitnow.com/api/job-board-api"
 NETHERLANDS_KEYWORDS = [
     "netherlands", "nederland", "dutch", "holland",
     "amsterdam", "rotterdam", "utrecht", "the hague", "den haag",
@@ -136,6 +186,8 @@ NETHERLANDS_KEYWORDS = [
     "almere", "delft", "s-hertogenbosch", "den bosch", "enschede",
 ]
 OTHER_COUNTRY_KEYWORDS = [
+    "usa", "united states", "canada", "australia", "new zealand",
+    "india", "singapore", "philippines",
     "germany", "deutschland", "berlin", "munich", "frankfurt",
     "belgium", "france", "spain", "portugal", "italy",
     "poland", "romania", "hungary", "czech republic",
@@ -148,6 +200,7 @@ EU_REMOTE_HINTS = [
     "portugal", "ireland", "sweden", "denmark", "finland", "poland",
     "romania", "czech", "austria", "switzerland",
 ]
+GLOBAL_REMOTE_HINTS = ["worldwide", "anywhere", "global"]
 COUNTRY_BLOCKLIST_KEYWORDS = [
     "germany", "deutschland", "berlin", "munich", "frankfurt", "dach",
 ]
@@ -157,6 +210,8 @@ REMOTEOK_API = "https://remoteok.com/api"
 THEMUSE_API = "https://www.themuse.com/api/public/jobs"
 THEMUSE_PAGES = 3
 ARBEITNOW_API = "https://www.arbeitnow.com/api/job-board-api"
+JOBICY_API = "https://jobicy.com/api/v2/remote-jobs"
+HIMALAYAS_API = "https://himalayas.app/jobs/api"
 ADZUNA_API_TEMPLATE = "https://api.adzuna.com/v1/api/jobs/nl/search/{page}"
 SERPAPI_URL = "https://serpapi.com/search.json"
 
@@ -221,16 +276,24 @@ def _passes_location_gate(text, location_mode):
     if location_mode == "global":
         return True
 
-    if _is_netherlands_job(text):
+    is_netherlands = _is_netherlands_job(text)
+    if is_netherlands:
         return True
 
-    if location_mode == "nl_only":
+    is_remote_or_hybrid = "remote" in text or "hybrid" in text
+    has_eu_hint = any(keyword in text for keyword in EU_REMOTE_HINTS)
+    has_global_remote_hint = any(keyword in text for keyword in GLOBAL_REMOTE_HINTS)
+    has_blocked_country = any(keyword in text for keyword in COUNTRY_BLOCKLIST_KEYWORDS)
+
+    if not is_remote_or_hybrid:
         return False
 
-    if "remote" in text or "hybrid" in text:
-        has_eu_hint = any(keyword in text for keyword in EU_REMOTE_HINTS)
-        has_blocked_country = any(keyword in text for keyword in COUNTRY_BLOCKLIST_KEYWORDS)
-        return has_eu_hint and not has_blocked_country
+    if location_mode == "nl_only":
+        # Sources often only expose "Europe/EMEA remote" instead of explicit NL labels.
+        return (has_eu_hint or has_global_remote_hint) and not has_blocked_country
+
+    if location_mode == "nl_eu":
+        return (has_eu_hint or has_global_remote_hint) and not has_blocked_country
 
     return False
 
@@ -262,6 +325,46 @@ def _score_sleeve(text, title_text, sleeve_keywords):
     if raw_hits == 1:
         return 2
     return 0
+
+
+def _count_unique_hits(text, keywords):
+    return len(set(_find_hits(text, keywords)))
+
+
+def _passes_sleeve_must_have(sleeve_key, text, title_text):
+    sleeve_keywords = SLEEVE_KEYWORDS.get(sleeve_key, [])
+    sleeve_hits = len(
+        set(_find_hits(text, sleeve_keywords)).union(_find_hits(title_text, sleeve_keywords))
+    )
+    context_hits = _count_unique_hits(text, SLEEVE_CONTEXT_KEYWORDS.get(sleeve_key, []))
+
+    if sleeve_key == "A":
+        return sleeve_hits >= 2 or (sleeve_hits >= 1 and context_hits >= 1)
+
+    if sleeve_key == "B":
+        tooling_hits = _count_unique_hits(text, SLEEVE_B_TOOLING_KEYWORDS)
+        remote_hits = _count_unique_hits(text, ["remote", "hybrid", "work from home"])
+        return tooling_hits >= 1 and remote_hits >= 1
+
+    if sleeve_key == "C":
+        title_strong_hits = _count_unique_hits(title_text, SLEEVE_C_STRONG_KEYWORDS)
+        text_strong_hits = _count_unique_hits(text, SLEEVE_C_STRONG_KEYWORDS)
+        return title_strong_hits >= 1 or text_strong_hits >= 2
+
+    if sleeve_key == "D":
+        field_hits = _count_unique_hits(text, SLEEVE_D_FIELD_KEYWORDS)
+        travel_hits = _count_unique_hits(
+            text,
+            ["travel", "reizen", "site visit", "site visits", "on-site", "onsite", "klantlocatie"],
+        )
+        return field_hits >= 1 and travel_hits >= 1
+
+    if sleeve_key == "E":
+        title_hits = _count_unique_hits(title_text, SLEEVE_E_MUST_HAVE_KEYWORDS)
+        text_hits = _count_unique_hits(text, SLEEVE_E_MUST_HAVE_KEYWORDS)
+        return title_hits >= 1 or text_hits >= 2
+
+    return True
 
 
 def rank_and_filter_jobs(
@@ -321,6 +424,8 @@ def rank_and_filter_jobs(
                 continue
             if target_score < required_score:
                 continue
+            if not _passes_sleeve_must_have(target_sleeve, full_text, title_text):
+                continue
             primary_sleeve = target_sleeve
             primary_score = target_score
 
@@ -335,9 +440,11 @@ def rank_and_filter_jobs(
 
         if not has_foreign_mechanism:
             continue
-        if sum([has_foreign_mechanism, has_strong_sleeve, has_growth]) < 2:
+        if strict_sleeve and sum([has_foreign_mechanism, has_strong_sleeve, has_growth]) < 2:
             continue
-        if primary_score <= 2:
+        if strict_sleeve and primary_score <= 2:
+            continue
+        if not strict_sleeve and primary_score <= 1:
             continue
 
         synergy_hits = _find_hits(full_text, SYNERGY_KEYWORDS)
@@ -566,12 +673,126 @@ def _fetch_arbeitnow_jobs():
     return items
 
 
-def _fetch_adzuna_jobs(sleeve_key):
+def _format_salary_range(minimum, maximum, currency=""):
+    if minimum and maximum:
+        return f"{minimum}-{maximum} {currency}".strip()
+    return "Not listed"
+
+
+def _fetch_jobicy_jobs(_sleeve_key=None, location_mode="nl_eu"):
+    params = {"count": 100}
+    if location_mode == "nl_only":
+        params["geo"] = "Netherlands"
+    elif location_mode == "nl_eu":
+        params["geo"] = "Europe"
+
+    response = requests.get(
+        JOBICY_API,
+        timeout=12,
+        params=params,
+        headers={"User-Agent": "Mozilla/5.0 (existence.app)"},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
+    items = []
+    for job in jobs:
+        tags = job.get("jobTags") or job.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        tags_text = " ".join(str(tag) for tag in tags)
+
+        industries = job.get("jobIndustry") or []
+        if isinstance(industries, str):
+            industries = [industries]
+        industry_text = " ".join(str(industry) for industry in industries)
+
+        job_types = job.get("jobType") or []
+        if isinstance(job_types, str):
+            job_types = [job_types]
+        job_type_text = " ".join(str(job_type) for job_type in job_types)
+
+        location = _clean_value(job.get("jobGeo") or job.get("location"), "")
+        items.append(
+            {
+                "title": _clean_value(job.get("jobTitle") or job.get("title"), ""),
+                "company": _clean_value(job.get("companyName"), ""),
+                "location": location,
+                "link": _clean_value(job.get("url"), ""),
+                "snippet": _clean_value(job.get("jobExcerpt") or _strip_html(job.get("jobDescription")), ""),
+                "salary": "Not listed",
+                "date": _clean_value(job.get("pubDate"), "Unknown"),
+                "work_mode_hint": _normalize_text(job_type_text, location, tags_text, industry_text),
+                "source": "Jobicy",
+            }
+        )
+    return items
+
+
+def _fetch_himalayas_jobs():
+    response = requests.get(HIMALAYAS_API, timeout=12, params={"limit": 80})
+    response.raise_for_status()
+    payload = response.json()
+    jobs = payload.get("jobs", payload if isinstance(payload, list) else [])
+    items = []
+    for job in jobs:
+        company_info = job.get("company") if isinstance(job.get("company"), dict) else {}
+        company = _clean_value(
+            company_info.get("name") or job.get("companyName"),
+            "",
+        )
+        location_restrictions = job.get("locationRestrictions") or job.get("location_restrictions") or []
+        if isinstance(location_restrictions, str):
+            location_restrictions = [location_restrictions]
+        timezone_restrictions = job.get("timezoneRestrictions") or job.get("timezone_restrictions") or []
+        if isinstance(timezone_restrictions, str):
+            timezone_restrictions = [timezone_restrictions]
+        categories = job.get("categories") or []
+        if isinstance(categories, str):
+            categories = [categories]
+        category_text = " ".join(str(category) for category in categories)
+        location = _clean_value(
+            ", ".join(str(part) for part in location_restrictions) or job.get("location"),
+            "",
+        )
+        salary = _format_salary_range(
+            job.get("salaryMin") or job.get("minSalary"),
+            job.get("salaryMax") or job.get("maxSalary"),
+            job.get("salaryCurrency") or "",
+        )
+        items.append(
+            {
+                "title": _clean_value(job.get("title"), ""),
+                "company": company,
+                "location": location,
+                "link": _clean_value(
+                    job.get("applicationLink") or job.get("applyUrl") or job.get("url"),
+                    "",
+                ),
+                "snippet": _clean_value(job.get("excerpt") or _strip_html(job.get("description")), ""),
+                "salary": salary,
+                "date": _clean_value(job.get("pubDate") or job.get("publishedAt"), "Unknown"),
+                "work_mode_hint": _normalize_text(
+                    " ".join(str(part) for part in location_restrictions),
+                    " ".join(str(part) for part in timezone_restrictions),
+                    job.get("employmentType"),
+                    job.get("type"),
+                    category_text,
+                ),
+                "source": "Himalayas",
+            }
+        )
+    return items
+
+
+def _fetch_adzuna_jobs(sleeve_key, location_mode="nl_eu"):
     app_id = os.getenv("ADZUNA_APP_ID", "").strip()
     app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
     if not app_id or not app_key:
         raise ValueError("Adzuna credentials are missing")
     query = _sleeve_query_string(sleeve_key)
+    if location_mode in {"nl_only", "nl_eu"}:
+        query = f"({query}) AND (remote OR hybrid OR travel OR on-site)"
     response = requests.get(
         ADZUNA_API_TEMPLATE.format(page=1),
         timeout=12,
@@ -602,25 +823,29 @@ def _fetch_adzuna_jobs(sleeve_key):
                 "snippet": _strip_html(job.get("description")),
                 "salary": salary,
                 "date": _clean_value(job.get("created"), "Unknown"),
-                "work_mode_hint": query,
+                "work_mode_hint": _normalize_text(query, job.get("contract_time"), job.get("contract_type")),
                 "source": "Adzuna",
             }
         )
     return items
 
 
-def _fetch_serpapi_jobs(sleeve_key):
+def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_eu", provider_filter=None):
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("SerpApi key is missing")
     query = _sleeve_query_string(sleeve_key)
+    if location_mode in {"nl_only", "nl_eu"}:
+        query = f"({query}) (remote OR hybrid OR travel) Netherlands"
+
+    search_location = "Netherlands" if location_mode in {"nl_only", "nl_eu"} else "Europe"
     response = requests.get(
         SERPAPI_URL,
         timeout=12,
         params={
             "engine": "google_jobs",
             "q": query,
-            "location": "Netherlands",
+            "location": search_location,
             "hl": "en",
             "api_key": api_key,
         },
@@ -629,10 +854,28 @@ def _fetch_serpapi_jobs(sleeve_key):
     payload = response.json()
     items = []
     for job in payload.get("jobs_results", []):
+        via = _clean_value(job.get("via"), "")
+        if provider_filter and provider_filter.lower() not in via.lower():
+            continue
+
         options = job.get("apply_options") or []
         apply_link = ""
         if options and isinstance(options[0], dict):
             apply_link = options[0].get("link", "")
+
+        extensions = job.get("detected_extensions") or []
+        if isinstance(extensions, list):
+            extension_text = " ".join(str(item) for item in extensions)
+            date_value = extensions[0] if extensions else "Unknown"
+        else:
+            extension_text = str(extensions)
+            date_value = "Unknown"
+
+        source_label = "SerpApi Google Jobs"
+        if provider_filter:
+            provider_name = "LinkedIn" if provider_filter.lower() == "linkedin" else "Indeed"
+            source_label = f"{provider_name} via SerpApi"
+
         items.append(
             {
                 "title": _clean_value(job.get("title"), ""),
@@ -641,16 +884,32 @@ def _fetch_serpapi_jobs(sleeve_key):
                 "link": _clean_value(apply_link, ""),
                 "snippet": _clean_value(job.get("description"), ""),
                 "salary": _clean_value(job.get("salary"), "Not listed"),
-                "date": _clean_value(job.get("detected_extensions", ["Unknown"])[0], "Unknown"),
+                "date": _clean_value(date_value, "Unknown"),
                 "work_mode_hint": _normalize_text(
-                    " ".join(job.get("detected_extensions") or []),
-                    job.get("via"),
+                    extension_text,
+                    via,
                     job.get("location"),
                 ),
-                "source": "SerpApi Google Jobs",
+                "source": source_label,
             }
         )
     return items
+
+
+def _fetch_serpapi_indeed_jobs(sleeve_key, location_mode="nl_eu"):
+    return _fetch_serpapi_jobs(
+        sleeve_key,
+        location_mode=location_mode,
+        provider_filter="indeed",
+    )
+
+
+def _fetch_serpapi_linkedin_jobs(sleeve_key, location_mode="nl_eu"):
+    return _fetch_serpapi_jobs(
+        sleeve_key,
+        location_mode=location_mode,
+        provider_filter="linkedin",
+    )
 
 
 SOURCE_REGISTRY = {
@@ -668,9 +927,24 @@ SOURCE_REGISTRY = {
         "query_based": False,
         "fetcher": _fetch_remoteok_jobs,
     },
+    "jobicy": {
+        "label": "Jobicy",
+        "default_enabled": True,
+        "requires_env": [],
+        "query_based": True,
+        "cache_by_sleeve": False,
+        "fetcher": _fetch_jobicy_jobs,
+    },
+    "himalayas": {
+        "label": "Himalayas",
+        "default_enabled": True,
+        "requires_env": [],
+        "query_based": False,
+        "fetcher": _fetch_himalayas_jobs,
+    },
     "themuse": {
         "label": "The Muse",
-        "default_enabled": True,
+        "default_enabled": False,
         "requires_env": [],
         "query_based": False,
         "fetcher": _fetch_themuse_jobs,
@@ -689,8 +963,22 @@ SOURCE_REGISTRY = {
         "query_based": True,
         "fetcher": _fetch_adzuna_jobs,
     },
+    "indeed_serpapi": {
+        "label": "Indeed via SerpApi (API key)",
+        "default_enabled": False,
+        "requires_env": ["SERPAPI_API_KEY"],
+        "query_based": True,
+        "fetcher": _fetch_serpapi_indeed_jobs,
+    },
+    "linkedin_serpapi": {
+        "label": "LinkedIn via SerpApi (API key)",
+        "default_enabled": False,
+        "requires_env": ["SERPAPI_API_KEY"],
+        "query_based": True,
+        "fetcher": _fetch_serpapi_linkedin_jobs,
+    },
     "serpapi": {
-        "label": "SerpApi Google Jobs (API key)",
+        "label": "Google Jobs via SerpApi (API key)",
         "default_enabled": False,
         "requires_env": ["SERPAPI_API_KEY"],
         "query_based": True,
@@ -699,12 +987,54 @@ SOURCE_REGISTRY = {
 }
 
 
-def _source_available(source_key):
+def _source_env_missing(source_key):
     config = SOURCE_REGISTRY[source_key]
+    missing = []
     for env_name in config["requires_env"]:
         if not os.getenv(env_name, "").strip():
-            return False
+            missing.append(env_name)
+    return missing
+
+
+def _source_health_block_reason(source_key):
+    health = source_health.get(source_key) or {}
+    failure_streak = health.get("failure_streak", 0)
+    last_failure_at = health.get("last_failure_at", 0)
+    if failure_streak < SOURCE_FAILURE_THRESHOLD:
+        return ""
+    if time.time() - last_failure_at > SOURCE_FAILURE_COOLDOWN_SECONDS:
+        return ""
+    return _clean_value(health.get("last_error"), "Recent repeated source failures")
+
+
+def _source_available(source_key):
+    if _source_env_missing(source_key):
+        return False
+    if _source_health_block_reason(source_key):
+        return False
     return True
+
+
+def _source_availability_reason(source_key):
+    missing_env = _source_env_missing(source_key)
+    if missing_env:
+        return f"Missing env: {', '.join(missing_env)}"
+    health_reason = _source_health_block_reason(source_key)
+    if health_reason:
+        return f"Temporarily disabled after repeated failures: {health_reason}"
+    return ""
+
+
+def _record_source_health(source_key, error):
+    health = source_health.get(source_key, {"failure_streak": 0, "last_failure_at": 0, "last_error": ""})
+    if error:
+        health["failure_streak"] = health.get("failure_streak", 0) + 1
+        health["last_failure_at"] = time.time()
+        health["last_error"] = _clean_value(error, "Unknown source error")
+    else:
+        health["failure_streak"] = 0
+        health["last_error"] = ""
+    source_health[source_key] = health
 
 
 def _default_sources():
@@ -715,14 +1045,17 @@ def _default_sources():
     ]
 
 
-def _cache_key_for(source_key, sleeve_key):
-    if SOURCE_REGISTRY[source_key]["query_based"]:
-        return f"{source_key}:{sleeve_key}"
+def _cache_key_for(source_key, sleeve_key, location_mode):
+    config = SOURCE_REGISTRY[source_key]
+    if config["query_based"] and config.get("cache_by_sleeve", True):
+        return f"{source_key}:{sleeve_key}:{location_mode}"
+    if config["query_based"]:
+        return f"{source_key}:{location_mode}"
     return source_key
 
 
-def _fetch_source_with_cache(source_key, sleeve_key, force_refresh=False):
-    cache_key = _cache_key_for(source_key, sleeve_key)
+def _fetch_source_with_cache(source_key, sleeve_key, location_mode, force_refresh=False):
+    cache_key = _cache_key_for(source_key, sleeve_key, location_mode)
     now = time.time()
     cache_entry = source_cache.get(cache_key)
     if (
@@ -735,11 +1068,12 @@ def _fetch_source_with_cache(source_key, sleeve_key, force_refresh=False):
     fetcher = SOURCE_REGISTRY[source_key]["fetcher"]
     query_based = SOURCE_REGISTRY[source_key]["query_based"]
     try:
-        items = fetcher(sleeve_key) if query_based else fetcher()
+        items = fetcher(sleeve_key, location_mode=location_mode) if query_based else fetcher()
         error = None
     except Exception as exc:  # pragma: no cover
         items = []
         error = str(exc)
+    _record_source_health(source_key, error)
 
     source_cache[cache_key] = {
         "items": items,
@@ -749,7 +1083,7 @@ def _fetch_source_with_cache(source_key, sleeve_key, force_refresh=False):
     return items, error
 
 
-def fetch_jobs_from_sources(selected_sources, sleeve_key, force_refresh=False):
+def fetch_jobs_from_sources(selected_sources, sleeve_key, location_mode="nl_eu", force_refresh=False):
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
     if not requested:
         requested = _default_sources()
@@ -763,6 +1097,7 @@ def fetch_jobs_from_sources(selected_sources, sleeve_key, force_refresh=False):
         source_items, source_error = _fetch_source_with_cache(
             source_key,
             sleeve_key,
+            location_mode,
             force_refresh=force_refresh,
         )
         items.extend(source_items)
@@ -786,9 +1121,7 @@ def _public_scrape_config():
     sources = []
     for source_key, config in SOURCE_REGISTRY.items():
         available = _source_available(source_key)
-        reason = ""
-        if not available and config["requires_env"]:
-            reason = f"Missing env: {', '.join(config['requires_env'])}"
+        reason = _source_availability_reason(source_key)
         sources.append(
             {
                 "id": source_key,
@@ -804,12 +1137,12 @@ def _public_scrape_config():
         "defaults": {
             "sources": _default_sources(),
             "location_mode": "nl_eu",
-            "strict": True,
-            "max_results": 20,
+            "strict": False,
+            "max_results": 30,
             "use_cache": True,
         },
         "location_modes": [
-            {"id": "nl_only", "label": "Netherlands only"},
+            {"id": "nl_only", "label": "Netherlands focus"},
             {"id": "nl_eu", "label": "Netherlands + EU remote"},
             {"id": "global", "label": "Global"},
         ],
@@ -931,6 +1264,7 @@ def scrape():
     items, fetch_errors, used_sources = fetch_jobs_from_sources(
         selected_sources,
         sleeve_key,
+        location_mode=location_mode,
         force_refresh=force_refresh,
     )
     if not items and fetch_errors:
@@ -939,7 +1273,7 @@ def scrape():
     ranked_items = rank_and_filter_jobs(
         items,
         target_sleeve=sleeve_key,
-        min_target_score=4,
+        min_target_score=3,
         location_mode=location_mode,
         strict_sleeve=strict_sleeve,
     )
