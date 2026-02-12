@@ -7,18 +7,18 @@ authors = ["ThijsVanZon <thijs.vanzon@existenceinitiative.com>"]
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
 Flask = "^3.1.2"
-requests = "^2.32.4"
+requests = "^2.32.5"
 Jinja2 = "^3.1.6"
-scrapy = "^2.13.3"
-aiohttp = ">=3.12.15"
+scrapy = "^2.14.1"
+aiohttp = ">=3.13.3"
 Twisted = ">=25.5.0"
-Werkzeug = ">=3.1.3"
-urllib3 = ">=2.5.0"
-cryptography = ">=45.0.7"
-protobuf = ">=5.29.5"
-certifi = ">=2025.1.31"
-setuptools = ">=78.1.1"
-filelock = ">=3.19.1"
+Werkzeug = ">=3.1.5"
+urllib3 = ">=2.6.3"
+cryptography = ">=46.0.5"
+protobuf = ">=6.33.5"
+certifi = ">=2026.1.4"
+setuptools = ">=82.0.0"
+filelock = ">=3.21.0"
 
 [tool.poetry.dev-dependencies]
 python-lsp-server = {extras = ["yapf", "rope", "pyflakes"], version = "^1.5.0"}
@@ -28,3 +28,4 @@ toml = "^0.10.2"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
