@@ -13,25 +13,25 @@ SLEEVE_QUERIES = {
         ("solutions engineer", "Remote"),
         ("product operations", "Europe"),
         ("workflow automation", "Remote"),
-        ("implementation consultant", "Netherlands"),
+        ("inkoper", "Netherlands"),
     ],
     "C": [
         ("creative producer", "Europe"),
+        ("projectmanager events", "Netherlands"),
+        ("projectmanager audio", "Netherlands"),
         ("experience design", "Netherlands"),
-        ("immersive production", "Europe"),
-        ("brand activation producer", "Netherlands"),
     ],
     "D": [
+        ("servicecoordinator", "Netherlands"),
         ("field service engineer", "Netherlands"),
-        ("technical operations", "Europe"),
         ("commissioning engineer", "Europe"),
-        ("onsite technical support", "Netherlands"),
+        ("reizend technicus", "Europe"),
     ],
     "E": [
-        ("community manager events", "Europe"),
-        ("partnership manager events", "Netherlands"),
+        ("event manager", "Europe"),
+        ("programmer nightlife", "Netherlands"),
+        ("nachtcultuur programmeur", "Netherlands"),
         ("festival partnerships", "Europe"),
-        ("event marketing coordinator", "Netherlands"),
     ],
 }
 
