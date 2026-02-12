@@ -23,12 +23,54 @@
   </nav>
 
   <h2>Scraped Jobs Per Sleeve</h2>
-  <p>Click a sleeve to scrape only that direction. Use the toggles per sleeve to choose sources, location scope, strictness, and speed.</p>
+  <section class="scrape-toolbar">
+    <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
+    <div class="toolbar-grid">
+      <div class="toolbar-field">
+        <label for="global-location">Location scope</label>
+        <select id="global-location">
+          <option value="nl_only">Netherlands only</option>
+          <option value="nl_eu">Netherlands + EU remote</option>
+          <option value="global">Global</option>
+        </select>
+      </div>
+
+      <div class="toolbar-field">
+        <label for="global-max">Max results per sleeve</label>
+        <select id="global-max">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+
+      <div class="toolbar-field toolbar-checks">
+        <label class="control-inline">
+          <input type="checkbox" id="global-strict" checked>
+          Strict sleeve matching
+        </label>
+        <label class="control-inline">
+          <input type="checkbox" id="global-cache" checked>
+          Use cache (faster)
+        </label>
+      </div>
+    </div>
+
+    <div class="toolbar-field">
+      <div class="source-title">Enabled Sources</div>
+      <div id="global-sources" class="source-toggle-group"></div>
+      <div id="source-note" class="toolbar-note"></div>
+      <details id="unavailable-sources" class="unavailable-sources" hidden>
+        <summary>Unavailable sources</summary>
+        <div id="unavailable-source-list"></div>
+      </details>
+    </div>
+  </section>
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
       <h3>Sleeve A - Live Entertainment / AV Ops</h3>
-      <div id="controls-A" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="error-A" class="error" style="display: none;"></div>
@@ -37,7 +79,6 @@
 
     <section class="sleeve-panel" id="panel-B">
       <h3>Sleeve B - Tech/Software + AI Workflow</h3>
-      <div id="controls-B" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="error-B" class="error" style="display: none;"></div>
@@ -46,7 +87,6 @@
 
     <section class="sleeve-panel" id="panel-C">
       <h3>Sleeve C - Experience / Creative Production</h3>
-      <div id="controls-C" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="error-C" class="error" style="display: none;"></div>
@@ -55,7 +95,6 @@
 
     <section class="sleeve-panel" id="panel-D">
       <h3>Sleeve D - Field Service / Technical Ops</h3>
-      <div id="controls-D" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="error-D" class="error" style="display: none;"></div>
@@ -64,7 +103,6 @@
 
     <section class="sleeve-panel" id="panel-E">
       <h3>Sleeve E - Community / Partnerships / Event Marketing</h3>
-      <div id="controls-E" class="scrape-controls"></div>
       <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="error-E" class="error" style="display: none;"></div>
@@ -161,79 +199,87 @@
     }
 
     function renderControls() {
-      sleeveKeys.forEach(sleeveKey => {
-        const controls = document.getElementById(`controls-${sleeveKey}`);
-        if (!controls) return;
+      const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
+      const locationModes = scrapeConfig.location_modes || [
+        { id: 'nl_only', label: 'Netherlands only' },
+        { id: 'nl_eu', label: 'Netherlands + EU remote' },
+        { id: 'global', label: 'Global' }
+      ];
 
-        controls.innerHTML = `
-          <label for="location-${sleeveKey}">Location scope</label>
-          <select id="location-${sleeveKey}">
-            <option value="nl_only">Netherlands only</option>
-            <option value="nl_eu">Netherlands + EU remote</option>
-            <option value="global">Global</option>
-          </select>
-          <label class="control-inline">
-            <input type="checkbox" id="strict-${sleeveKey}" checked>
-            Strict sleeve matching
-          </label>
-          <label class="control-inline">
-            <input type="checkbox" id="cache-${sleeveKey}" checked>
-            Use cache (faster)
-          </label>
-          <label for="max-${sleeveKey}">Max results</label>
-          <select id="max-${sleeveKey}">
-            <option value="10">10</option>
-            <option value="20">20</option>
-            <option value="30">30</option>
-            <option value="50">50</option>
-          </select>
-          <div class="source-title">Sources</div>
-          <div id="sources-${sleeveKey}" class="source-toggle-group"></div>
-        `;
-
-        const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
-        const locationSelect = document.getElementById(`location-${sleeveKey}`);
-        locationSelect.value = defaults.location_mode || 'nl_eu';
-        document.getElementById(`strict-${sleeveKey}`).checked = defaults.strict !== false;
-        document.getElementById(`cache-${sleeveKey}`).checked = defaults.use_cache !== false;
-        document.getElementById(`max-${sleeveKey}`).value = String(defaults.max_results || 20);
-
-        const sourceWrap = document.getElementById(`sources-${sleeveKey}`);
-        (scrapeConfig.sources || []).forEach(source => {
-          const label = document.createElement('label');
-          label.className = 'source-option';
-          const checkedByDefault = (defaults.sources || []).includes(source.id);
-          label.innerHTML = `
-            <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault && source.available ? 'checked' : ''} ${source.available ? '' : 'disabled'}>
-            ${source.label}
-          `;
-          if (!source.available && source.reason) {
-            const reason = document.createElement('span');
-            reason.className = 'source-reason';
-            reason.textContent = ` (${source.reason})`;
-            label.appendChild(reason);
-          }
-          sourceWrap.appendChild(label);
-        });
+      const locationSelect = document.getElementById('global-location');
+      locationSelect.innerHTML = '';
+      locationModes.forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode.id;
+        option.textContent = mode.label;
+        locationSelect.appendChild(option);
       });
+      locationSelect.value = defaults.location_mode || 'nl_eu';
+      document.getElementById('global-strict').checked = defaults.strict !== false;
+      document.getElementById('global-cache').checked = defaults.use_cache !== false;
+      document.getElementById('global-max').value = String(defaults.max_results || 20);
+
+      const sourceWrap = document.getElementById('global-sources');
+      const unavailableWrapper = document.getElementById('unavailable-sources');
+      const unavailableList = document.getElementById('unavailable-source-list');
+      sourceWrap.innerHTML = '';
+      unavailableList.innerHTML = '';
+
+      const availableSources = (scrapeConfig.sources || []).filter(source => source.available);
+      const unavailableSources = (scrapeConfig.sources || []).filter(source => !source.available);
+      availableSources.forEach(source => {
+        const checkedByDefault = (defaults.sources || []).includes(source.id);
+        const label = document.createElement('label');
+        label.className = 'source-option source-pill';
+        label.innerHTML = `
+          <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault ? 'checked' : ''}>
+          ${source.label}
+        `;
+        sourceWrap.appendChild(label);
+      });
+
+      if (unavailableSources.length) {
+        unavailableWrapper.hidden = false;
+        unavailableSources.forEach(source => {
+          const row = document.createElement('div');
+          row.className = 'unavailable-row';
+          row.textContent = `${source.label} - ${source.reason || 'Unavailable on this server'}`;
+          unavailableList.appendChild(row);
+        });
+      } else {
+        unavailableWrapper.hidden = true;
+      }
+
+      const sourceNote = document.getElementById('source-note');
+      if (!availableSources.length) {
+        sourceNote.textContent = 'No sources are currently available. Check API keys on the server.';
+      } else {
+        sourceNote.textContent = `Recommended: ${availableSources
+          .filter(source => (defaults.sources || []).includes(source.id))
+          .map(source => source.label)
+          .join(', ') || availableSources[0].label}`;
+      }
     }
 
-    function selectedSourcesForSleeve(sleeveKey) {
-      const wrap = document.getElementById(`sources-${sleeveKey}`);
-      if (!wrap) return [];
+    function selectedSources() {
+      const wrap = document.getElementById('global-sources');
       return Array.from(wrap.querySelectorAll('input[type="checkbox"]:checked'))
         .map(input => input.getAttribute('data-source-id'))
         .filter(Boolean);
     }
 
     function buildScrapeUrl(sleeveKey) {
+      let sources = selectedSources();
+      if (!sources.length) {
+        sources = (scrapeConfig.defaults?.sources || []).slice();
+      }
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
-      params.set('location_mode', document.getElementById(`location-${sleeveKey}`).value);
-      params.set('strict', document.getElementById(`strict-${sleeveKey}`).checked ? '1' : '0');
-      params.set('max_results', document.getElementById(`max-${sleeveKey}`).value);
-      params.set('refresh', document.getElementById(`cache-${sleeveKey}`).checked ? '0' : '1');
-      params.set('sources', selectedSourcesForSleeve(sleeveKey).join(','));
+      params.set('location_mode', document.getElementById('global-location').value);
+      params.set('strict', document.getElementById('global-strict').checked ? '1' : '0');
+      params.set('max_results', document.getElementById('global-max').value);
+      params.set('refresh', document.getElementById('global-cache').checked ? '0' : '1');
+      params.set('sources', sources.join(','));
       return `/scrape?${params.toString()}`;
     }
 
