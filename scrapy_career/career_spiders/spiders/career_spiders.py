@@ -2,21 +2,54 @@ import scrapy
 from urllib.parse import quote_plus
 
 
-QUERIES = [
-    ("av technician", "Netherlands"),
-    ("field service engineer", "Netherlands"),
-    ("solutions engineer", "Remote"),
-    ("creative producer", "Europe"),
-    ("community manager events", "Europe"),
-    ("technical operations", "Netherlands"),
-]
+SLEEVE_QUERIES = {
+    "A": [
+        ("av technician", "Netherlands"),
+        ("event technician", "Europe"),
+        ("production technician", "Netherlands"),
+        ("lighting technician", "Europe"),
+    ],
+    "B": [
+        ("solutions engineer", "Remote"),
+        ("product operations", "Europe"),
+        ("workflow automation", "Remote"),
+        ("implementation consultant", "Netherlands"),
+    ],
+    "C": [
+        ("creative producer", "Europe"),
+        ("experience design", "Netherlands"),
+        ("immersive production", "Europe"),
+        ("brand activation producer", "Netherlands"),
+    ],
+    "D": [
+        ("field service engineer", "Netherlands"),
+        ("technical operations", "Europe"),
+        ("commissioning engineer", "Europe"),
+        ("onsite technical support", "Netherlands"),
+    ],
+    "E": [
+        ("community manager events", "Europe"),
+        ("partnership manager events", "Netherlands"),
+        ("festival partnerships", "Europe"),
+        ("event marketing coordinator", "Netherlands"),
+    ],
+}
+
+
+def sleeve_queries_for(sleeve_key):
+    key = (sleeve_key or "").upper()
+    return SLEEVE_QUERIES.get(key, [])
 
 
 class CareerSpiderIndeed(scrapy.Spider):
     name = "career_spider_indeed"
 
+    def __init__(self, sleeve_key=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sleeve_key = (sleeve_key or "").upper()
+
     def start_requests(self):
-        for term, location in QUERIES:
+        for term, location in sleeve_queries_for(self.sleeve_key):
             term_q = quote_plus(term)
             loc_q = quote_plus(location)
             url = f"https://www.indeed.com/jobs?q={term_q}&l={loc_q}"
@@ -70,8 +103,12 @@ class CareerSpiderIndeed(scrapy.Spider):
 class CareerSpiderLinkedIn(scrapy.Spider):
     name = "career_spider_linkedin"
 
+    def __init__(self, sleeve_key=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sleeve_key = (sleeve_key or "").upper()
+
     def start_requests(self):
-        for term, location in QUERIES:
+        for term, location in sleeve_queries_for(self.sleeve_key):
             term_q = quote_plus(term)
             loc_q = quote_plus(location)
             url = (

@@ -22,12 +22,50 @@
     </div>
   </nav>
 
-  <h2>Scraped Jobs</h2>
-  <button onclick="startScraping()">Scrape Jobs</button>
+  <h2>Scraped Jobs Per Sleeve</h2>
+  <p>Klik op een sleeve om alleen die richting te scrapen. Je kunt meerdere sleeves achter elkaar starten.</p>
 
-  <p id="status" aria-live="polite"></p>
-  <div id="results"></div>
-  <div id="error" class="error" style="display: none;"></div>
+  <div class="sleeve-grid">
+    <section class="sleeve-panel" id="panel-A">
+      <h3>Sleeve A - Live Entertainment / AV Ops</h3>
+      <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
+      <p id="status-A" aria-live="polite"></p>
+      <div id="error-A" class="error" style="display: none;"></div>
+      <div id="results-A"></div>
+    </section>
+
+    <section class="sleeve-panel" id="panel-B">
+      <h3>Sleeve B - Tech/Software + AI Workflow</h3>
+      <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
+      <p id="status-B" aria-live="polite"></p>
+      <div id="error-B" class="error" style="display: none;"></div>
+      <div id="results-B"></div>
+    </section>
+
+    <section class="sleeve-panel" id="panel-C">
+      <h3>Sleeve C - Experience / Creative Production</h3>
+      <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
+      <p id="status-C" aria-live="polite"></p>
+      <div id="error-C" class="error" style="display: none;"></div>
+      <div id="results-C"></div>
+    </section>
+
+    <section class="sleeve-panel" id="panel-D">
+      <h3>Sleeve D - Field Service / Technical Ops</h3>
+      <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
+      <p id="status-D" aria-live="polite"></p>
+      <div id="error-D" class="error" style="display: none;"></div>
+      <div id="results-D"></div>
+    </section>
+
+    <section class="sleeve-panel" id="panel-E">
+      <h3>Sleeve E - Community / Partnerships / Event Marketing</h3>
+      <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
+      <p id="status-E" aria-live="polite"></p>
+      <div id="error-E" class="error" style="display: none;"></div>
+      <div id="results-E"></div>
+    </section>
+  </div>
 
   <script>
     function createJobResult(job) {
@@ -76,18 +114,27 @@
       return card;
     }
 
-    function startScraping() {
-      const resultsDiv = document.getElementById('results');
-      const errorDiv = document.getElementById('error');
-      const status = document.getElementById('status');
+    const sleeveControllers = {};
+
+    function startScraping(sleeveKey) {
+      const resultsDiv = document.getElementById(`results-${sleeveKey}`);
+      const errorDiv = document.getElementById(`error-${sleeveKey}`);
+      const status = document.getElementById(`status-${sleeveKey}`);
+      const panel = document.getElementById(`panel-${sleeveKey}`);
+
+      if (sleeveControllers[sleeveKey]) {
+        sleeveControllers[sleeveKey].abort();
+      }
       const controller = new AbortController();
+      sleeveControllers[sleeveKey] = controller;
       const timeoutId = setTimeout(() => controller.abort(), 70000);
 
+      panel.classList.add('loading');
       resultsDiv.innerHTML = '';
       errorDiv.style.display = 'none';
-      status.textContent = 'Scraping jobs... this may take a moment.';
+      status.textContent = `Scraping sleeve ${sleeveKey}... this may take a moment.`;
 
-      fetch('/scrape', { signal: controller.signal })
+      fetch(`/scrape?sleeve=${encodeURIComponent(sleeveKey)}`, { signal: controller.signal })
         .then(async response => {
           const contentType = (response.headers.get('content-type') || '').toLowerCase();
           const isJson = contentType.includes('application/json');
@@ -112,7 +159,7 @@
           return response.json();
         })
         .then(data => {
-          status.textContent = `Finished scraping. Found ${data.length} relevant jobs.`;
+          status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs.`;
           if (!data.length) {
             resultsDiv.textContent = 'No jobs were found this time. Try again later.';
             return;
@@ -126,12 +173,16 @@
           status.textContent = '';
           const isTimeout = error.name === 'AbortError';
           errorDiv.textContent = isTimeout
-            ? 'Scrape timed out after 70 seconds. Try again or narrow your search.'
+            ? `Scrape for sleeve ${sleeveKey} timed out after 70 seconds.`
             : `An error occurred while scraping jobs: ${error.message}`;
           errorDiv.style.display = 'block';
         })
         .finally(() => {
           clearTimeout(timeoutId);
+          panel.classList.remove('loading');
+          if (sleeveControllers[sleeveKey] === controller) {
+            delete sleeveControllers[sleeveKey];
+          }
         });
     }
   </script>

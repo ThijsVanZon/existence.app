@@ -81,6 +81,28 @@ a:focus-visible {
   margin: 6px 0;
 }
 
+.sleeve-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.sleeve-panel {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.sleeve-panel.loading {
+  opacity: 0.7;
+}
+
+.sleeve-panel h3 {
+  margin-top: 0;
+}
+
 .videos,
 .playlists {
   display: grid;

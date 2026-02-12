@@ -57,6 +57,7 @@ SLEEVE_KEYWORDS = {
         "account manager", "festival partnerships",
     ],
 }
+VALID_SLEEVES = set(SLEEVE_KEYWORDS.keys())
 
 NEGATIVE_KEYWORDS = [
     "cashier", "kassa", "vakkenvuller", "orderpicker", "telemarketing",
@@ -132,7 +133,7 @@ def _score_sleeve(text, title_text, sleeve_keywords):
     return 0
 
 
-def rank_and_filter_jobs(items):
+def rank_and_filter_jobs(items, target_sleeve=None):
     ranked = []
     seen = set()
 
@@ -172,6 +173,12 @@ def rank_and_filter_jobs(items):
             sleeve_scores.items(),
             key=lambda pair: pair[1],
         )
+        if target_sleeve:
+            target_score = sleeve_scores.get(target_sleeve, 0)
+            if target_score < 4:
+                continue
+            primary_sleeve = target_sleeve
+            primary_score = target_score
 
         foreign_hits = _find_hits(full_text, FOREIGN_KEYWORDS)
         explicit_foreign = bool(foreign_hits)
@@ -267,7 +274,7 @@ def fetch_comic(comic_id):
     return response.json()
 
 
-def run_scrapers(result_queue):
+def run_scrapers(result_queue, sleeve_key):
     """Run Scrapy spiders in a child process so each request has a fresh reactor."""
     items = []
     crawl_errors = []
@@ -303,8 +310,8 @@ def run_scrapers(result_queue):
     dispatcher.connect(spider_closed, signal=signals.spider_closed)
 
     try:
-        process.crawl(CareerSpiderIndeed)
-        process.crawl(CareerSpiderLinkedIn)
+        process.crawl(CareerSpiderIndeed, sleeve_key=sleeve_key)
+        process.crawl(CareerSpiderLinkedIn, sleeve_key=sleeve_key)
         process.start(stop_after_crawl=True)
     except Exception as exc:  # pragma: no cover - defensive fallback
         result_queue.put({"error": f"Failed to scrape jobs: {exc}"})
@@ -409,8 +416,15 @@ def show_comic(comic_id):
 # Route to trigger scraping
 @app.route('/scrape')
 def scrape():
+    sleeve_key = request.args.get("sleeve", "").upper().strip()
+    if sleeve_key not in VALID_SLEEVES:
+        return jsonify({"error": "Invalid sleeve. Use one of: A, B, C, D, E."}), 400
+
     result_queue = multiprocessing.Queue()
-    scrape_process = multiprocessing.Process(target=run_scrapers, args=(result_queue,))
+    scrape_process = multiprocessing.Process(
+        target=run_scrapers,
+        args=(result_queue, sleeve_key),
+    )
     scrape_process.start()
     scrape_process.join(timeout=SCRAPE_TIMEOUT_SECONDS)
 
@@ -430,7 +444,7 @@ def scrape():
         return jsonify(result), 500
 
     items = result.get("items", [])
-    ranked_items = rank_and_filter_jobs(items)
+    ranked_items = rank_and_filter_jobs(items, target_sleeve=sleeve_key)
     if ranked_items:
         return jsonify(ranked_items)
 
