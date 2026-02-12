@@ -1,13 +1,4 @@
 from flask import Flask, request, redirect, render_template, url_for, jsonify
-from scrapy.crawler import CrawlerProcess
-from scrapy import signals
-from scrapy.signalmanager import dispatcher
-from scrapy_career.career_spiders.spiders.career_spiders import (
-    CareerSpiderIndeed,
-    CareerSpiderLinkedIn,
-)
-import multiprocessing
-from queue import Empty
 import random
 import requests
 import time
@@ -28,7 +19,8 @@ SLEEVE_KEYWORDS = {
         "stage crew", "foh", "boh", "monitor engineer", "lighting technician",
         "licht", "geluid", "rigging", "led wall", "projection", "stagehand",
         "production technician", "venue technician", "theater techniek",
-        "festival production",
+        "festival production", "audio", "video", "broadcast", "streaming",
+        "media production", "sound", "live production",
     ],
     "B": [
         "operations", "revenue ops", "product ops", "customer success",
@@ -70,6 +62,7 @@ FOREIGN_KEYWORDS = [
     "hybrid", "international travel", "travel", "reizen", "site visit",
     "site visits", "on-site at client", "onsite at client", "rotatie",
     "rotation", "workation", "global", "international", "emea",
+    "worldwide", "remote-first", "remote only", "work from home",
 ]
 
 TRAVEL_ROLETYPE_KEYWORDS = [
@@ -90,6 +83,19 @@ SYNERGY_KEYWORDS = [
     "immersive", "av", "audio", "video", "automation", "ai", "workflow",
     "tooling", "systems", "production",
 ]
+
+SLEEVE_SEARCH_TERMS = {
+    "A": ["av technician", "event technician", "production technician", "live sound"],
+    "B": ["solutions engineer", "workflow automation", "product operations", "ai tooling"],
+    "C": ["creative producer", "experience design", "immersive design", "brand activation"],
+    "D": ["field service engineer", "technical operations", "commissioning engineer", "onsite support"],
+    "E": ["community manager events", "partnership manager", "event marketing", "festival partnerships"],
+}
+
+JOB_SOURCE_NAME = "Remotive"
+JOB_SOURCE_API = "https://remotive.com/api/remote-jobs"
+ARBEITNOW_SOURCE_NAME = "Arbeitnow"
+ARBEITNOW_API = "https://www.arbeitnow.com/api/job-board-api"
 
 
 def _normalize_text(*parts):
@@ -117,6 +123,11 @@ def _clean_value(value, fallback="Unknown"):
     return cleaned if cleaned else fallback
 
 
+def _strip_html(value):
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    return _clean_value(text, "")
+
+
 def _score_sleeve(text, title_text, sleeve_keywords):
     text_hits = _find_hits(text, sleeve_keywords)
     title_hits = _find_hits(title_text, sleeve_keywords)
@@ -133,7 +144,7 @@ def _score_sleeve(text, title_text, sleeve_keywords):
     return 0
 
 
-def rank_and_filter_jobs(items, target_sleeve=None):
+def rank_and_filter_jobs(items, target_sleeve=None, min_target_score=4):
     ranked = []
     seen = set()
 
@@ -175,7 +186,7 @@ def rank_and_filter_jobs(items, target_sleeve=None):
         )
         if target_sleeve:
             target_score = sleeve_scores.get(target_sleeve, 0)
-            if target_score < 4:
+            if target_score < min_target_score:
                 continue
             primary_sleeve = target_sleeve
             primary_score = target_score
@@ -187,7 +198,7 @@ def rank_and_filter_jobs(items, target_sleeve=None):
 
         growth_hits = _find_hits(full_text, GROWTH_KEYWORDS)
         has_growth = bool(growth_hits)
-        has_strong_sleeve = primary_score >= 4
+        has_strong_sleeve = primary_score >= min_target_score
 
         if not has_foreign_mechanism:
             continue
@@ -274,60 +285,64 @@ def fetch_comic(comic_id):
     return response.json()
 
 
-def run_scrapers(result_queue, sleeve_key):
-    """Run Scrapy spiders in a child process so each request has a fresh reactor."""
+def fetch_jobs_for_sleeve(sleeve_key):
+    seen = set()
     items = []
-    crawl_errors = []
-    spider_stats = {}
+    remotive = requests.get(JOB_SOURCE_API, timeout=12)
+    remotive.raise_for_status()
+    for job in remotive.json().get("jobs", []):
+        link = _clean_value(job.get("url"), "")
+        if not link or link in seen:
+            continue
+        seen.add(link)
+        location = _clean_value(job.get("candidate_required_location"), "")
+        category = _clean_value(job.get("category"), "")
+        tags = " ".join(job.get("tags") or [])
+        items.append(
+            {
+                "title": _clean_value(job.get("title"), ""),
+                "company": _clean_value(job.get("company_name"), ""),
+                "location": location,
+                "link": link,
+                "snippet": _strip_html(job.get("description")),
+                "salary": _clean_value(job.get("salary"), "Not listed"),
+                "date": _clean_value(job.get("publication_date"), "Unknown"),
+                "work_mode_hint": _normalize_text(job.get("job_type"), location, category, tags),
+                "source": JOB_SOURCE_NAME,
+            }
+        )
 
-    def crawler_results(item, response, spider):
-        items.append(dict(item))
+    arbeitnow = requests.get(ARBEITNOW_API, timeout=12)
+    arbeitnow.raise_for_status()
+    for job in arbeitnow.json().get("data", []):
+        link = _clean_value(job.get("url"), "")
+        if not link or link in seen:
+            continue
+        seen.add(link)
+        created_at = job.get("created_at")
+        if isinstance(created_at, int):
+            date_value = time.strftime("%Y-%m-%d", time.gmtime(created_at))
+        else:
+            date_value = "Unknown"
+        tags = " ".join(job.get("tags") or [])
+        job_types = " ".join(job.get("job_types") or [])
+        location = _clean_value(job.get("location"), "")
+        remote_flag = "remote" if job.get("remote") else ""
+        items.append(
+            {
+                "title": _clean_value(job.get("title"), ""),
+                "company": _clean_value(job.get("company_name"), ""),
+                "location": location,
+                "link": link,
+                "snippet": _strip_html(job.get("description")),
+                "salary": "Not listed",
+                "date": date_value,
+                "work_mode_hint": _normalize_text(remote_flag, location, tags, job_types),
+                "source": ARBEITNOW_SOURCE_NAME,
+            }
+        )
 
-    def crawler_error(failure, response, spider):
-        crawl_errors.append(f"{spider.name}: {failure.getErrorMessage()}")
-
-    def spider_closed(spider, reason):
-        spider_stats[spider.name] = {"reason": reason}
-
-    process = CrawlerProcess(
-        settings={
-            "LOG_ENABLED": False,
-            "ROBOTSTXT_OBEY": False,
-            "USER_AGENT": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/123.0.0.0 Safari/537.36"
-            ),
-            "DOWNLOAD_TIMEOUT": 12,
-            "RETRY_ENABLED": False,
-            "CONCURRENT_REQUESTS": 8,
-            "CLOSESPIDER_PAGECOUNT": 40,
-            "CLOSESPIDER_TIMEOUT": 20,
-        }
-    )
-    dispatcher.connect(crawler_results, signal=signals.item_scraped)
-    dispatcher.connect(crawler_error, signal=signals.spider_error)
-    dispatcher.connect(spider_closed, signal=signals.spider_closed)
-
-    try:
-        process.crawl(CareerSpiderIndeed, sleeve_key=sleeve_key)
-        process.crawl(CareerSpiderLinkedIn, sleeve_key=sleeve_key)
-        process.start(stop_after_crawl=True)
-    except Exception as exc:  # pragma: no cover - defensive fallback
-        result_queue.put({"error": f"Failed to scrape jobs: {exc}"})
-        return
-    finally:
-        dispatcher.disconnect(crawler_results, signal=signals.item_scraped)
-        dispatcher.disconnect(crawler_error, signal=signals.spider_error)
-        dispatcher.disconnect(spider_closed, signal=signals.spider_closed)
-
-    result_queue.put(
-        {
-            "items": items,
-            "errors": crawl_errors,
-            "spider_stats": spider_stats,
-        }
-    )
+    return items
 
 
 # Root URL maps to this function
@@ -420,57 +435,21 @@ def scrape():
     if sleeve_key not in VALID_SLEEVES:
         return jsonify({"error": "Invalid sleeve. Use one of: A, B, C, D, E."}), 400
 
-    result_queue = multiprocessing.Queue()
-    scrape_process = multiprocessing.Process(
-        target=run_scrapers,
-        args=(result_queue, sleeve_key),
-    )
-    scrape_process.start()
-    scrape_process.join(timeout=SCRAPE_TIMEOUT_SECONDS)
-
-    if scrape_process.is_alive():
-        scrape_process.terminate()
-        scrape_process.join(timeout=3)
-        if scrape_process.is_alive():
-            scrape_process.kill()
-            scrape_process.join(timeout=2)
-        return jsonify({"error": "Scraping timed out. Please try again."}), 504
-
     try:
-        result = result_queue.get_nowait()
-    except Empty:
-        if scrape_process.exitcode and scrape_process.exitcode != 0:
-            return jsonify({"error": "Scraping process crashed before returning results."}), 500
-        return jsonify({"error": "Scraping failed to return any results."}), 500
+        items = fetch_jobs_for_sleeve(sleeve_key)
+    except requests.Timeout:
+        return jsonify({"error": "Job fetch timed out. Please try again."}), 504
+    except requests.RequestException as exc:
+        return jsonify({"error": f"Failed to fetch jobs from source: {exc}"}), 502
 
-    if "error" in result:
-        return jsonify(result), 500
-
-    items = result.get("items", [])
-    ranked_items = rank_and_filter_jobs(items, target_sleeve=sleeve_key)
+    ranked_items = rank_and_filter_jobs(items, target_sleeve=sleeve_key, min_target_score=4)
+    if not ranked_items:
+        ranked_items = rank_and_filter_jobs(items, target_sleeve=sleeve_key, min_target_score=3)
+    if not ranked_items:
+        ranked_items = rank_and_filter_jobs(items, target_sleeve=sleeve_key, min_target_score=2)
     if ranked_items:
         return jsonify(ranked_items)
-
-    details = []
-    crawl_errors = result.get("errors", [])
-    if crawl_errors:
-        details.extend(crawl_errors)
-
-    spider_stats = result.get("spider_stats", {})
-    if spider_stats:
-        reasons = ", ".join(
-            f"{name} ({data.get('reason', 'unknown')})"
-            for name, data in spider_stats.items()
-        )
-        details.append(f"Spider close reasons: {reasons}")
-
-    message = (
-        "Scraping completed but no jobs passed your filter "
-        "(foreign mechanism + sleeve fit + growth)."
-    )
-    if details:
-        message = f"{message} " + " | ".join(details)
-    return jsonify({"error": message}), 502
+    return jsonify([])
 
 
 # Main driver function
