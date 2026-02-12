@@ -76,7 +76,6 @@ SLEEVE_KEYWORDS = {
         "creative technologist", "installation", "storytelling",
         "projectmanager", "projectmanager events", "projectmanager audio",
         "event project manager", "audio project manager",
-        "nachtcultuur", "programmeur", "programmering",
     ],
     "D": [
         "field service engineer", "service engineer", "service technician",
@@ -85,7 +84,7 @@ SLEEVE_KEYWORDS = {
         "technical support", "onsite support", "on-site support",
         "systems engineer", "service coordinator", "werkvoorbereider",
         "technical operations", "field engineer", "site visits",
-        "klantlocatie", "servicecoordinator", "service coördinator",
+        "klantlocatie", "servicecoordinator",
         "reizend", "reiziger", "internationaal reizen",
     ],
     "E": [
@@ -103,7 +102,7 @@ VALID_SLEEVES = set(SLEEVE_KEYWORDS.keys())
 SLEEVE_CONTEXT_KEYWORDS = {
     "A": ["festival", "venue", "theater", "concert", "tour", "touring", "events", "livemuziek"],
     "B": ["saas", "platform", "b2b software", "integrations", "tooling", "enablement", "supply chain", "procurement"],
-    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation", "projectdelivery", "audio"],
+    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation", "project delivery", "audio"],
     "D": ["site visits", "travel", "op locatie", "klantlocatie", "field", "storingen", "service"],
     "E": ["music", "festival", "nightlife", "culture", "events", "creator economy", "programmeur", "curation"],
 }
@@ -114,10 +113,18 @@ SLEEVE_B_TOOLING_KEYWORDS = [
     "jira", "confluence", "tooling", "systems",
 ]
 
+SLEEVE_B_PROCUREMENT_KEYWORDS = [
+    "procurement", "buyer", "purchasing", "strategic sourcing", "inkoper",
+]
+
 SLEEVE_D_FIELD_KEYWORDS = [
     "field service", "service engineer", "service technician", "commissioning",
     "installation", "inbedrijfstelling", "maintenance", "troubleshooting",
     "onsite support", "on-site support", "technical operations", "field engineer",
+]
+
+SLEEVE_D_COORDINATOR_KEYWORDS = [
+    "service coordinator", "servicecoordinator", "werkvoorbereider",
 ]
 
 SLEEVE_C_STRONG_KEYWORDS = [
@@ -127,13 +134,18 @@ SLEEVE_C_STRONG_KEYWORDS = [
     "creative technologist", "production coordinator",
 ]
 
+SLEEVE_C_PROJECT_KEYWORDS = [
+    "projectmanager", "project manager", "projectmanager events",
+    "projectmanager audio", "event project manager", "audio project manager",
+]
 SLEEVE_E_MUST_HAVE_KEYWORDS = [
     "community manager", "partnership manager", "partnerships manager",
     "brand partnerships", "event marketing", "event marketer",
     "sponsorship", "festival partnerships", "event manager",
-    "promoter", "bookings", "artist relations",
+    "promoter", "bookings", "artist relations", "eventmanager",
+    "nightlife", "nachtcultuur", "programmeur", "programmer nightlife",
+    "cultural programmer", "program curator",
 ]
-
 NEGATIVE_KEYWORDS = [
     "cashier", "kassa", "vakkenvuller", "orderpicker", "telemarketing",
     "callcenter", "geen reizen mogelijk", "alleen op locatie in nl",
@@ -179,10 +191,10 @@ SYNERGY_KEYWORDS = [
 
 SLEEVE_SEARCH_TERMS = {
     "A": ["av technician", "event technician", "stagehand", "live sound"],
-    "B": ["solutions engineer", "workflow automation", "product operations", "inkoper"],
-    "C": ["creative producer", "projectmanager events", "projectmanager audio", "experience design"],
-    "D": ["servicecoordinator", "field service engineer", "commissioning engineer", "reizend technicus"],
-    "E": ["event manager", "programmer nightlife", "nachtcultuur programmeur", "festival partnerships"],
+    "B": ["inkoper", "procurement specialist", "buyer", "product operations"],
+    "C": ["projectmanager events", "projectmanager audio", "creative producer", "event project manager"],
+    "D": ["servicecoordinator", "service coordinator", "field service engineer", "reizend technicus"],
+    "E": ["event manager", "nachtcultuur programmeur", "cultural programmer", "festival partnerships"],
 }
 
 NETHERLANDS_KEYWORDS = [
@@ -362,12 +374,25 @@ def _passes_sleeve_must_have(sleeve_key, text, title_text):
     if sleeve_key == "B":
         tooling_hits = _count_unique_hits(text, SLEEVE_B_TOOLING_KEYWORDS)
         remote_hits = _count_unique_hits(text, ["remote", "hybrid", "work from home"])
-        return tooling_hits >= 1 and remote_hits >= 1
+        procurement_title_hits = _count_unique_hits(title_text, SLEEVE_B_PROCUREMENT_KEYWORDS)
+        procurement_text_hits = _count_unique_hits(text, SLEEVE_B_PROCUREMENT_KEYWORDS)
+        return (
+            (tooling_hits >= 1 and remote_hits >= 1)
+            or procurement_title_hits >= 1
+            or procurement_text_hits >= 2
+        )
 
     if sleeve_key == "C":
         title_strong_hits = _count_unique_hits(title_text, SLEEVE_C_STRONG_KEYWORDS)
         text_strong_hits = _count_unique_hits(text, SLEEVE_C_STRONG_KEYWORDS)
-        return title_strong_hits >= 1 or text_strong_hits >= 2
+        project_title_hits = _count_unique_hits(title_text, SLEEVE_C_PROJECT_KEYWORDS)
+        project_text_hits = _count_unique_hits(text, SLEEVE_C_PROJECT_KEYWORDS)
+        return (
+            title_strong_hits >= 1
+            or project_title_hits >= 1
+            or text_strong_hits >= 2
+            or project_text_hits >= 2
+        )
 
     if sleeve_key == "D":
         field_hits = _count_unique_hits(text, SLEEVE_D_FIELD_KEYWORDS)
@@ -375,7 +400,13 @@ def _passes_sleeve_must_have(sleeve_key, text, title_text):
             text,
             ["travel", "reizen", "site visit", "site visits", "on-site", "onsite", "klantlocatie"],
         )
-        return field_hits >= 1 and travel_hits >= 1
+        coordinator_title_hits = _count_unique_hits(title_text, SLEEVE_D_COORDINATOR_KEYWORDS)
+        coordinator_text_hits = _count_unique_hits(text, SLEEVE_D_COORDINATOR_KEYWORDS)
+        return (
+            (field_hits >= 1 and travel_hits >= 1)
+            or coordinator_title_hits >= 1
+            or coordinator_text_hits >= 2
+        )
 
     if sleeve_key == "E":
         title_hits = _count_unique_hits(title_text, SLEEVE_E_MUST_HAVE_KEYWORDS)

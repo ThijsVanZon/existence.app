@@ -10,31 +10,30 @@ SLEEVE_QUERIES = {
         ("lighting technician", "Europe"),
     ],
     "B": [
-        ("solutions engineer", "Remote"),
-        ("product operations", "Europe"),
-        ("workflow automation", "Remote"),
         ("inkoper", "Netherlands"),
+        ("procurement specialist", "Netherlands"),
+        ("buyer", "Netherlands"),
+        ("product operations", "Europe"),
     ],
     "C": [
-        ("creative producer", "Europe"),
         ("projectmanager events", "Netherlands"),
         ("projectmanager audio", "Netherlands"),
-        ("experience design", "Netherlands"),
+        ("creative producer", "Europe"),
+        ("event project manager", "Netherlands"),
     ],
     "D": [
         ("servicecoordinator", "Netherlands"),
+        ("service coordinator", "Netherlands"),
         ("field service engineer", "Netherlands"),
-        ("commissioning engineer", "Europe"),
         ("reizend technicus", "Europe"),
     ],
     "E": [
         ("event manager", "Europe"),
-        ("programmer nightlife", "Netherlands"),
         ("nachtcultuur programmeur", "Netherlands"),
+        ("cultural programmer", "Netherlands"),
         ("festival partnerships", "Europe"),
     ],
 }
-
 
 def sleeve_queries_for(sleeve_key):
     key = (sleeve_key or "").upper()
