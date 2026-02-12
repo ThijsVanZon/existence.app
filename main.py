@@ -211,11 +211,11 @@ def rank_and_filter_jobs(items, target_sleeve=None):
             f"Sleeve {primary_sleeve} fit {primary_score}/5 "
             f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} C:{sleeve_scores['C']} "
             f"D:{sleeve_scores['D']} E:{sleeve_scores['E']})",
-            f"Buitenland-mechanisme: {foreign_label}",
+            f"International-work mechanism: {foreign_label}",
             (
-                "Groeipad: ownership/impact signal gevonden"
+                "Growth path: ownership and impact signals found"
                 if has_growth
-                else "Groeipad: beperkte ownership signalen"
+                else "Growth path: limited ownership signals"
             ),
         ]
 
@@ -430,7 +430,10 @@ def scrape():
 
     if scrape_process.is_alive():
         scrape_process.terminate()
-        scrape_process.join()
+        scrape_process.join(timeout=3)
+        if scrape_process.is_alive():
+            scrape_process.kill()
+            scrape_process.join(timeout=2)
         return jsonify({"error": "Scraping timed out. Please try again."}), 504
 
     try:

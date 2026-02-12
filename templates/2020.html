@@ -23,7 +23,7 @@
   </nav>
 
   <h2>Scraped Jobs Per Sleeve</h2>
-  <p>Klik op een sleeve om alleen die richting te scrapen. Je kunt meerdere sleeves achter elkaar starten.</p>
+  <p>Click a sleeve to scrape only that direction. You can run multiple sleeves one after another.</p>
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
@@ -81,7 +81,7 @@
       card.appendChild(meta);
 
       const mechanism = document.createElement('p');
-      mechanism.textContent = `Buitenland-mechanisme: ${job.foreign_mechanism || 'Unknown'}`;
+      mechanism.textContent = `International-work mechanism: ${job.foreign_mechanism || 'Unknown'}`;
       card.appendChild(mechanism);
 
       if (job.sleeve_scores) {
@@ -106,7 +106,7 @@
 
       const link = document.createElement('a');
       link.href = job.link || '#';
-      link.textContent = 'Open vacature';
+      link.textContent = 'Open job posting';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       card.appendChild(link);
