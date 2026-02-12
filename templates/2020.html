@@ -129,7 +129,7 @@
       ],
       defaults: {
         sources: ['remotive', 'remoteok', 'jobicy', 'himalayas'],
-        location_mode: 'nl_eu',
+        location_mode: 'nl_only',
         strict: false,
         max_results: 30,
         use_cache: true
@@ -219,7 +219,7 @@
         option.textContent = mode.label;
         locationSelect.appendChild(option);
       });
-      locationSelect.value = defaults.location_mode || 'nl_eu';
+      locationSelect.value = defaults.location_mode || 'nl_only';
       document.getElementById('global-strict').checked = defaults.strict !== false;
       document.getElementById('global-cache').checked = defaults.use_cache !== false;
       document.getElementById('global-max').value = String(defaults.max_results || 20);

@@ -194,6 +194,13 @@ OTHER_COUNTRY_KEYWORDS = [
     "united kingdom", "uk", "england", "ireland", "sweden",
     "norway", "denmark", "finland", "austria", "switzerland",
 ]
+NON_EU_COUNTRY_KEYWORDS = [
+    "usa", "united states", "canada", "australia", "new zealand",
+    "india", "singapore", "philippines", "mexico", "brazil",
+    "argentina", "chile", "colombia", "japan", "china",
+    "hong kong", "south korea", "korea", "uae", "saudi",
+    "egypt", "south africa", "nigeria",
+]
 EU_REMOTE_HINTS = [
     "europe", "european", "eu", "european union", "emea",
     "netherlands", "nederland", "belgium", "france", "spain", "italy",
@@ -276,24 +283,28 @@ def _passes_location_gate(text, location_mode):
     if location_mode == "global":
         return True
 
+    has_non_eu_hint = any(keyword in text for keyword in NON_EU_COUNTRY_KEYWORDS)
+    has_blocked_country = any(keyword in text for keyword in COUNTRY_BLOCKLIST_KEYWORDS)
     is_netherlands = _is_netherlands_job(text)
+    if location_mode == "nl_only":
+        return is_netherlands and not has_non_eu_hint and not has_blocked_country
+
     if is_netherlands:
         return True
 
     is_remote_or_hybrid = "remote" in text or "hybrid" in text
     has_eu_hint = any(keyword in text for keyword in EU_REMOTE_HINTS)
     has_global_remote_hint = any(keyword in text for keyword in GLOBAL_REMOTE_HINTS)
-    has_blocked_country = any(keyword in text for keyword in COUNTRY_BLOCKLIST_KEYWORDS)
 
     if not is_remote_or_hybrid:
         return False
 
-    if location_mode == "nl_only":
-        # Sources often only expose "Europe/EMEA remote" instead of explicit NL labels.
-        return (has_eu_hint or has_global_remote_hint) and not has_blocked_country
-
     if location_mode == "nl_eu":
-        return (has_eu_hint or has_global_remote_hint) and not has_blocked_country
+        return (
+            (has_eu_hint or has_global_remote_hint)
+            and not has_blocked_country
+            and not has_non_eu_hint
+        )
 
     return False
 
@@ -371,7 +382,7 @@ def rank_and_filter_jobs(
     items,
     target_sleeve=None,
     min_target_score=4,
-    location_mode="nl_eu",
+    location_mode="nl_only",
     strict_sleeve=True,
 ):
     ranked = []
@@ -679,7 +690,7 @@ def _format_salary_range(minimum, maximum, currency=""):
     return "Not listed"
 
 
-def _fetch_jobicy_jobs(_sleeve_key=None, location_mode="nl_eu"):
+def _fetch_jobicy_jobs(_sleeve_key=None, location_mode="nl_only"):
     params = {"count": 100}
     if location_mode == "nl_only":
         params["geo"] = "Netherlands"
@@ -785,7 +796,7 @@ def _fetch_himalayas_jobs():
     return items
 
 
-def _fetch_adzuna_jobs(sleeve_key, location_mode="nl_eu"):
+def _fetch_adzuna_jobs(sleeve_key, location_mode="nl_only"):
     app_id = os.getenv("ADZUNA_APP_ID", "").strip()
     app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
     if not app_id or not app_key:
@@ -830,7 +841,7 @@ def _fetch_adzuna_jobs(sleeve_key, location_mode="nl_eu"):
     return items
 
 
-def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_eu", provider_filter=None):
+def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_only", provider_filter=None):
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("SerpApi key is missing")
@@ -896,7 +907,7 @@ def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_eu", provider_filter=None)
     return items
 
 
-def _fetch_serpapi_indeed_jobs(sleeve_key, location_mode="nl_eu"):
+def _fetch_serpapi_indeed_jobs(sleeve_key, location_mode="nl_only"):
     return _fetch_serpapi_jobs(
         sleeve_key,
         location_mode=location_mode,
@@ -904,7 +915,7 @@ def _fetch_serpapi_indeed_jobs(sleeve_key, location_mode="nl_eu"):
     )
 
 
-def _fetch_serpapi_linkedin_jobs(sleeve_key, location_mode="nl_eu"):
+def _fetch_serpapi_linkedin_jobs(sleeve_key, location_mode="nl_only"):
     return _fetch_serpapi_jobs(
         sleeve_key,
         location_mode=location_mode,
@@ -1083,7 +1094,7 @@ def _fetch_source_with_cache(source_key, sleeve_key, location_mode, force_refres
     return items, error
 
 
-def fetch_jobs_from_sources(selected_sources, sleeve_key, location_mode="nl_eu", force_refresh=False):
+def fetch_jobs_from_sources(selected_sources, sleeve_key, location_mode="nl_only", force_refresh=False):
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
     if not requested:
         requested = _default_sources()
@@ -1136,7 +1147,7 @@ def _public_scrape_config():
         "sources": sources,
         "defaults": {
             "sources": _default_sources(),
-            "location_mode": "nl_eu",
+            "location_mode": "nl_only",
             "strict": False,
             "max_results": 30,
             "use_cache": True,
@@ -1244,9 +1255,9 @@ def scrape():
     if sleeve_key not in VALID_SLEEVES:
         return jsonify({"error": "Invalid sleeve. Use one of: A, B, C, D, E."}), 400
 
-    location_mode = request.args.get("location_mode", "nl_eu").strip()
+    location_mode = request.args.get("location_mode", "nl_only").strip()
     if location_mode not in {"nl_only", "nl_eu", "global"}:
-        location_mode = "nl_eu"
+        location_mode = "nl_only"
 
     strict_sleeve = request.args.get("strict", "1") == "1"
     force_refresh = request.args.get("refresh", "0") == "1"
