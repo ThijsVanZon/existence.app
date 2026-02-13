@@ -1,0 +1,184 @@
+{
+  "jobs": [
+    {
+      "title": "Implementation Consultant",
+      "company": "Example Labs",
+      "location": "Amsterdam, Netherlands",
+      "url": "https://www.indeed.com/viewjob?jk=abc123",
+      "source": "Indeed",
+      "date_posted": "2 days ago",
+      "snippet": "Drive workflow automation and integrations with enterprise clients.",
+      "full_description": "You will own implementation workflows, API integrations and process improvements.",
+      "raw_text": "Implementation Consultant Example Labs Amsterdam, Netherlands Drive workflow automation and integrations with enterprise clients. You will own implementation workflows, API integrations and process improvements.",
+      "prepared_text": "implementation consultant example labs amsterdam netherlands drive workflow automation and integrations with enterprise clients you will own implementation workflows api integrations and process improvements",
+      "primary_sleeve_id": "B",
+      "primary_sleeve_name": "Workflow Ops & Automation",
+      "primary_sleeve_tagline": "Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).",
+      "sleeve_scores": {
+        "A": 0,
+        "B": 5,
+        "C": 0,
+        "D": 1,
+        "E": 0
+      },
+      "primary_sleeve_score": 5,
+      "abroad_score": 2,
+      "abroad_badges": [
+        "remote_or_hybrid"
+      ],
+      "decision": "PASS",
+      "reasons": [
+        "Sleeve B fit 5/5 (A:0 B:5 C:0 D:1 E:0)",
+        "Abroad score 2/4 via remote_or_hybrid",
+        "Keyword coverage 4 hits for sleeve B"
+      ],
+      "hard_reject_reason": null,
+      "language_flags": {
+        "extra_language_required": false,
+        "extra_language_preferred": true,
+        "extra_languages": [
+          "german"
+        ],
+        "allow_languages": [
+          "nl",
+          "en"
+        ]
+      },
+      "language_notes": [
+        "Kanttekening: extra taal genoemd (german); check of het vereist is."
+      ],
+      "query": "implementation consultant",
+      "query_location": "Netherlands",
+      "detail_fetch_failed": false,
+      "canonical_url_or_job_id": "abc123",
+      "link": "https://www.indeed.com/viewjob?jk=abc123",
+      "date": "2 days ago",
+      "salary": "Not listed",
+      "primary_sleeve": "B",
+      "why_relevant": [
+        "Sleeve B fit 5/5 (A:0 B:5 C:0 D:1 E:0)",
+        "Abroad score 2/4 via remote_or_hybrid",
+        "Keyword coverage 4 hits for sleeve B"
+      ]
+    }
+  ],
+  "summary": {
+    "run_id": "f4c1a29b8d2e",
+    "config_version": "1.1",
+    "sleeve": "B",
+    "location_mode": "nl_eu",
+    "sources_used": [
+      "indeed_web",
+      "linkedin_web"
+    ],
+    "raw_count": 184,
+    "deduped_count": 158,
+    "pass_count": 26,
+    "maybe_count": 41,
+    "fail_count": 91,
+    "top_fail_reasons": [
+      {
+        "reason": "primary_sleeve_score_too_low",
+        "count": 55
+      },
+      {
+        "reason": "insufficient_keyword_hits",
+        "count": 31
+      },
+      {
+        "reason": "hard_reject_title:Account Executive",
+        "count": 5
+      }
+    ],
+    "fallbacks_applied": [
+      "fallback:min_total_hits-1"
+    ],
+    "incremental_mode": false,
+    "incremental_skipped": 0,
+    "full_description_coverage": 0.62,
+    "full_description_count": 98,
+    "targets": {
+      "raw_or_pages_goal_met": true,
+      "pass_or_maybe_goal_met": true,
+      "non_zero_when_raw": true,
+      "min_pages_attempted_per_source": 5,
+      "pages_attempted_per_source": {
+        "Indeed": 9,
+        "LinkedIn": 7
+      }
+    },
+    "kpi_gate_passed": true
+  },
+  "diagnostics": {
+    "run_id": "f4c1a29b8d2e",
+    "source_query_pages": [
+      {
+        "source": "Indeed",
+        "query": "implementation consultant",
+        "location": "Netherlands",
+        "page": 1,
+        "url": "https://www.indeed.com/jobs?q=implementation+consultant&l=Netherlands&start=0",
+        "status": 200,
+        "cards_found": 14,
+        "parsed_count": 14,
+        "detailpages_fetched": 14,
+        "error_count": 0,
+        "blocked_detected": false
+      }
+    ],
+    "source_query_summary": {
+      "Indeed|implementation consultant|Netherlands": {
+        "source": "Indeed",
+        "query": "implementation consultant",
+        "location": "Netherlands",
+        "pages_attempted": 3,
+        "raw_count": 39,
+        "parsed_count": 37,
+        "detailpages_fetched": 37,
+        "error_count": 1,
+        "blocked_detected": false
+      }
+    },
+    "blocked_detected": {
+      "Indeed": false,
+      "LinkedIn": false
+    },
+    "snapshots": [],
+    "funnel": {
+      "raw": 184,
+      "after_dedupe": 158,
+      "scored": 158,
+      "pass_count": 26,
+      "maybe_count": 41,
+      "fail_count": 91,
+      "top_fail_reasons": [
+        {
+          "reason": "primary_sleeve_score_too_low",
+          "count": 55
+        }
+      ]
+    },
+    "fallbacks_applied": [
+      "fallback:min_total_hits-1"
+    ],
+    "fail_reasons": {
+      "primary_sleeve_score_too_low": 55,
+      "insufficient_keyword_hits": 31
+    },
+    "dedupe_ratio_by_source": {
+      "Indeed": {
+        "raw_count": 92,
+        "after_dedupe": 81,
+        "dedupe_ratio": 0.8804
+      },
+      "LinkedIn": {
+        "raw_count": 92,
+        "after_dedupe": 77,
+        "dedupe_ratio": 0.837
+      }
+    },
+    "auto_failover": [],
+    "config_version": "1.1"
+  },
+  "errors": []
+}

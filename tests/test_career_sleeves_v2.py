@@ -25,6 +25,13 @@ class TestCareerSleevesV2(unittest.TestCase):
         self.assertTrue(preferred_flags["extra_language_preferred"])
         self.assertIn("german", preferred_flags["extra_languages"])
 
+    def test_language_required_marker_must_be_near_language(self):
+        flags, _ = sleeves_v2.detect_language_flags(
+            "Must have strong stakeholder management. German is a plus."
+        )
+        self.assertFalse(flags["extra_language_required"])
+        self.assertTrue(flags["extra_language_preferred"])
+
     def test_plural_matching_improves_keyword_detection(self):
         score, details = sleeves_v2.score_sleeve(
             "E",
@@ -48,6 +55,22 @@ class TestCareerSleevesV2(unittest.TestCase):
         self.assertIn("remote_or_hybrid", badges)
         self.assertIn("work_from_abroad_policy", badges)
         self.assertIn("travel_component", badges)
+
+    def test_hard_reject_detects_sales_titles(self):
+        reason = sleeves_v2.detect_hard_reject(
+            "Account Executive",
+            "Enterprise quota carrying role with cold calling.",
+        )
+        self.assertTrue(reason.startswith("hard_reject_title"))
+
+    def test_workflow_role_scores_without_hard_must_have_gate(self):
+        score, details = sleeves_v2.score_sleeve(
+            "B",
+            "Implementation consultant for process improvement and systems analysis.",
+            "Implementation Consultant",
+        )
+        self.assertGreaterEqual(score, 3)
+        self.assertEqual(details["reason"], "ok")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ class TestMainRanking(unittest.TestCase):
             "source": "test",
         }
 
-    def test_abroad_gate_filters_jobs_without_abroad_signal(self):
+    def test_abroad_signal_is_no_longer_a_hard_gate(self):
         jobs = [
             self._job(
                 "NoAbroad",
@@ -29,7 +29,9 @@ class TestMainRanking(unittest.TestCase):
             location_mode="global",
             strict_sleeve=False,
         )
-        self.assertEqual(ranked, [])
+        self.assertEqual(len(ranked), 1)
+        self.assertEqual(ranked[0]["decision"], "PASS")
+        self.assertEqual(ranked[0]["abroad_score"], 0)
 
     def test_sales_soft_penalty_demotes_but_does_not_hide_fit(self):
         base_snippet = (
@@ -74,14 +76,14 @@ class TestMainRanking(unittest.TestCase):
         self.assertTrue(item["primary_sleeve_tagline"])
         self.assertLessEqual(len(item.get("reasons") or []), 3)
 
-    def test_dedupe_by_company_title_city(self):
+    def test_dedupe_by_title_company_and_canonical_url(self):
         jobs = [
             {
                 "title": "AV Technician",
                 "company": "SameCo",
                 "location": "Amsterdam, Netherlands",
                 "snippet": "Remote hybrid festival role with travel.",
-                "link": "https://example.com/1",
+                "link": "https://example.com/jobs/1?utm_source=foo",
                 "date": "2026-02-01",
                 "source": "test",
             },
@@ -90,7 +92,7 @@ class TestMainRanking(unittest.TestCase):
                 "company": "SameCo",
                 "location": "Amsterdam Netherlands",
                 "snippet": "Remote hybrid festival role with travel.",
-                "link": "https://example.com/2",
+                "link": "https://example.com/jobs/1?utm_source=bar",
                 "date": "2026-02-01",
                 "source": "test",
             },
@@ -103,6 +105,31 @@ class TestMainRanking(unittest.TestCase):
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
+
+    def test_output_contract_contains_decision_and_text_fields(self):
+        jobs = [
+            self._job(
+                "ContractCheck",
+                "Remote workflow automation role with integrations and business analysis.",
+                title="Implementation Consultant",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="B",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+        )
+
+        self.assertEqual(len(ranked), 1)
+        item = ranked[0]
+        self.assertIn("decision", item)
+        self.assertIn(item["decision"], {"PASS", "MAYBE", "FAIL"})
+        self.assertIn("raw_text", item)
+        self.assertIn("prepared_text", item)
+        self.assertIn("language_flags", item)
+        self.assertIn("hard_reject_reason", item)
 
 
 if __name__ == "__main__":

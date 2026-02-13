@@ -33,16 +33,19 @@ def _find_hits(prepared_text, phrases):
     return {phrase for phrase in phrases if _phrase_in_text(prepared_text, phrase)}
 
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "2.0"
 ALLOW_LANGUAGES = ["nl", "en"]
 VALID_SLEEVES = {"A", "B", "C", "D", "E"}
 MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW = 3
 MIN_ABROAD_SCORE_TO_PASS = 1
 ABROAD_SCORE_CAP = 4
+MIN_TOTAL_HITS_TO_SHOW = 2
+MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE = 2
+MIN_TOTAL_HITS_TO_MAYBE = 1
 
 RANKING_WEIGHTS = {
-    "abroad_score": 0.35,
-    "primary_sleeve_score": 0.45,
+    "abroad_score": 0.30,
+    "primary_sleeve_score": 0.50,
     "synergy_score": 0.20,
 }
 
@@ -52,11 +55,45 @@ SOFT_PENALTIES = [
             "Account Executive",
             "SDR",
             "Sales Development",
-            "cold calling",
         ],
-        "penalty_points": 15,
+        "penalty_points": 12,
         "reason": "Sales-heavy role signal detected.",
+    },
+    {
+        "if_any": [
+            "cold calling",
+            "commission only",
+            "door-to-door",
+        ],
+        "penalty_points": 10,
+        "reason": "High-friction sales context detected.",
+    },
+    {
+        "if_any": [
+            "Technical Account Manager",
+        ],
+        "penalty_points": 20,
+        "reason": "Technical Account Manager profile likely outside target fit.",
     }
+]
+
+HARD_REJECT_TITLE_PATTERNS = [
+    "Account Executive",
+    "SDR",
+    "Sales Development",
+    "Sales Development Representative",
+    "Technical Account Manager",
+]
+
+HARD_REJECT_TEXT_PATTERNS = [
+    "door-to-door",
+    "commission only",
+]
+
+HARD_REJECT_COLD_CALLING_CONTEXT = [
+    "sales",
+    "quota",
+    "business development",
 ]
 
 ABROAD_SIGNALS = {
@@ -128,12 +165,7 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
-            "must_not_have_any": [
-                "IT support",
-                "software developer",
-                "Account Executive",
-                "Technical Account Manager",
-            ],
+            "bonus_signals": [],
         },
         "keywords": {
             "title_positive": [
@@ -176,10 +208,18 @@ SLEEVE_CONFIG = {
                 "inside sales",
                 "customer success",
                 "callcenter",
+                "helpdesk",
             ],
         },
         "scoring": {
-            "points": {"title_hit": 3, "context_hit": 2, "negative_hit": -4},
+            "points": {
+                "title_hit": 3,
+                "context_hit": 2,
+                "bonus_hit": 1,
+                "negative_hit": -3,
+                "title_gate_bonus": 1,
+                "coverage_bonus": 1,
+            },
             "cap_max": 5,
         },
     },
@@ -189,13 +229,20 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
-            "must_have_any": ["SaaS", "workflow", "automation", "integrations"],
-            "must_not_have_any": ["Account Executive", "Technical Account Manager"],
+            "bonus_signals": [
+                "SaaS",
+                "workflow",
+                "automation",
+                "integrations",
+                "rpa",
+            ],
         },
         "keywords": {
             "title_positive": [
                 "implementation consultant",
                 "solutions engineer",
+                "solutions consultant",
+                "technical consultant",
                 "operations specialist",
                 "business operations",
                 "product operations",
@@ -209,6 +256,11 @@ SLEEVE_CONFIG = {
                 "systems analyst",
                 "business analyst",
                 "data operations",
+                "customer success engineer",
+                "support engineer",
+                "consultant implementatie",
+                "implementatie consultant",
+                "functioneel beheer",
             ],
             "context_positive": [
                 "SaaS",
@@ -223,6 +275,11 @@ SLEEVE_CONFIG = {
                 "Confluence",
                 "service management",
                 "AI",
+                "automatisering",
+                "procesverbetering",
+                "integraties",
+                "workflow",
+                "rpa",
             ],
             "negative": [
                 "pure sales",
@@ -232,7 +289,14 @@ SLEEVE_CONFIG = {
             ],
         },
         "scoring": {
-            "points": {"title_hit": 3, "context_hit": 2, "negative_hit": -5},
+            "points": {
+                "title_hit": 3,
+                "context_hit": 2,
+                "bonus_hit": 1,
+                "negative_hit": -5,
+                "title_gate_bonus": 1,
+                "coverage_bonus": 1,
+            },
             "cap_max": 5,
         },
     },
@@ -242,11 +306,7 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
-            "must_not_have_any": [
-                "Account Executive",
-                "Technical Account Manager",
-                "IT support",
-            ],
+            "bonus_signals": [],
         },
         "keywords": {
             "title_positive": [
@@ -262,9 +322,18 @@ SLEEVE_CONFIG = {
                 "exhibition",
                 "activation",
                 "installation",
+                "creatief producent",
+                "technisch producent",
+                "productiecoördinator",
+                "beleving",
+                "tentoonstelling",
+                "activatie",
+                "installatie",
             ],
             "context_positive": [
                 "brand experience",
+                "brand activation",
+                "experiential",
                 "interactive",
                 "museum",
                 "expo",
@@ -272,11 +341,19 @@ SLEEVE_CONFIG = {
                 "scenography",
                 "content production",
                 "concept-to-delivery",
+                "immersive",
             ],
             "negative": ["account manager", "inside sales", "helpdesk"],
         },
         "scoring": {
-            "points": {"title_hit": 3, "context_hit": 2, "negative_hit": -4},
+            "points": {
+                "title_hit": 3,
+                "context_hit": 2,
+                "bonus_hit": 1,
+                "negative_hit": -4,
+                "title_gate_bonus": 1,
+                "coverage_bonus": 1,
+            },
             "cap_max": 5,
         },
     },
@@ -286,14 +363,13 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
-            "must_have_any": [
+            "bonus_signals": [
                 "installation",
                 "commissioning",
                 "field",
                 "service",
                 "inbedrijfstelling",
             ],
-            "must_not_have_any": ["Technical Account Manager", "Account Executive"],
         },
         "keywords": {
             "title_positive": [
@@ -304,10 +380,14 @@ SLEEVE_CONFIG = {
                 "commissioning",
                 "inbedrijfstelling",
                 "installation engineer",
+                "installatiemonteur",
+                "servicemonteur",
                 "maintenance technician",
                 "troubleshooting",
                 "on-site support",
                 "systems integrator",
+                "deployment",
+                "rollout",
             ],
             "context_positive": [
                 "site visits",
@@ -317,11 +397,21 @@ SLEEVE_CONFIG = {
                 "rollout",
                 "SLA",
                 "incident response",
+                "field service",
+                "storingsdienst",
+                "uitrol",
             ],
             "negative": ["callcenter", "pure sales", "account manager"],
         },
         "scoring": {
-            "points": {"title_hit": 3, "context_hit": 2, "negative_hit": -4},
+            "points": {
+                "title_hit": 3,
+                "context_hit": 2,
+                "bonus_hit": 1,
+                "negative_hit": -4,
+                "title_gate_bonus": 1,
+                "coverage_bonus": 1,
+            },
             "cap_max": 5,
         },
     },
@@ -331,20 +421,13 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
-            "must_have_any": [
+            "bonus_signals": [
                 "partnership",
                 "community",
                 "event",
                 "program",
                 "sponsorship",
                 "artist relations",
-            ],
-            "must_not_have_any": [
-                "Technical Account Manager",
-                "Account Executive",
-                "Inside Sales",
-                "SDR",
-                "Sales Development",
             ],
         },
         "keywords": {
@@ -356,10 +439,13 @@ SLEEVE_CONFIG = {
                 "program coordinator",
                 "program manager",
                 "event marketing manager",
+                "event marketeer",
                 "sponsorship manager",
                 "artist relations",
                 "talent buyer",
                 "booker",
+                "programma coördinator",
+                "programmamaker",
             ],
             "context_positive": [
                 "events",
@@ -369,11 +455,21 @@ SLEEVE_CONFIG = {
                 "music",
                 "creator economy",
                 "brand activations",
+                "samenwerkingen",
+                "sponsoring",
+                "artiestenbegeleiding",
             ],
-            "negative": ["Technical Account Manager", "account manager"],
+            "negative": ["account manager"],
         },
         "scoring": {
-            "points": {"title_hit": 3, "context_hit": 2, "negative_hit": -6},
+            "points": {
+                "title_hit": 3,
+                "context_hit": 2,
+                "bonus_hit": 1,
+                "negative_hit": -4,
+                "title_gate_bonus": 1,
+                "coverage_bonus": 1,
+            },
             "cap_max": 5,
         },
     },
@@ -393,44 +489,110 @@ SLEEVE_SEARCH_TERMS = {
     "B": [
         "implementation consultant",
         "solutions engineer",
-        "workflow automation",
-        "product operations",
-        "business operations specialist",
+        "solutions consultant",
+        "technical consultant",
+        "workflow",
+        "automation",
+        "integrations",
+        "rpa",
+        "business analyst",
+        "process improvement",
         "systems analyst",
-        "integrations specialist",
-        "revops",
+        "product operations",
+        "customer success engineer",
+        "support engineer workflow",
+        "implementatie consultant",
+        "consultant implementatie",
+        "automatisering",
+        "integraties",
+        "procesverbetering",
+        "functioneel beheer workflow",
     ],
     "C": [
         "creative producer",
         "technical producer",
         "experience producer",
-        "production coordinator",
-        "creative technologist",
-        "immersive producer",
-        "exhibition producer",
         "event producer",
+        "production coordinator",
+        "immersive",
+        "exhibition",
+        "brand activation",
+        "experiential",
+        "installation",
+        "creatief producent",
+        "technisch producent",
+        "productiecoordinator",
+        "beleving",
+        "tentoonstelling",
+        "activatie",
+        "installatie",
     ],
     "D": [
         "field service engineer",
+        "service engineer",
         "service technician",
         "commissioning engineer",
         "installation engineer",
-        "on-site support engineer",
-        "systems integrator technician",
+        "on-site support",
+        "systems integrator",
+        "deployment",
+        "rollout",
+        "field service",
+        "servicemonteur",
         "inbedrijfstelling",
-        "service engineer",
+        "installatiemonteur",
+        "storingsdienst",
+        "troubleshooting",
+        "uitrol",
     ],
     "E": [
-        "partnerships manager",
         "community manager",
+        "community lead",
+        "partnerships manager",
+        "partnership manager",
         "program coordinator",
-        "sponsorship manager",
+        "program manager",
+        "event marketing",
+        "sponsorship",
         "artist relations",
         "talent buyer",
         "booker",
-        "event marketing manager",
+        "samenwerkingen",
+        "programma coordinator",
+        "programmamaker",
+        "event marketeer",
+        "sponsoring",
+        "artiestenbegeleiding",
     ],
 }
+
+SEARCH_LOCATIONS = {
+    "nl": ["Netherlands"],
+    "emea": ["Europe", "Amsterdam", "Berlin", "Barcelona", "Milan", "Warsaw"],
+}
+
+LOCATION_MODE_PASSES = {
+    "nl_only": ["nl"],
+    "nl_eu": ["nl", "emea"],
+    "global": ["nl", "emea"],
+}
+
+LOCATION_MODE_LABELS = {
+    "nl_only": "Netherlands focus",
+    "nl_eu": "Netherlands + EMEA",
+    "global": "Global (NL + EMEA discovery)",
+}
+
+BLOCKED_PAGE_HINTS = [
+    "captcha",
+    "are you a robot",
+    "access denied",
+    "blocked",
+    "security check",
+    "unusual traffic",
+    "verify you are human",
+    "sign in to continue",
+]
 
 LANGUAGE_REQUIRED_MARKERS = [
     "required",
@@ -645,26 +807,101 @@ for language in LANGUAGE_CATALOG:
         _LANGUAGE_LOOKUP[normalized_name] = code
 
 
-def detect_language_flags(raw_text):
+def detect_hard_reject(raw_title, raw_text):
+    prepared_title = _prepare_text(raw_title)
     prepared_text = _prepare_text(raw_text)
-    required_marker = any(
-        _phrase_in_text(prepared_text, marker) for marker in LANGUAGE_REQUIRED_MARKERS
-    )
+
+    for phrase in HARD_REJECT_TITLE_PATTERNS:
+        if _phrase_in_text(prepared_title, phrase):
+            return f"hard_reject_title:{phrase}"
+
+    for phrase in HARD_REJECT_TEXT_PATTERNS:
+        if _phrase_in_text(prepared_text, phrase):
+            return f"hard_reject_text:{phrase}"
+
+    if _phrase_in_text(prepared_text, "cold calling"):
+        if _find_hits(prepared_text, HARD_REJECT_COLD_CALLING_CONTEXT):
+            return "hard_reject_text:cold calling sales context"
+    return ""
+
+
+def detect_blocked_html(html_text):
+    prepared = _prepare_text(html_text)
+    return any(_phrase_in_text(prepared, marker) for marker in BLOCKED_PAGE_HINTS)
+
+
+def normalize_for_match(value):
+    return _normalize_for_match(value)
+
+
+def prepare_text(value):
+    return _prepare_text(value)
+
+
+def find_hits(prepared_text, phrases):
+    return _find_hits(prepared_text, phrases)
+
+
+def _phrase_spans(normalized_text, phrase):
+    normalized_phrase = _normalize_for_match(phrase)
+    if not normalized_phrase:
+        return []
+    parts = [re.escape(part) for part in normalized_phrase.split()]
+    if not parts:
+        return []
+    pattern = r"\b" + r"\s+".join(parts) + r"\b"
+    return [match.span() for match in re.finditer(pattern, normalized_text)]
+
+
+def _phrase_token_positions(normalized_text, phrase):
+    phrase_tokens = _normalize_for_match(phrase).split()
+    text_tokens = normalized_text.split()
+    if not phrase_tokens or not text_tokens:
+        return []
+    positions = []
+    span_len = len(phrase_tokens)
+    for idx in range(0, len(text_tokens) - span_len + 1):
+        if text_tokens[idx : idx + span_len] == phrase_tokens:
+            positions.append(idx)
+    return positions
+
+
+def _is_language_required_in_context(raw_text, language_phrase):
+    raw_value = str(raw_text or "").lower()
+    clauses = [segment.strip() for segment in re.split(r"[.;:!\n\r]+", raw_value) if segment.strip()]
+    for clause in clauses:
+        normalized_clause = _normalize_for_match(clause)
+        prepared_clause = _prepare_text(normalized_clause)
+        if not _phrase_in_text(prepared_clause, language_phrase):
+            continue
+        for marker in LANGUAGE_REQUIRED_MARKERS:
+            if _phrase_in_text(prepared_clause, marker):
+                return True
+    return False
+
+
+def detect_language_flags(raw_text):
+    normalized_text = _normalize_for_match(raw_text)
+    prepared_text = _prepare_text(normalized_text)
 
     extra_languages = set()
+    required_languages = set()
     for normalized_name, code in _LANGUAGE_LOOKUP.items():
         if code in ALLOW_LANGUAGES:
             continue
         if _phrase_in_text(prepared_text, normalized_name):
             extra_languages.add(normalized_name)
+            if _is_language_required_in_context(raw_text, normalized_name):
+                required_languages.add(normalized_name)
 
     ordered_languages = sorted(extra_languages)
+    ordered_required = sorted(required_languages)
     language_label = ", ".join(ordered_languages)
-    required = bool(ordered_languages) and required_marker
-    preferred = bool(ordered_languages) and not required_marker
+    required = bool(ordered_required)
+    preferred = bool(ordered_languages) and not required
     notes = []
     if required:
-        notes.append(f"Let op: deze vacature vereist ook {language_label} (naast NL/EN).")
+        notes.append(f"Let op: vereist ook {', '.join(ordered_required)} (naast NL/EN).")
     elif preferred:
         notes.append(
             f"Kanttekening: extra taal genoemd ({language_label}); check of het vereist is."
@@ -720,46 +957,19 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     title_hits_in_text = _find_hits(prepared_text, keywords["title_positive"])
     context_hits = _find_hits(prepared_text, keywords["context_positive"])
     negative_hits = _find_hits(prepared_text, keywords["negative"])
-
+    bonus_hits = _find_hits(prepared_text, must_haves.get("bonus_signals") or [])
     total_positive_hits = len(title_hits_in_text.union(context_hits))
-    if len(title_hits_in_title) < must_haves.get("min_title_hits", 0):
-        return 0, {
-            "reason": "min_title_hits",
-            "title_hits": sorted(title_hits_in_title),
-            "context_hits": sorted(context_hits),
-            "negative_hits": sorted(negative_hits),
-        }
-    if total_positive_hits < must_haves.get("min_total_hits", 0):
-        return 0, {
-            "reason": "min_total_hits",
-            "title_hits": sorted(title_hits_in_title),
-            "context_hits": sorted(context_hits),
-            "negative_hits": sorted(negative_hits),
-        }
-
-    must_have_any = must_haves.get("must_have_any") or []
-    if must_have_any and not _find_hits(prepared_text, must_have_any):
-        return 0, {
-            "reason": "must_have_any",
-            "title_hits": sorted(title_hits_in_title),
-            "context_hits": sorted(context_hits),
-            "negative_hits": sorted(negative_hits),
-        }
-
-    must_not_have_any = must_haves.get("must_not_have_any") or []
-    if _find_hits(prepared_text, must_not_have_any):
-        return 0, {
-            "reason": "must_not_have_any",
-            "title_hits": sorted(title_hits_in_title),
-            "context_hits": sorted(context_hits),
-            "negative_hits": sorted(negative_hits),
-        }
 
     score = (
         len(title_hits_in_title) * points.get("title_hit", 0)
         + len(context_hits) * points.get("context_hit", 0)
+        + len(bonus_hits) * points.get("bonus_hit", 0)
         + len(negative_hits) * points.get("negative_hit", 0)
     )
+    if len(title_hits_in_title) >= must_haves.get("min_title_hits", 0):
+        score += points.get("title_gate_bonus", 0)
+    if total_positive_hits >= must_haves.get("min_total_hits", 0):
+        score += points.get("coverage_bonus", 0)
     score = max(0, min(cap, score))
 
     return score, {
@@ -767,6 +977,11 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
         "title_hits": sorted(title_hits_in_title),
         "context_hits": sorted(context_hits),
         "negative_hits": sorted(negative_hits),
+        "bonus_hits": sorted(bonus_hits),
+        "title_hit_count": len(title_hits_in_title),
+        "total_positive_hits": total_positive_hits,
+        "min_title_hits": int(must_haves.get("min_title_hits", 0)),
+        "min_total_hits": int(must_haves.get("min_total_hits", 0)),
     }
 
 

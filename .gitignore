@@ -3,3 +3,5 @@ __pycache__/
 *.py[cod]
 *.log
 tmp/
+debug_state/
+debug_snapshots/

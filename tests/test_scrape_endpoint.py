@@ -1,0 +1,216 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import main
+
+
+class TestScrapeEndpoint(unittest.TestCase):
+    def setUp(self):
+        self.client = main.app.test_client()
+
+    def test_summary_uses_total_pages_attempted_per_source(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            def fake_fetch(*args, **kwargs):
+                items = [
+                    {
+                        "title": "AV Technician",
+                        "company": "A",
+                        "location": "Amsterdam, Netherlands",
+                        "snippet": "Remote role",
+                        "link": "https://example.com/a",
+                        "source": "Indeed",
+                    }
+                ]
+                diagnostics = main._new_diagnostics()
+                diagnostics["source_query_summary"] = {
+                    "Indeed|q1|Netherlands": {
+                        "source": "Indeed",
+                        "query": "q1",
+                        "location": "Netherlands",
+                        "pages_attempted": 2,
+                        "raw_count": 10,
+                        "parsed_count": 8,
+                        "new_unique_count": 7,
+                        "detailpages_fetched": 5,
+                        "full_description_count": 3,
+                        "error_count": 0,
+                        "blocked_detected": False,
+                    },
+                    "Indeed|q2|Netherlands": {
+                        "source": "Indeed",
+                        "query": "q2",
+                        "location": "Netherlands",
+                        "pages_attempted": 2,
+                        "raw_count": 10,
+                        "parsed_count": 8,
+                        "new_unique_count": 7,
+                        "detailpages_fetched": 5,
+                        "full_description_count": 3,
+                        "error_count": 0,
+                        "blocked_detected": False,
+                    },
+                    "LinkedIn|q1|Netherlands": {
+                        "source": "LinkedIn",
+                        "query": "q1",
+                        "location": "Netherlands",
+                        "pages_attempted": 3,
+                        "raw_count": 12,
+                        "parsed_count": 10,
+                        "new_unique_count": 9,
+                        "detailpages_fetched": 6,
+                        "full_description_count": 4,
+                        "error_count": 0,
+                        "blocked_detected": False,
+                    },
+                }
+                return items, [], ["indeed_web", "linkedin_web"], diagnostics
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [
+                        {
+                            "title": "AV Technician",
+                            "company": "A",
+                            "location": "Amsterdam, Netherlands",
+                            "url": "https://example.com/a",
+                            "source": "Indeed",
+                            "decision": "PASS",
+                            "language_flags": {},
+                            "language_notes": [],
+                            "reasons": [],
+                            "hard_reject_reason": None,
+                            "sleeve_scores": {"A": 5, "B": 0, "C": 0, "D": 0, "E": 0},
+                            "primary_sleeve_id": "A",
+                            "primary_sleeve_score": 5,
+                            "abroad_score": 2,
+                            "abroad_badges": [],
+                            "raw_text": "",
+                            "prepared_text": "",
+                            "snippet": "",
+                            "full_description": "",
+                            "canonical_url_or_job_id": "https://example.com/a",
+                        }
+                    ],
+                    "funnel": {
+                        "raw": 20,
+                        "after_dedupe": 15,
+                        "pass_count": 1,
+                        "maybe_count": 2,
+                        "fail_count": 12,
+                        "full_description_count": 5,
+                        "full_description_coverage": 0.3333,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get("/scrape?sleeve=A&target_raw=150")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            summary = payload["summary"]
+
+            self.assertEqual(summary["targets"]["pages_attempted_per_source"]["Indeed"], 4)
+            self.assertEqual(summary["targets"]["pages_attempted_per_source"]["LinkedIn"], 3)
+            self.assertFalse(summary["targets"]["raw_or_pages_goal_met"])
+            self.assertFalse(summary["kpi_gate_passed"])
+            self.assertIn("config_version", summary)
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
+    def test_auto_failover_activates_on_low_yield(self):
+        original_fetch_source = main._fetch_source_with_cache
+        try:
+            def fake_fetch_source(source_key, *args, **kwargs):
+                diagnostics = main._new_diagnostics()
+                if source_key in {"indeed_web", "linkedin_web"}:
+                    return (
+                        [
+                            {
+                                "title": "Dup",
+                                "company": "Same",
+                                "location": "Amsterdam",
+                                "link": "https://example.com/dup",
+                                "source": "Indeed" if source_key == "indeed_web" else "LinkedIn",
+                            }
+                        ],
+                        None,
+                        diagnostics,
+                    )
+                if source_key == "jobicy":
+                    return (
+                        [
+                            {
+                                "title": "Unique One",
+                                "company": "U1",
+                                "location": "NL",
+                                "link": "https://example.com/u1",
+                                "source": "Jobicy",
+                            },
+                            {
+                                "title": "Unique Two",
+                                "company": "U2",
+                                "location": "NL",
+                                "link": "https://example.com/u2",
+                                "source": "Jobicy",
+                            },
+                        ],
+                        None,
+                        diagnostics,
+                    )
+                return ([], None, diagnostics)
+
+            main._fetch_source_with_cache = fake_fetch_source
+
+            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                ["indeed_web", "linkedin_web"],
+                sleeve_key="A",
+                target_raw=10,
+            )
+            self.assertEqual(errors, [])
+            self.assertIn("jobicy", used_sources)
+            self.assertGreaterEqual(len(items), 3)
+            self.assertTrue(diagnostics["auto_failover"])
+        finally:
+            main._fetch_source_with_cache = original_fetch_source
+
+    def test_incremental_filter_skips_previously_seen_jobs(self):
+        original_state_path = main.SEEN_JOBS_STATE_PATH
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                main.SEEN_JOBS_STATE_PATH = Path(temp_dir) / "seen_jobs_state.json"
+                jobs = [
+                    {
+                        "title": "Job A",
+                        "company": "Company A",
+                        "location": "Amsterdam",
+                        "link": "https://example.com/a",
+                    },
+                    {
+                        "title": "Job B",
+                        "company": "Company B",
+                        "location": "Amsterdam",
+                        "link": "https://example.com/b",
+                    },
+                ]
+
+                first_run, first_skipped = main._apply_incremental_filter(jobs, window_days=14)
+                second_run, second_skipped = main._apply_incremental_filter(jobs, window_days=14)
+
+                self.assertEqual(len(first_run), 2)
+                self.assertEqual(first_skipped, 0)
+                self.assertEqual(len(second_run), 0)
+                self.assertEqual(second_skipped, 2)
+        finally:
+            main.SEEN_JOBS_STATE_PATH = original_state_path
+
+
+if __name__ == "__main__":
+    unittest.main()
