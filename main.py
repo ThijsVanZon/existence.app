@@ -285,6 +285,15 @@ def _slugify(value):
     return cleaned or "na"
 
 
+def _is_absolute_http_url(url):
+    parsed = urlparse(_clean_value(url, ""))
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _host_for_url(url):
+    return urlparse(_clean_value(url, "")).netloc.lower()
+
+
 def _ensure_snapshot_dir():
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -431,6 +440,8 @@ def _canonicalize_url(url):
     if not raw_url:
         return ""
     parsed = urlparse(raw_url)
+    if not parsed.netloc:
+        return ""
     scheme = parsed.scheme or "https"
     netloc = parsed.netloc.lower()
     path = re.sub(r"/{2,}", "/", parsed.path or "/")
@@ -460,8 +471,9 @@ def _extract_job_id_from_url(url):
 def _build_dedupe_key(item):
     title_key = sleeves_v2.normalize_for_match(item.get("title"))
     company_key = sleeves_v2.normalize_for_match(item.get("company"))
-    canonical_url = _canonicalize_url(item.get("link") or item.get("url"))
-    job_id = _clean_value(item.get("job_id"), "") or _extract_job_id_from_url(canonical_url)
+    raw_url = _clean_value(item.get("link") or item.get("url"), "")
+    canonical_url = _canonicalize_url(raw_url)
+    job_id = _clean_value(item.get("job_id"), "") or _extract_job_id_from_url(canonical_url or raw_url)
     anchor = job_id or canonical_url
     if not anchor:
         location_key = sleeves_v2.normalize_for_match(item.get("location"))
@@ -937,6 +949,83 @@ def _parse_linkedin_cards(selector):
     return cards, parsed
 
 
+def _decode_embedded_url(value):
+    text = _clean_value(value, "")
+    if not text:
+        return ""
+    text = (
+        text.replace("\\u002F", "/")
+        .replace("\\u003A", ":")
+        .replace("\\u0026", "&")
+        .replace("\\/", "/")
+        .replace("&amp;", "&")
+    )
+    if text.startswith("//"):
+        text = f"https:{text}"
+    return text
+
+
+def _extract_indeed_links_from_detail(html_text, response_url):
+    selector = Selector(text=html_text or "")
+    response_url = _clean_value(response_url, "")
+    indeed_url = response_url if "indeed." in _host_for_url(response_url) else ""
+    company_candidates = []
+
+    for anchor in selector.css("a"):
+        href_raw = anchor.attrib.get("href", "")
+        if not href_raw:
+            continue
+        href = requests.compat.urljoin(response_url, _decode_embedded_url(href_raw))
+        if not _is_absolute_http_url(href):
+            continue
+
+        host = _host_for_url(href)
+        text_blob = _normalize_text(
+            anchor.attrib.get("id"),
+            anchor.attrib.get("class"),
+            anchor.attrib.get("data-testid"),
+            anchor.attrib.get("aria-label"),
+            _compact_whitespace(anchor.css("*::text").getall()),
+        )
+        has_apply_marker = any(
+            marker in text_blob
+            for marker in ["apply", "sollic", "bewerb", "company", "website", "extern"]
+        )
+
+        if "indeed." in host:
+            if not indeed_url:
+                indeed_url = href
+            continue
+        if has_apply_marker:
+            company_candidates.append(href)
+
+    json_patterns = [
+        r'"(?:applyUrl|companyApplyUrl|externalApplyUrl|externalUrl|companyPageUrl)"\s*:\s*"([^"]+)"',
+    ]
+    for pattern in json_patterns:
+        for match in re.finditer(pattern, html_text or "", flags=re.IGNORECASE):
+            candidate = requests.compat.urljoin(response_url, _decode_embedded_url(match.group(1)))
+            if not _is_absolute_http_url(candidate):
+                continue
+            host = _host_for_url(candidate)
+            if "indeed." in host:
+                if not indeed_url:
+                    indeed_url = candidate
+            else:
+                company_candidates.append(candidate)
+
+    company_url = ""
+    for candidate in company_candidates:
+        if _is_absolute_http_url(candidate):
+            company_url = candidate
+            break
+
+    return {
+        "indeed_url": indeed_url if _is_absolute_http_url(indeed_url) else "",
+        "company_url": company_url if _is_absolute_http_url(company_url) else "",
+    }
+
+
 def _fetch_detail_page_text(
     session,
     url,
@@ -948,7 +1037,7 @@ def _fetch_detail_page_text(
 ):
     link = _clean_value(url, "")
     if not link:
-        return "", True, 0
+        return "", True, 0, {"indeed_url": "", "company_url": ""}
 
     response, error = _rate_limited_get(
         session,
@@ -962,7 +1051,13 @@ def _fetch_detail_page_text(
     )
     error_count = 1 if error else 0
     if error or response is None:
-        return "", True, error_count
+        return "", True, error_count, {"indeed_url": "", "company_url": ""}
+
+    detail_links = {"indeed_url": "", "company_url": ""}
+    if source_name == "Indeed":
+        detail_links = _extract_indeed_links_from_detail(response.text, response.url or link)
+        if not detail_links.get("indeed_url") and _is_absolute_http_url(link):
+            detail_links["indeed_url"] = link
 
     blocked = response.status_code in {401, 403, 429} or sleeves_v2.detect_blocked_html(response.text)
     if blocked:
@@ -975,7 +1070,7 @@ def _fetch_detail_page_text(
             "blocked",
             diagnostics,
         )
-        return "", True, error_count + 1
+        return "", True, error_count + 1, detail_links
 
     selector = Selector(text=response.text)
     if source_name == "Indeed":
@@ -992,8 +1087,8 @@ def _fetch_detail_page_text(
         ).getall()
     description = _compact_whitespace(chunks)
     if not description:
-        return "", True, error_count
-    return description, False, error_count
+        return "", True, error_count, detail_links
+    return description, False, error_count, detail_links
 
 
 def _fetch_indeed_jobs_direct(
@@ -1088,8 +1183,9 @@ def _fetch_indeed_jobs_direct(
                         full_description = ""
                         detail_failed = True
                         detail_errors = 0
+                        detail_links = {"indeed_url": "", "company_url": ""}
                         if idx < detail_budget:
-                            full_description, detail_failed, detail_errors = _fetch_detail_page_text(
+                            full_description, detail_failed, detail_errors, detail_links = _fetch_detail_page_text(
                                 session,
                                 item.get("link"),
                                 "Indeed",
@@ -1108,6 +1204,11 @@ def _fetch_indeed_jobs_direct(
 
                         item["full_description"] = full_description
                         item["detail_fetch_failed"] = bool(detail_failed)
+                        item["indeed_url"] = _clean_value(
+                            detail_links.get("indeed_url") or item.get("link"),
+                            "",
+                        )
+                        item["company_url"] = _clean_value(detail_links.get("company_url"), "")
                         item["query"] = query
                         item["query_location"] = location
                         item["source"] = "Indeed"
@@ -1262,8 +1363,9 @@ def _fetch_linkedin_jobs_direct(
                         full_description = ""
                         detail_failed = True
                         detail_errors = 0
+                        detail_links = {"indeed_url": "", "company_url": ""}
                         if idx < detail_budget:
-                            full_description, detail_failed, detail_errors = _fetch_detail_page_text(
+                            full_description, detail_failed, detail_errors, detail_links = _fetch_detail_page_text(
                                 session,
                                 item.get("link"),
                                 "LinkedIn",
@@ -1282,6 +1384,8 @@ def _fetch_linkedin_jobs_direct(
 
                         item["full_description"] = full_description
                         item["detail_fetch_failed"] = bool(detail_failed)
+                        item["indeed_url"] = ""
+                        item["company_url"] = _clean_value(detail_links.get("company_url"), "")
                         item["query"] = query
                         item["query_location"] = location
                         item["source"] = "LinkedIn"
@@ -1375,10 +1479,21 @@ def rank_and_filter_jobs(
         snippet = _clean_value(job.get("snippet"), "")
         full_description = _clean_value(job.get("full_description"), "")
         link = _clean_value(job.get("link") or job.get("url"), "")
-        if canonical_url:
+        if not _is_absolute_http_url(link) and canonical_url:
             link = canonical_url
+        if not _is_absolute_http_url(link):
+            link = ""
         date_posted = _clean_value(job.get("date") or job.get("date_posted"), "Unknown")
         salary = _clean_value(job.get("salary"), "Not listed")
+        company_url = _clean_value(job.get("company_url") or job.get("external_url"), "")
+        if not _is_absolute_http_url(company_url):
+            company_url = ""
+        indeed_url = _clean_value(job.get("indeed_url"), "")
+        if not _is_absolute_http_url(indeed_url):
+            if "indeed" in source.lower() and _is_absolute_http_url(link):
+                indeed_url = link
+            else:
+                indeed_url = ""
 
         raw_text = _clean_value(
             " ".join(
@@ -1459,6 +1574,8 @@ def rank_and_filter_jobs(
                 "work_mode": work_mode,
                 "snippet": snippet,
                 "full_description": full_description,
+                "company_url": company_url,
+                "indeed_url": indeed_url,
                 "raw_text": raw_text,
                 "prepared_text": prepared_text.strip(),
                 "primary_sleeve_id": scoring_sleeve,

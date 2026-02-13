@@ -236,6 +236,37 @@ a:focus-visible {
   font-size: 0.9rem;
 }
 
+.job-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.job-link-btn {
+  display: inline-block;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.job-link-company {
+  background: #2563eb;
+  color: #fff;
+}
+
+.job-link-indeed {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.job-link-fallback {
+  background: #1d4ed8;
+  color: #fff;
+}
+
 .scrape-toolbar {
   border: 1px solid var(--line);
   border-radius: 14px;

@@ -202,6 +202,21 @@
       return badge;
     }
 
+    function isValidHttpUrl(url) {
+      const value = String(url || '').trim();
+      return /^https?:\/\//i.test(value);
+    }
+
+    function createActionLink(label, href, extraClass = '') {
+      const link = document.createElement('a');
+      link.className = `job-link-btn ${extraClass}`.trim();
+      link.href = href;
+      link.textContent = label;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      return link;
+    }
+
     function renderSleeveSummary(sleeveKey, summary, sourcesText) {
       const summaryWrap = document.getElementById(`summary-${sleeveKey}`);
       summaryWrap.innerHTML = '';
@@ -238,6 +253,9 @@
       const abroadPctText = String(job.abroad_percentage_text || '').trim();
       const abroadShare = abroadPctText || (Number.isFinite(job.abroad_percentage) ? `${job.abroad_percentage}%` : '');
       const abroadLocations = Array.isArray(job.abroad_locations) ? job.abroad_locations : [];
+      const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
+      const indeedUrl = isValidHttpUrl(job.indeed_url) ? job.indeed_url : primaryLink;
+      const companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : (indeedUrl || primaryLink);
 
       const header = document.createElement('div');
       header.className = 'job-card-header';
@@ -260,7 +278,7 @@
       badges.appendChild(
         createBadge(
           'decision-badge decision-abroad',
-          abroadShare ? `Abroad ${abroadScore}/4 · ${abroadShare}` : `Abroad ${abroadScore}/4`
+          abroadShare ? `Abroad ${abroadScore}/4 - ${abroadShare}` : `Abroad ${abroadScore}/4`
         )
       );
       card.appendChild(badges);
@@ -293,12 +311,23 @@
         card.appendChild(whyList);
       }
 
-      const link = document.createElement('a');
-      link.href = job.link || job.url || '#';
-      link.textContent = 'Open job posting';
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      card.appendChild(link);
+      const actions = document.createElement('div');
+      actions.className = 'job-actions';
+      actions.appendChild(
+        createActionLink(
+          'Open company posting',
+          companyUrl || '#',
+          companyUrl && companyUrl !== indeedUrl ? 'job-link-company' : 'job-link-fallback'
+        )
+      );
+      actions.appendChild(
+        createActionLink(
+          'Open on Indeed',
+          indeedUrl || companyUrl || '#',
+          'job-link-indeed'
+        )
+      );
+      card.appendChild(actions);
 
       return card;
     }

@@ -187,6 +187,52 @@ class TestMainRanking(unittest.TestCase):
         with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
             self.assertEqual(main._active_scrape_profile(), "mvp")
 
+    def test_canonicalize_relative_url_returns_empty(self):
+        self.assertEqual(main._canonicalize_url("/rc/clk?jk=abc123"), "")
+
+    def test_extract_indeed_links_from_detail_prefers_external_apply(self):
+        html = """
+        <html>
+          <body>
+            <a data-testid="apply-button" href="https://company.example/jobs/42">Apply now</a>
+            <a href="https://nl.indeed.com/viewjob?jk=abc123">View on Indeed</a>
+          </body>
+        </html>
+        """
+        links = main._extract_indeed_links_from_detail(
+            html,
+            "https://nl.indeed.com/viewjob?jk=abc123",
+        )
+        self.assertEqual(links["indeed_url"], "https://nl.indeed.com/viewjob?jk=abc123")
+        self.assertEqual(links["company_url"], "https://company.example/jobs/42")
+
+    def test_ranking_preserves_raw_link_for_opening(self):
+        jobs = [
+            self._job(
+                "LinkCheck",
+                "Remote workflow automation role.",
+                title="Implementation Consultant",
+            )
+        ]
+        jobs[0]["link"] = "https://nl.indeed.com/viewjob?jk=abc123&utm_source=test"
+        jobs[0]["source"] = "Indeed"
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="B",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+        )
+        self.assertTrue(ranked)
+        self.assertEqual(
+            ranked[0]["url"],
+            "https://nl.indeed.com/viewjob?jk=abc123&utm_source=test",
+        )
+        self.assertEqual(
+            ranked[0]["indeed_url"],
+            "https://nl.indeed.com/viewjob?jk=abc123&utm_source=test",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
