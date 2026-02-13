@@ -91,7 +91,32 @@ HIMALAYAS_API = "https://himalayas.app/jobs/api"
 ADZUNA_API_TEMPLATE = "https://api.adzuna.com/v1/api/jobs/nl/search/{page}"
 SERPAPI_URL = "https://serpapi.com/search.json"
 INDEED_SEARCH_URL = "https://www.indeed.com/jobs"
+INDEED_SEARCH_URL_NL = "https://nl.indeed.com/jobs"
+INDEED_SEARCH_URL_BY_MODE = {
+    "nl_only": INDEED_SEARCH_URL_NL,
+    "nl_eu": INDEED_SEARCH_URL_NL,
+    "global": INDEED_SEARCH_URL,
+}
 LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+LINKEDIN_GEO_ID_BY_MODE = {
+    "nl_only": "102890719",  # Netherlands
+}
+SERPAPI_MARKET_BY_MODE = {
+    "nl_only": {
+        "google_domain": "google.nl",
+        "gl": "nl",
+        "hl": "nl",
+    },
+    "nl_eu": {
+        "google_domain": "google.nl",
+        "gl": "nl",
+        "hl": "en",
+    },
+    "global": {
+        "google_domain": "google.com",
+        "hl": "en",
+    },
+}
 DEFAULT_MAX_PAGES = 8
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
 DEFAULT_RATE_LIMIT_RPS = 1.5
@@ -145,6 +170,29 @@ def _clean_value(value, fallback="Unknown"):
         return fallback
     cleaned = re.sub(r"\s+", " ", str(value)).strip()
     return cleaned if cleaned else fallback
+
+
+def _normalized_location_mode(location_mode):
+    mode = _clean_value(location_mode, "nl_only").lower()
+    if mode in {"nl_only", "nl_eu", "global"}:
+        return mode
+    return "nl_only"
+
+
+def _indeed_search_url_for_mode(location_mode):
+    mode = _normalized_location_mode(location_mode)
+    return INDEED_SEARCH_URL_BY_MODE.get(mode, INDEED_SEARCH_URL)
+
+
+def _linkedin_geo_id_for_mode(location_mode):
+    mode = _normalized_location_mode(location_mode)
+    return LINKEDIN_GEO_ID_BY_MODE.get(mode, "")
+
+
+def _serpapi_market_params_for_mode(location_mode):
+    mode = _normalized_location_mode(location_mode)
+    params = SERPAPI_MARKET_BY_MODE.get(mode, {"hl": "en"})
+    return dict(params)
 
 
 def _strip_html(value):
@@ -636,16 +684,23 @@ def _query_bundle_for_sleeve(sleeve_key):
     return _prioritize_queries(sleeve, ordered_terms)
 
 
-def _source_headers(source_name):
+def _source_headers(source_name, location_mode="nl_only"):
+    mode = _normalized_location_mode(location_mode)
+    if mode in {"nl_only", "nl_eu"}:
+        accept_language = "nl-NL,nl;q=0.9,en-US;q=0.7,en;q=0.6"
+        referer = "https://www.google.nl/"
+    else:
+        accept_language = "en-US,en;q=0.9,nl;q=0.8"
+        referer = "https://www.google.com/"
     return {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "en-US,en;q=0.9,nl;q=0.8",
+        "Accept-Language": accept_language,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Referer": "https://www.google.com/",
+        "Referer": referer,
         "X-Source": source_name,
     }
 
@@ -748,6 +803,7 @@ def _fetch_detail_page_text(
     diagnostics,
     domain_state,
     detail_rps,
+    location_mode="nl_only",
 ):
     link = _clean_value(url, "")
     if not link:
@@ -757,7 +813,7 @@ def _fetch_detail_page_text(
         session,
         link,
         params=None,
-        headers=_source_headers(source_name),
+        headers=_source_headers(source_name, location_mode),
         domain_state=domain_state,
         requests_per_second=detail_rps,
         timeout_seconds=DEFAULT_HTTP_TIMEOUT,
@@ -810,6 +866,7 @@ def _fetch_indeed_jobs_direct(
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
 ):
     diagnostics = diagnostics or _new_diagnostics()
+    search_url = _indeed_search_url_for_mode(location_mode)
     jobs = []
     seen_unique = set()
     domain_state = {}
@@ -831,9 +888,9 @@ def _fetch_indeed_jobs_direct(
                 params = {"q": query, "l": location, "start": start}
                 response, error = _rate_limited_get(
                     session,
-                    INDEED_SEARCH_URL,
+                    search_url,
                     params=params,
-                    headers=_source_headers("Indeed"),
+                    headers=_source_headers("Indeed", location_mode),
                     domain_state=domain_state,
                     requests_per_second=requests_per_second,
                     timeout_seconds=DEFAULT_HTTP_TIMEOUT,
@@ -857,7 +914,7 @@ def _fetch_indeed_jobs_direct(
                 full_description_count = 0
                 error_count = 1 if error else 0
                 parsed_items = []
-                request_url = response.url if response is not None else INDEED_SEARCH_URL
+                request_url = response.url if response is not None else search_url
 
                 if response is not None and response.ok and not blocked:
                     selector = Selector(text=body)
@@ -898,6 +955,7 @@ def _fetch_indeed_jobs_direct(
                                 diagnostics,
                                 domain_state,
                                 detail_rps,
+                                location_mode,
                             )
                             detail_attempts += 1
                             if detail_failed:
@@ -985,6 +1043,7 @@ def _fetch_linkedin_jobs_direct(
     jobs = []
     seen_unique = set()
     domain_state = {}
+    geo_id = _linkedin_geo_id_for_mode(location_mode)
     queries = _query_bundle_for_sleeve(sleeve_key)
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
@@ -1000,11 +1059,13 @@ def _fetch_linkedin_jobs_direct(
             for page_idx in range(max_pages):
                 start = page_idx * 25
                 params = {"keywords": query, "location": location, "start": start}
+                if geo_id:
+                    params["geoId"] = geo_id
                 response, error = _rate_limited_get(
                     session,
                     LINKEDIN_SEARCH_URL,
                     params=params,
-                    headers=_source_headers("LinkedIn"),
+                    headers=_source_headers("LinkedIn", location_mode),
                     domain_state=domain_state,
                     requests_per_second=requests_per_second,
                     timeout_seconds=DEFAULT_HTTP_TIMEOUT,
@@ -1068,6 +1129,7 @@ def _fetch_linkedin_jobs_direct(
                                 diagnostics,
                                 domain_state,
                                 detail_rps,
+                                location_mode,
                             )
                             detail_attempts += 1
                             if detail_failed:
@@ -1787,21 +1849,23 @@ def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_only", provider_filter=Non
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("SerpApi key is missing")
+    location_mode = _normalized_location_mode(location_mode)
     query = _sleeve_query_string(sleeve_key)
     if location_mode in {"nl_only", "nl_eu"}:
         query = f"({query}) (remote OR hybrid OR travel) Netherlands"
 
-    search_location = "Netherlands" if location_mode in {"nl_only", "nl_eu"} else "Europe"
+    search_location = "Netherlands" if location_mode == "nl_only" else "Europe"
+    serpapi_params = {
+        "engine": "google_jobs",
+        "q": query,
+        "location": search_location,
+        "api_key": api_key,
+    }
+    serpapi_params.update(_serpapi_market_params_for_mode(location_mode))
     response = requests.get(
         SERPAPI_URL,
         timeout=12,
-        params={
-            "engine": "google_jobs",
-            "q": query,
-            "location": search_location,
-            "hl": "en",
-            "api_key": api_key,
-        },
+        params=serpapi_params,
     )
     response.raise_for_status()
     payload = response.json()

@@ -149,6 +149,19 @@ class TestMainRanking(unittest.TestCase):
         )
         self.assertEqual(ranked, [])
 
+    def test_nl_only_uses_nl_market_settings_for_sources(self):
+        self.assertEqual(
+            main._indeed_search_url_for_mode("nl_only"),
+            "https://nl.indeed.com/jobs",
+        )
+        self.assertEqual(main._linkedin_geo_id_for_mode("nl_only"), "102890719")
+
+    def test_serpapi_nl_market_params_are_localized(self):
+        params = main._serpapi_market_params_for_mode("nl_only")
+        self.assertEqual(params.get("google_domain"), "google.nl")
+        self.assertEqual(params.get("gl"), "nl")
+        self.assertEqual(params.get("hl"), "nl")
+
 
 if __name__ == "__main__":
     unittest.main()
