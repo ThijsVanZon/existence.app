@@ -23,7 +23,7 @@
   </nav>
 
   <h2>Scraped Jobs Per Sleeve</h2>
-  <section class="scrape-toolbar">
+  <section class="scrape-toolbar" hidden>
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
     <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed NL only, no auto failover).</p>
     <div class="toolbar-grid">
@@ -70,7 +70,10 @@
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
-      <h3>Sleeve A - Show Venue Operations</h3>
+      <h3>
+        <span class="sleeve-header-code">Sleeve A</span>
+        <span class="sleeve-header-name">Show Venue Operations</span>
+      </h3>
       <p class="sleeve-tagline">Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).</p>
       <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-A" class="extra-terms-input" type="text" placeholder="bijv. grandMA, Dante, FOH">
@@ -83,7 +86,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-B">
-      <h3>Sleeve B - Workflow Systems Automation</h3>
+      <h3>
+        <span class="sleeve-header-code">Sleeve B</span>
+        <span class="sleeve-header-name">Workflow Systems Automation</span>
+      </h3>
       <p class="sleeve-tagline">Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).</p>
       <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-B" class="extra-terms-input" type="text" placeholder="bijv. Zapier, Make, API integrations">
@@ -96,7 +102,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-C">
-      <h3>Sleeve C - Creative Experience Production</h3>
+      <h3>
+        <span class="sleeve-header-code">Sleeve C</span>
+        <span class="sleeve-header-name">Creative Experience Production</span>
+      </h3>
       <p class="sleeve-tagline">Creative production: concept to delivery, immersive/brand/experience (project + travel).</p>
       <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-C" class="extra-terms-input" type="text" placeholder="bijv. scenography, immersive, exhibition">
@@ -109,7 +118,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-D">
-      <h3>Sleeve D - Field Systems Engineering</h3>
+      <h3>
+        <span class="sleeve-header-code">Sleeve D</span>
+        <span class="sleeve-header-name">Field Systems Engineering</span>
+      </h3>
       <p class="sleeve-tagline">Field/commissioning/install: ownership op klantlocaties (travel ingebakken).</p>
       <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-D" class="extra-terms-input" type="text" placeholder="bijv. commissioning, PLC, troubleshooting">
@@ -122,7 +134,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-E">
-      <h3>Sleeve E - Community Partnerships Programming</h3>
+      <h3>
+        <span class="sleeve-header-code">Sleeve E</span>
+        <span class="sleeve-header-name">Community Partnerships Programming</span>
+      </h3>
       <p class="sleeve-tagline">Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).</p>
       <label class="extra-terms-label" for="extra-terms-E">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-E" class="extra-terms-input" type="text" placeholder="bijv. sponsorships, artist relations, programming">
@@ -231,6 +246,20 @@
       } catch (error) {
         return false;
       }
+    }
+
+    function buildCompanyPostingFallbackUrl(job) {
+      const company = String(job?.company || '').trim();
+      const title = String(job?.title || '').trim();
+      const query = `${company} ${title} careers`.trim() || 'company careers';
+      return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    }
+
+    function buildIndeedPostingFallbackUrl(job) {
+      const company = String(job?.company || '').trim();
+      const title = String(job?.title || '').trim();
+      const query = `${title} ${company}`.trim() || 'vacature';
+      return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Nederland')}`;
     }
 
     function createActionLink(label, href, extraClass = '', enabled = true) {
@@ -345,13 +374,18 @@
       const abroadShare = abroadPctText || (Number.isFinite(job.abroad_percentage) ? `${job.abroad_percentage}%` : '');
       const abroadLocations = Array.isArray(job.abroad_locations) ? job.abroad_locations : [];
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
-      const indeedUrl = isValidHttpUrl(job.indeed_url) ? job.indeed_url : primaryLink;
+      const indeedUrl = isValidHttpUrl(job.indeed_url)
+        ? job.indeed_url
+        : (isValidHttpUrl(primaryLink) ? primaryLink : buildIndeedPostingFallbackUrl(job));
       let companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
       if (isIndeedUrl(companyUrl)) {
         companyUrl = '';
       }
       if (companyUrl && indeedUrl && companyUrl === indeedUrl) {
         companyUrl = '';
+      }
+      if (!companyUrl) {
+        companyUrl = buildCompanyPostingFallbackUrl(job);
       }
 
       const header = document.createElement('div');
@@ -412,18 +446,18 @@
       actions.className = 'job-actions';
       actions.appendChild(
         createActionLink(
-          'Open company posting',
-          companyUrl || '#',
+          'Company Posting',
+          companyUrl || buildCompanyPostingFallbackUrl(job),
           'job-link-company',
-          Boolean(companyUrl)
+          true
         )
       );
       actions.appendChild(
         createActionLink(
-          'Open on Indeed',
-          indeedUrl || '#',
+          'Indeed Posting',
+          indeedUrl || buildIndeedPostingFallbackUrl(job),
           'job-link-indeed',
-          Boolean(indeedUrl)
+          true
         )
       );
       card.appendChild(actions);
@@ -530,11 +564,7 @@
     }
 
     function buildScrapeUrl(sleeveKey) {
-      let sources = selectedSources();
-      if (!sources.length) {
-        sources = (scrapeConfig.defaults?.sources || []).slice();
-      }
-      const profile = String(scrapeConfig.profile || 'mvp').toLowerCase();
+      const sources = ['indeed_web'];
       const maxResults = Math.max(
         DEFAULT_FETCH_LIMIT,
         Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
@@ -548,17 +578,14 @@
       const extraTerms = String(extraInput?.value || '').trim();
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
-      params.set('location_mode', document.getElementById('global-location').value);
-      params.set('strict', document.getElementById('global-strict').checked ? '1' : '0');
+      params.set('location_mode', 'nl_only');
+      params.set('strict', '0');
       params.set('max_results', String(maxResults));
       params.set('max_pages', String(tunedMaxPages));
       params.set('target_raw', String(tunedTargetRaw));
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
-      params.set('refresh', document.getElementById('global-cache').checked ? '0' : '1');
-      const failoverRequested = profile === 'mvp'
-        ? false
-        : document.getElementById('global-failover').checked;
-      params.set('failover', failoverRequested ? '1' : '0');
+      params.set('refresh', '0');
+      params.set('failover', '0');
       params.set('sources', sources.join(','));
       if (extraTerms) {
         params.set('extra_terms', extraTerms);
