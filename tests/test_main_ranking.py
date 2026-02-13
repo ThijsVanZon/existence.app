@@ -187,6 +187,20 @@ class TestMainRanking(unittest.TestCase):
         with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
             self.assertEqual(main._active_scrape_profile(), "mvp")
 
+    def test_full_profile_requires_explicit_opt_in(self):
+        with patch.dict(
+            main.os.environ,
+            {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "0"},
+            clear=False,
+        ):
+            self.assertEqual(main._active_scrape_profile(), "mvp")
+        with patch.dict(
+            main.os.environ,
+            {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
+            clear=False,
+        ):
+            self.assertEqual(main._active_scrape_profile(), "full")
+
     def test_canonicalize_relative_url_returns_empty(self):
         self.assertEqual(main._canonicalize_url("/rc/clk?jk=abc123"), "")
 
@@ -242,6 +256,27 @@ class TestMainRanking(unittest.TestCase):
             ranked[0]["indeed_url"],
             "https://nl.indeed.com/viewjob?jk=abc123&utm_source=test",
         )
+
+    def test_company_url_never_uses_indeed_host(self):
+        jobs = [
+            self._job(
+                "CompanyLinkCheck",
+                "Remote workflow automation role.",
+                title="Implementation Consultant",
+            )
+        ]
+        jobs[0]["source"] = "Indeed"
+        jobs[0]["indeed_url"] = "https://nl.indeed.com/viewjob?jk=abc123"
+        jobs[0]["company_url"] = "https://nl.indeed.com/rc/clk?jk=abc123"
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="B",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+        )
+        self.assertTrue(ranked)
+        self.assertEqual(ranked[0]["company_url"], "")
 
 
 if __name__ == "__main__":

@@ -160,7 +160,7 @@ SYNERGY_SIGNALS = {
 
 SLEEVE_CONFIG = {
     "A": {
-        "name": "Show Systems & Venue Operations",
+        "name": "Show Venue Operations",
         "tagline": "Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).",
         "must_haves": {
             "min_title_hits": 1,
@@ -224,7 +224,7 @@ SLEEVE_CONFIG = {
         },
     },
     "B": {
-        "name": "Workflow Ops & Automation",
+        "name": "Workflow Systems Automation",
         "tagline": "Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).",
         "must_haves": {
             "min_title_hits": 1,
@@ -301,7 +301,7 @@ SLEEVE_CONFIG = {
         },
     },
     "C": {
-        "name": "Experience Production & Creative Tech",
+        "name": "Creative Experience Production",
         "tagline": "Creative production: concept to delivery, immersive/brand/experience (project + travel).",
         "must_haves": {
             "min_title_hits": 1,
@@ -416,7 +416,7 @@ SLEEVE_CONFIG = {
         },
     },
     "E": {
-        "name": "Scene Growth: Partnerships, Community & Programming",
+        "name": "Community Partnerships Programming",
         "tagline": "Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).",
         "must_haves": {
             "min_title_hits": 1,

@@ -75,8 +75,10 @@
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
-      <h3>Sleeve A - Show Systems & Venue Operations</h3>
+      <h3>Sleeve A - Show Venue Operations</h3>
       <p class="sleeve-tagline">Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).</p>
+      <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
+      <input id="extra-terms-A" class="extra-terms-input" type="text" placeholder="bijv. grandMA, Dante, FOH">
       <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="summary-A" class="sleeve-summary"></div>
@@ -85,8 +87,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-B">
-      <h3>Sleeve B - Workflow Ops & Automation</h3>
+      <h3>Sleeve B - Workflow Systems Automation</h3>
       <p class="sleeve-tagline">Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).</p>
+      <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
+      <input id="extra-terms-B" class="extra-terms-input" type="text" placeholder="bijv. Zapier, Make, API integrations">
       <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="summary-B" class="sleeve-summary"></div>
@@ -95,8 +99,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-C">
-      <h3>Sleeve C - Experience Production & Creative Tech</h3>
+      <h3>Sleeve C - Creative Experience Production</h3>
       <p class="sleeve-tagline">Creative production: concept to delivery, immersive/brand/experience (project + travel).</p>
+      <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
+      <input id="extra-terms-C" class="extra-terms-input" type="text" placeholder="bijv. scenography, immersive, exhibition">
       <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="summary-C" class="sleeve-summary"></div>
@@ -107,6 +113,8 @@
     <section class="sleeve-panel" id="panel-D">
       <h3>Sleeve D - Field Systems Engineering</h3>
       <p class="sleeve-tagline">Field/commissioning/install: ownership op klantlocaties (travel ingebakken).</p>
+      <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
+      <input id="extra-terms-D" class="extra-terms-input" type="text" placeholder="bijv. commissioning, PLC, troubleshooting">
       <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="summary-D" class="sleeve-summary"></div>
@@ -115,8 +123,10 @@
     </section>
 
     <section class="sleeve-panel" id="panel-E">
-      <h3>Sleeve E - Scene Growth: Partnerships, Community & Programming</h3>
+      <h3>Sleeve E - Community Partnerships Programming</h3>
       <p class="sleeve-tagline">Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).</p>
+      <label class="extra-terms-label" for="extra-terms-E">Extra zoekwoorden (comma separated)</label>
+      <input id="extra-terms-E" class="extra-terms-input" type="text" placeholder="bijv. sponsorships, artist relations, programming">
       <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="summary-E" class="sleeve-summary"></div>
@@ -129,15 +139,15 @@
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
     const sleeveMeta = {
       A: {
-        name: 'Show Systems & Venue Operations',
+        name: 'Show Venue Operations',
         tagline: 'Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).'
       },
       B: {
-        name: 'Workflow Ops & Automation',
+        name: 'Workflow Systems Automation',
         tagline: 'Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).'
       },
       C: {
-        name: 'Experience Production & Creative Tech',
+        name: 'Creative Experience Production',
         tagline: 'Creative production: concept to delivery, immersive/brand/experience (project + travel).'
       },
       D: {
@@ -145,7 +155,7 @@
         tagline: 'Field/commissioning/install: ownership op klantlocaties (travel ingebakken).'
       },
       E: {
-        name: 'Scene Growth: Partnerships, Community & Programming',
+        name: 'Community Partnerships Programming',
         tagline: 'Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).'
       }
     };
@@ -207,6 +217,17 @@
       return /^https?:\/\//i.test(value);
     }
 
+    function isIndeedUrl(url) {
+      if (!isValidHttpUrl(url)) {
+        return false;
+      }
+      try {
+        return new URL(url).hostname.toLowerCase().includes('indeed.');
+      } catch (error) {
+        return false;
+      }
+    }
+
     function createActionLink(label, href, extraClass = '', enabled = true) {
       const link = document.createElement('a');
       link.className = `job-link-btn ${extraClass}`.trim();
@@ -261,7 +282,13 @@
       const abroadLocations = Array.isArray(job.abroad_locations) ? job.abroad_locations : [];
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
       const indeedUrl = isValidHttpUrl(job.indeed_url) ? job.indeed_url : primaryLink;
-      const companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
+      let companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
+      if (isIndeedUrl(companyUrl)) {
+        companyUrl = '';
+      }
+      if (companyUrl && indeedUrl && companyUrl === indeedUrl) {
+        companyUrl = '';
+      }
 
       const header = document.createElement('div');
       header.className = 'job-card-header';
@@ -284,7 +311,7 @@
       badges.appendChild(
         createBadge(
           'decision-badge decision-abroad',
-          abroadShare ? `Abroad ${abroadScore}/4 - ${abroadShare}` : `Abroad ${abroadScore}/4`
+          abroadShare ? `Abroad ${abroadScore}/4 ${abroadShare}` : `Abroad ${abroadScore}/4`
         )
       );
       card.appendChild(badges);
@@ -451,6 +478,8 @@
       const tunedTargetRaw = hasDirectScrape
         ? Math.max(40, Math.min(120, maxResults * 3))
         : Math.max(60, Math.min(150, maxResults * 4));
+      const extraInput = document.getElementById(`extra-terms-${sleeveKey}`);
+      const extraTerms = String(extraInput?.value || '').trim();
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
       params.set('location_mode', document.getElementById('global-location').value);
@@ -465,6 +494,9 @@
         : document.getElementById('global-failover').checked;
       params.set('failover', failoverRequested ? '1' : '0');
       params.set('sources', sources.join(','));
+      if (extraTerms) {
+        params.set('extra_terms', extraTerms);
+      }
       return `/scrape?${params.toString()}`;
     }
 

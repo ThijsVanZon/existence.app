@@ -829,11 +829,38 @@ def _location_passes_for_mode(location_mode):
     return locations or ["Netherlands"]
 
 
-def _query_bundle_for_sleeve(sleeve_key):
+def _parse_extra_terms(raw_value):
+    raw_text = str(raw_value or "")
+    if not raw_text.strip():
+        return []
+    parts = re.split(r"[,;\n\r|]+", raw_text)
+    extra_terms = []
+    seen = set()
+    for part in parts:
+        cleaned = _clean_value(part, "")
+        if len(cleaned) < 2:
+            continue
+        normalized = sleeves_v2.normalize_for_match(cleaned)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        extra_terms.append(cleaned)
+    return extra_terms
+
+
+def _query_bundle_for_sleeve(sleeve_key, extra_terms=None):
     sleeve = (sleeve_key or "").upper()
     overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(sleeve, [])
     terms = overrides if isinstance(overrides, list) and overrides else sleeves_v2.SLEEVE_SEARCH_TERMS.get(sleeve, [])
     ordered_terms = [term for term in terms if term]
+    if extra_terms:
+        seen = {sleeves_v2.normalize_for_match(term) for term in ordered_terms if term}
+        for term in extra_terms:
+            normalized = sleeves_v2.normalize_for_match(term)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_terms.append(term)
     return _prioritize_queries(sleeve, ordered_terms)
 
 
@@ -1028,8 +1055,6 @@ def _extract_indeed_links_from_detail(html_text, response_url):
         if "indeed." in host:
             if not indeed_url:
                 indeed_url = href
-            if has_apply_marker:
-                company_candidates.append(href)
             continue
         if has_apply_marker:
             company_candidates.append(href)
@@ -1068,13 +1093,6 @@ def _extract_indeed_links_from_detail(html_text, response_url):
         if "indeed." not in _host_for_url(candidate):
             company_url = candidate
             break
-    if not company_url:
-        for candidate in deduped_candidates:
-            host = _host_for_url(candidate)
-            path = (urlparse(candidate).path or "").lower()
-            if "indeed." in host and any(token in path for token in ("apply", "pagead", "rc/clk")):
-                company_url = candidate
-                break
 
     return {
         "indeed_url": indeed_url if _is_absolute_http_url(indeed_url) else "",
@@ -1156,13 +1174,14 @@ def _fetch_indeed_jobs_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     search_url = _indeed_search_url_for_mode(location_mode)
     jobs = []
     seen_unique = set()
     domain_state = {}
-    queries = _query_bundle_for_sleeve(sleeve_key)
+    queries = _query_bundle_for_sleeve(sleeve_key, extra_terms=extra_terms)
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
     detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
@@ -1240,6 +1259,8 @@ def _fetch_indeed_jobs_direct(
                         detail_failed = True
                         detail_errors = 0
                         detail_links = {"indeed_url": "", "company_url": ""}
+                        base_indeed_url = _clean_value(item.get("link"), "")
+                        base_company_url = _extract_external_destination_from_url(base_indeed_url)
                         if idx < detail_budget:
                             full_description, detail_failed, detail_errors, detail_links = _fetch_detail_page_text(
                                 session,
@@ -1261,10 +1282,13 @@ def _fetch_indeed_jobs_direct(
                         item["full_description"] = full_description
                         item["detail_fetch_failed"] = bool(detail_failed)
                         item["indeed_url"] = _clean_value(
-                            detail_links.get("indeed_url") or item.get("link"),
+                            detail_links.get("indeed_url") or base_indeed_url,
                             "",
                         )
-                        item["company_url"] = _clean_value(detail_links.get("company_url"), "")
+                        item["company_url"] = _clean_value(
+                            detail_links.get("company_url") or base_company_url,
+                            "",
+                        )
                         item["query"] = query
                         item["query_location"] = location
                         item["source"] = "Indeed"
@@ -1336,13 +1360,14 @@ def _fetch_linkedin_jobs_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     jobs = []
     seen_unique = set()
     domain_state = {}
     geo_id = _linkedin_geo_id_for_mode(location_mode)
-    queries = _query_bundle_for_sleeve(sleeve_key)
+    queries = _query_bundle_for_sleeve(sleeve_key, extra_terms=extra_terms)
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
     detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
@@ -1542,7 +1567,16 @@ def rank_and_filter_jobs(
         date_posted = _clean_value(job.get("date") or job.get("date_posted"), "Unknown")
         salary = _clean_value(job.get("salary"), "Not listed")
         company_url = _clean_value(job.get("company_url") or job.get("external_url"), "")
-        if not _is_absolute_http_url(company_url):
+        if _is_absolute_http_url(company_url):
+            if "indeed." in _host_for_url(company_url):
+                extracted_company = _extract_external_destination_from_url(company_url)
+                company_url = (
+                    extracted_company
+                    if _is_absolute_http_url(extracted_company)
+                    and "indeed." not in _host_for_url(extracted_company)
+                    else ""
+                )
+        else:
             company_url = ""
         indeed_url = _clean_value(job.get("indeed_url"), "")
         if not _is_absolute_http_url(indeed_url):
@@ -1550,6 +1584,15 @@ def rank_and_filter_jobs(
                 indeed_url = link
             else:
                 indeed_url = ""
+        if not company_url and indeed_url:
+            company_url = _extract_external_destination_from_url(indeed_url)
+        if company_url and indeed_url:
+            canonical_company = _canonicalize_url(company_url) or company_url
+            canonical_indeed = _canonicalize_url(indeed_url) or indeed_url
+            if canonical_company == canonical_indeed:
+                company_url = ""
+        if not company_url and "indeed" not in source.lower() and _is_absolute_http_url(link):
+            company_url = link
 
         raw_text = _clean_value(
             " ".join(
@@ -2267,6 +2310,7 @@ def _fetch_indeed_web_jobs(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
     diagnostics=None,
     **_kwargs,
 ):
@@ -2279,6 +2323,7 @@ def _fetch_indeed_web_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
+        extra_terms=extra_terms,
     )
 
 
@@ -2290,6 +2335,7 @@ def _fetch_linkedin_web_jobs(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
     diagnostics=None,
     **_kwargs,
 ):
@@ -2302,6 +2348,7 @@ def _fetch_linkedin_web_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
+        extra_terms=extra_terms,
     )
 
 
@@ -2396,9 +2443,14 @@ SOURCE_REGISTRY = {
 
 def _active_scrape_profile():
     profile = _clean_value(os.getenv("SCRAPE_PROFILE"), "mvp").lower()
-    if profile in VALID_SCRAPE_PROFILES:
-        return profile
-    return "mvp"
+    if profile not in VALID_SCRAPE_PROFILES:
+        return "mvp"
+    # Keep MVP as safe default unless FULL is explicitly enabled.
+    if profile == "full":
+        allow_full = _clean_value(os.getenv("SCRAPE_FULL_PROFILE_ENABLED"), "0").lower()
+        if allow_full not in {"1", "true", "yes", "on"}:
+            return "mvp"
+    return profile
 
 
 def _configured_source_allowlist():
@@ -2487,12 +2539,26 @@ def _default_sources():
     ]
 
 
-def _cache_key_for(source_key, sleeve_key, location_mode, max_pages, target_raw, no_new_unique_pages):
+def _cache_key_for(
+    source_key,
+    sleeve_key,
+    location_mode,
+    max_pages,
+    target_raw,
+    no_new_unique_pages,
+    extra_terms=None,
+):
     config = SOURCE_REGISTRY[source_key]
+    extra_key = ""
+    if extra_terms:
+        normalized_terms = [sleeves_v2.normalize_for_match(term) for term in extra_terms if term]
+        normalized_terms = [term for term in normalized_terms if term]
+        if normalized_terms:
+            extra_key = f":x{','.join(sorted(set(normalized_terms)))}"
     if config["query_based"] and config.get("cache_by_sleeve", True):
-        return f"{source_key}:{sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}"
+        return f"{source_key}:{sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{extra_key}"
     if config["query_based"]:
-        return f"{source_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}"
+        return f"{source_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{extra_key}"
     return source_key
 
 
@@ -2506,6 +2572,7 @@ def _fetch_source_with_cache(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
 ):
     cache_key = _cache_key_for(
         source_key,
@@ -2514,6 +2581,7 @@ def _fetch_source_with_cache(
         max_pages,
         target_raw,
         no_new_unique_pages,
+        extra_terms=extra_terms,
     )
     now = time.time()
     cache_entry = source_cache.get(cache_key)
@@ -2537,6 +2605,7 @@ def _fetch_source_with_cache(
                 requests_per_second=requests_per_second,
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
+                extra_terms=extra_terms,
                 diagnostics=source_diag,
             )
         else:
@@ -2585,6 +2654,7 @@ def fetch_jobs_from_sources(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    extra_terms=None,
     allow_failover=True,
     run_id="",
 ):
@@ -2611,6 +2681,7 @@ def fetch_jobs_from_sources(
             requests_per_second=requests_per_second,
             detail_rps=detail_rps,
             no_new_unique_pages=no_new_unique_pages,
+            extra_terms=extra_terms,
         )
         items.extend(source_items)
         if source_error:
@@ -2665,6 +2736,7 @@ def fetch_jobs_from_sources(
                 requests_per_second=requests_per_second,
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
+                extra_terms=extra_terms,
             )
             usable_sources.append(source_key)
             items.extend(source_items)
@@ -2907,6 +2979,8 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     selected_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
+    extra_terms_param = request.args.get("extra_terms", "")
+    extra_terms = _parse_extra_terms(extra_terms_param)
     failover_raw = request.args.get("failover", "").strip()
     if failover_raw in {"0", "1"}:
         allow_failover = failover_raw == "1"
@@ -2925,6 +2999,7 @@ def scrape():
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
+        extra_terms=extra_terms,
         allow_failover=allow_failover,
         run_id=run_id,
     )
@@ -2960,6 +3035,7 @@ def scrape():
         "sleeve": sleeve_key,
         "location_mode": location_mode,
         "requested_sources": selected_sources,
+        "extra_terms": extra_terms,
         "sources_used": used_sources,
         "sources_used_labels": [
             SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
