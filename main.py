@@ -5,6 +5,7 @@ import random
 import requests
 import time
 import re
+import career_sleeves_v2 as sleeves_v2
 
 # Create an instance of the Flask class
 app = Flask(__name__)
@@ -437,9 +438,9 @@ def rank_and_filter_jobs(
         salary = _clean_value(job.get("salary"), "Not listed")
 
         dedupe_key = (
-            title.lower(),
-            company.lower(),
-            link.lower() if link and link != "Unknown" else "",
+            re.sub(r"\s+", " ", re.sub(r"[^\w\s]+", " ", title.lower())).strip(),
+            re.sub(r"\s+", " ", re.sub(r"[^\w\s]+", " ", company.lower())).strip(),
+            re.sub(r"\s+", " ", re.sub(r"[^\w\s]+", " ", location.lower())).strip(),
         )
         if dedupe_key in seen:
             continue
@@ -451,21 +452,16 @@ def rank_and_filter_jobs(
         )
         title_text = _normalize_text(title)
 
-        if _find_hits(full_text, NEGATIVE_KEYWORDS) or _find_hits(full_text, GLOBAL_NEGATIVE_KEYWORDS):
-            continue
-        if not _passes_language_gate(full_text):
-            continue
         if not _passes_location_gate(full_text, location_mode):
             continue
 
-        sleeve_scores = {
-            sleeve: _score_sleeve(full_text, title_text, keywords)
-            for sleeve, keywords in SLEEVE_KEYWORDS.items()
-        }
+        language_flags, language_notes = sleeves_v2.detect_language_flags(full_text)
+        sleeve_scores, sleeve_details = sleeves_v2.score_all_sleeves(full_text, title_text)
         primary_sleeve, primary_score = max(
             sleeve_scores.items(),
             key=lambda pair: pair[1],
         )
+
         if target_sleeve:
             target_score = sleeve_scores.get(target_sleeve, 0)
             required_score = min_target_score if strict_sleeve else max(2, min_target_score - 1)
@@ -473,94 +469,103 @@ def rank_and_filter_jobs(
                 continue
             if target_score < required_score:
                 continue
-            if not _passes_sleeve_must_have(target_sleeve, full_text, title_text):
-                continue
-            primary_sleeve = target_sleeve
-            primary_score = target_score
+            if strict_sleeve:
+                primary_sleeve = target_sleeve
+                primary_score = target_score
 
-        foreign_hits = _find_hits(full_text, FOREIGN_KEYWORDS)
-        explicit_foreign = bool(foreign_hits)
-        inferred_foreign = bool(_find_hits(full_text, TRAVEL_ROLETYPE_KEYWORDS))
-        has_foreign_mechanism = explicit_foreign or inferred_foreign
-
-        growth_hits = _find_hits(full_text, GROWTH_KEYWORDS)
-        has_growth = bool(growth_hits)
-        has_strong_sleeve = primary_score >= min_target_score
-
-        if not has_foreign_mechanism:
+        abroad_score, abroad_badges, abroad_details = sleeves_v2.score_abroad(full_text)
+        has_required_abroad_signal = any(
+            abroad_details.get(signal, {}).get("positive_hits")
+            for signal in ("remote_or_hybrid", "travel_component", "work_from_abroad_policy")
+        )
+        if not has_required_abroad_signal:
             continue
-        if strict_sleeve and sum([has_foreign_mechanism, has_strong_sleeve, has_growth]) < 2:
+        if abroad_score < sleeves_v2.MIN_ABROAD_SCORE_TO_PASS:
             continue
-        if strict_sleeve and primary_score <= 2:
-            continue
-        if not strict_sleeve and primary_score <= 1:
+        if primary_score < sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW:
             continue
 
-        synergy_hits = _find_hits(full_text, SYNERGY_KEYWORDS)
-        synergy_score = min(5, len(set(synergy_hits)))
-        ownership_score = min(5, len(set(growth_hits)))
-        abroad_clarity = 2 if explicit_foreign else 1
+        synergy_score, synergy_hits = sleeves_v2.score_synergy(full_text)
+        penalty_points, penalty_reasons = sleeves_v2.evaluate_soft_penalties(full_text)
+
+        weighted_score = (
+            (abroad_score * sleeves_v2.RANKING_WEIGHTS["abroad_score"])
+            + (primary_score * sleeves_v2.RANKING_WEIGHTS["primary_sleeve_score"])
+            + (synergy_score * sleeves_v2.RANKING_WEIGHTS["synergy_score"])
+        )
+        rank_score = (weighted_score * 20) - penalty_points
+
         distance_km, nearest_city = _estimate_distance_km(location)
-        if distance_km is None:
-            distance_bonus = 0
-        elif distance_km <= 30:
-            distance_bonus = 3
-        elif distance_km <= 60:
-            distance_bonus = 2
-        elif distance_km <= 120:
-            distance_bonus = 1
-        else:
-            distance_bonus = 0
 
         work_mode = _infer_work_mode(full_text)
-        if explicit_foreign:
-            foreign_label = "Explicit remote/hybrid/travel signal"
-        else:
-            foreign_label = "Inferred travel-compatible role type"
+        badge_labels = {
+            "remote_or_hybrid": "Remote/Hybrid",
+            "travel_component": "Travel component",
+            "work_from_abroad_policy": "Work-from-abroad policy",
+        }
+        foreign_label = ", ".join(
+            badge_labels.get(badge, badge) for badge in abroad_badges
+        ) or "No explicit abroad mechanism"
 
-        why = [
-            f"Sleeve {primary_sleeve} fit {primary_score}/5 "
-            f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} C:{sleeve_scores['C']} "
-            f"D:{sleeve_scores['D']} E:{sleeve_scores['E']})",
-            f"International-work mechanism: {foreign_label}",
+        reasons = [
             (
-                "Growth path: ownership and impact signals found"
-                if has_growth
-                else "Growth path: limited ownership signals"
+                f"Sleeve {primary_sleeve} fit {primary_score}/5 "
+                f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} "
+                f"C:{sleeve_scores['C']} D:{sleeve_scores['D']} E:{sleeve_scores['E']})"
             ),
+            f"Abroad score {abroad_score}/4 via {foreign_label}",
+            f"Synergy score {synergy_score}/5 ({', '.join(synergy_hits[:4]) or 'no extra synergy hits'})",
         ]
+        if language_notes:
+            reasons.append(language_notes[0])
+        if penalty_reasons:
+            reasons.append(penalty_reasons[0])
+        reasons = reasons[:3]
         if distance_km is not None and nearest_city:
-            why.append(f"Approx. {distance_km} km from Den Bosch (matched on {nearest_city})")
+            reasons.append(f"Approx. {distance_km} km from Den Bosch (matched on {nearest_city})")
+            reasons = reasons[:3]
 
         ranked.append(
             {
                 "title": title or "Unknown role",
                 "company": company or "Unknown company",
                 "location": location or "Unknown",
+                "url": link,
+                "date_posted": date_posted,
                 "work_mode": work_mode,
-                "foreign_mechanism": foreign_label,
-                "sleeve_scores": sleeve_scores,
-                "primary_sleeve": primary_sleeve,
+                "abroad_score": abroad_score,
+                "abroad_badges": abroad_badges,
+                "primary_sleeve_id": primary_sleeve,
                 "primary_sleeve_score": primary_score,
-                "why_relevant": why,
+                "sleeve_scores": sleeve_scores,
+                "reasons": reasons,
+                "hard_reject_reason": "",
+                "language_flags": language_flags,
+                "language_notes": language_notes,
+                "foreign_mechanism": foreign_label,
+                "primary_sleeve": primary_sleeve,
+                "why_relevant": reasons,
                 "link": link,
                 "date": date_posted,
                 "salary": salary,
                 "source": source,
                 "distance_km": distance_km,
                 "_rank": (
-                    abroad_clarity,
+                    round(rank_score, 4),
+                    weighted_score,
+                    abroad_score,
                     primary_score,
-                    distance_bonus,
                     synergy_score,
-                    ownership_score,
+                    sleeves_v2.SLEEVE_CONFIG[primary_sleeve]["name"],
                 ),
+                "_sleeve_details": sleeve_details,
             }
         )
 
     ranked.sort(key=lambda job: job["_rank"], reverse=True)
     for job in ranked:
         job.pop("_rank", None)
+        job.pop("_sleeve_details", None)
     return ranked
 
 
@@ -590,8 +595,9 @@ def fetch_comic(comic_id):
 
 
 def _sleeve_query_string(sleeve_key):
-    terms = SLEEVE_SEARCH_TERMS.get(sleeve_key, [])
-    return " OR ".join(terms[:4]) if terms else ""
+    terms = sleeves_v2.SLEEVE_SEARCH_TERMS.get((sleeve_key or "").upper(), [])
+    quoted_terms = [f"\"{term}\"" for term in terms[:6]]
+    return " OR ".join(quoted_terms) if quoted_terms else ""
 
 
 def _fetch_remotive_jobs():
@@ -1290,8 +1296,9 @@ def scrape_config():
 @app.route('/scrape')
 def scrape():
     sleeve_key = request.args.get("sleeve", "").upper().strip()
-    if sleeve_key not in VALID_SLEEVES:
-        return jsonify({"error": "Invalid sleeve. Use one of: A, B, C, D, E."}), 400
+    if sleeve_key not in sleeves_v2.VALID_SLEEVES:
+        allowed = ", ".join(sorted(sleeves_v2.VALID_SLEEVES))
+        return jsonify({"error": f"Invalid sleeve. Use one of: {allowed}."}), 400
 
     location_mode = request.args.get("location_mode", "nl_only").strip()
     if location_mode not in {"nl_only", "nl_eu", "global"}:
@@ -1322,7 +1329,7 @@ def scrape():
     ranked_items = rank_and_filter_jobs(
         items,
         target_sleeve=sleeve_key,
-        min_target_score=3,
+        min_target_score=sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
         location_mode=location_mode,
         strict_sleeve=strict_sleeve,
     )
