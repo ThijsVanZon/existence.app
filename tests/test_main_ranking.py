@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import main
 
@@ -161,6 +162,30 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(params.get("google_domain"), "google.nl")
         self.assertEqual(params.get("gl"), "nl")
         self.assertEqual(params.get("hl"), "nl")
+
+    def test_extract_abroad_metadata_detects_percentage_and_geo(self):
+        raw_text = (
+            "Remote AV role with up to 40% international travel across EMEA, "
+            "Germany and Spain."
+        )
+        meta = main._extract_abroad_metadata(raw_text)
+        self.assertEqual(meta["percentage"], 40)
+        self.assertEqual(meta["percentage_text"], "40%")
+        self.assertIn("EMEA", meta["regions"])
+        self.assertIn("Germany", meta["countries"])
+        self.assertIn("Spain", meta["countries"])
+
+    def test_extract_abroad_metadata_supports_ranges(self):
+        raw_text = "Travel requirement 30-50% on client sites across Europe and North America."
+        meta = main._extract_abroad_metadata(raw_text)
+        self.assertEqual(meta["percentage"], 50)
+        self.assertEqual(meta["percentage_text"], "30-50%")
+        self.assertIn("Europe", meta["continents"])
+        self.assertIn("North America", meta["continents"])
+
+    def test_profile_defaults_to_mvp(self):
+        with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
+            self.assertEqual(main._active_scrape_profile(), "mvp")
 
 
 if __name__ == "__main__":

@@ -145,6 +145,11 @@ a:focus-visible {
   color: #1e293b;
 }
 
+.decision-abroad {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .sleeve-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -224,6 +229,11 @@ a:focus-visible {
 .job-sleeve-tagline {
   color: var(--ink-muted);
   font-style: italic;
+}
+
+.job-abroad-geo {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
 }
 
 .scrape-toolbar {

@@ -80,6 +80,80 @@ EU_REMOTE_HINTS = [
     "romania", "czech", "austria", "switzerland",
 ]
 GLOBAL_REMOTE_HINTS = ["worldwide", "anywhere", "global"]
+ABROAD_PERCENT_CONTEXT_KEYWORDS = [
+    "travel",
+    "travelling",
+    "international",
+    "abroad",
+    "buitenland",
+    "overseas",
+    "site visit",
+    "site visits",
+    "client site",
+    "client sites",
+    "on site",
+    "on-site",
+    "onsite",
+    "op locatie",
+    "klantlocatie",
+]
+ABROAD_GEO_TERMS = {
+    "countries": [
+        ("Netherlands", ["netherlands", "nederland"]),
+        ("Belgium", ["belgium", "belgie"]),
+        ("Germany", ["germany", "deutschland"]),
+        ("France", ["france"]),
+        ("Spain", ["spain"]),
+        ("Italy", ["italy"]),
+        ("Portugal", ["portugal"]),
+        ("Poland", ["poland"]),
+        ("Romania", ["romania"]),
+        ("Czech Republic", ["czech republic", "czechia"]),
+        ("Austria", ["austria"]),
+        ("Switzerland", ["switzerland"]),
+        ("United Kingdom", ["united kingdom", "uk", "england"]),
+        ("Ireland", ["ireland"]),
+        ("United States", ["usa", "united states"]),
+        ("Canada", ["canada"]),
+        ("Mexico", ["mexico"]),
+        ("Brazil", ["brazil"]),
+        ("Argentina", ["argentina"]),
+        ("Chile", ["chile"]),
+        ("Colombia", ["colombia"]),
+        ("India", ["india"]),
+        ("Singapore", ["singapore"]),
+        ("Philippines", ["philippines"]),
+        ("Japan", ["japan"]),
+        ("China", ["china"]),
+        ("Hong Kong", ["hong kong"]),
+        ("South Korea", ["south korea", "korea"]),
+        ("United Arab Emirates", ["uae", "united arab emirates"]),
+        ("Saudi Arabia", ["saudi arabia", "saudi"]),
+        ("Egypt", ["egypt"]),
+        ("South Africa", ["south africa"]),
+        ("Nigeria", ["nigeria"]),
+        ("Australia", ["australia"]),
+        ("New Zealand", ["new zealand"]),
+    ],
+    "regions": [
+        ("EU", ["eu", "european union"]),
+        ("EMEA", ["emea"]),
+        ("Benelux", ["benelux"]),
+        ("DACH", ["dach"]),
+        ("Nordics", ["nordics", "scandinavia"]),
+        ("APAC", ["apac", "asia pacific"]),
+        ("LATAM", ["latam", "latin america"]),
+        ("Middle East", ["middle east", "mena"]),
+    ],
+    "continents": [
+        ("Europe", ["europe"]),
+        ("Asia", ["asia"]),
+        ("Africa", ["africa"]),
+        ("North America", ["north america"]),
+        ("South America", ["south america"]),
+        ("Oceania", ["oceania"]),
+    ],
+}
 
 REMOTIVE_API = "https://remotive.com/api/remote-jobs"
 REMOTEOK_API = "https://remoteok.com/api"
@@ -629,6 +703,72 @@ def _estimate_distance_km(location_text):
         if city in text:
             return round(_haversine_km(HOME_LAT, HOME_LON, lat, lon), 1), city
     return None, None
+
+
+def _context_has_abroad_keywords(raw_text, start, end):
+    text = str(raw_text or "").lower()
+    left = max(0, start - 64)
+    right = min(len(text), end + 64)
+    context = text[left:right]
+    return any(keyword in context for keyword in ABROAD_PERCENT_CONTEXT_KEYWORDS)
+
+
+def _extract_abroad_percentage(raw_text):
+    text = str(raw_text or "")
+    if not text:
+        return None, ""
+
+    candidates = []
+    range_spans = []
+    for match in re.finditer(r"(\d{1,3})\s*(?:-|to|–|—)\s*(\d{1,3})\s*%", text, flags=re.IGNORECASE):
+        start, end = match.span()
+        if not _context_has_abroad_keywords(text, start, end):
+            continue
+        first = int(match.group(1))
+        second = int(match.group(2))
+        low = max(0, min(100, min(first, second)))
+        high = max(0, min(100, max(first, second)))
+        candidates.append((high, f"{low}-{high}%"))
+        range_spans.append((start, end))
+
+    for match in re.finditer(r"(\d{1,3})\s*%", text, flags=re.IGNORECASE):
+        start, end = match.span()
+        if any(start < span_end and end > span_start for span_start, span_end in range_spans):
+            continue
+        if not _context_has_abroad_keywords(text, start, end):
+            continue
+        value = max(0, min(100, int(match.group(1))))
+        candidates.append((value, f"{value}%"))
+
+    if not candidates:
+        return None, ""
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][0], candidates[0][1]
+
+
+def _extract_abroad_geo_mentions(raw_text):
+    prepared_text = sleeves_v2.prepare_text(raw_text)
+    geo = {"countries": [], "regions": [], "continents": []}
+    for category in ("countries", "regions", "continents"):
+        for label, aliases in ABROAD_GEO_TERMS.get(category, []):
+            hits = sleeves_v2.find_hits(prepared_text, aliases)
+            if hits and label not in geo[category]:
+                geo[category].append(label)
+    locations = geo["countries"] + geo["regions"] + geo["continents"]
+    return geo, locations
+
+
+def _extract_abroad_metadata(raw_text):
+    percentage, percentage_text = _extract_abroad_percentage(raw_text)
+    geo, locations = _extract_abroad_geo_mentions(raw_text)
+    return {
+        "percentage": percentage,
+        "percentage_text": percentage_text,
+        "countries": geo["countries"],
+        "regions": geo["regions"],
+        "continents": geo["continents"],
+        "locations": locations,
+    }
 
 
 def _passes_location_gate(text, location_mode):
@@ -1277,6 +1417,7 @@ def rank_and_filter_jobs(
 
         hard_reject_reason = sleeves_v2.detect_hard_reject(title, raw_text)
         abroad_score, abroad_badges, _ = sleeves_v2.score_abroad(raw_text)
+        abroad_meta = _extract_abroad_metadata(raw_text)
         synergy_score, synergy_hits = sleeves_v2.score_synergy(raw_text)
         penalty_points, penalty_reasons = sleeves_v2.evaluate_soft_penalties(raw_text)
 
@@ -1327,6 +1468,12 @@ def rank_and_filter_jobs(
                 "primary_sleeve_score": primary_score,
                 "abroad_score": abroad_score,
                 "abroad_badges": abroad_badges,
+                "abroad_percentage": abroad_meta["percentage"],
+                "abroad_percentage_text": abroad_meta["percentage_text"],
+                "abroad_countries": abroad_meta["countries"],
+                "abroad_regions": abroad_meta["regions"],
+                "abroad_continents": abroad_meta["continents"],
+                "abroad_locations": abroad_meta["locations"],
                 "decision": "FAIL",
                 "reasons": reasons,
                 "hard_reject_reason": hard_reject_reason or None,
@@ -2075,10 +2222,10 @@ SOURCE_REGISTRY = {
 
 
 def _active_scrape_profile():
-    profile = _clean_value(os.getenv("SCRAPE_PROFILE"), "full").lower()
+    profile = _clean_value(os.getenv("SCRAPE_PROFILE"), "mvp").lower()
     if profile in VALID_SCRAPE_PROFILES:
         return profile
-    return "full"
+    return "mvp"
 
 
 def _configured_source_allowlist():

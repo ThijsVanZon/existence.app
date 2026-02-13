@@ -170,11 +170,12 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
-                ["indeed_web", "linkedin_web"],
-                sleeve_key="A",
-                target_raw=10,
-            )
+            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "full"}, clear=False):
+                items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                    ["indeed_web", "linkedin_web"],
+                    sleeve_key="A",
+                    target_raw=10,
+                )
             self.assertEqual(errors, [])
             self.assertIn("jobicy", used_sources)
             self.assertGreaterEqual(len(items), 3)
@@ -219,12 +220,13 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
-                ["indeed_web", "linkedin_web"],
-                sleeve_key="A",
-                target_raw=10,
-                allow_failover=False,
-            )
+            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "full"}, clear=False):
+                items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                    ["indeed_web", "linkedin_web"],
+                    sleeve_key="A",
+                    target_raw=10,
+                    allow_failover=False,
+                )
             self.assertEqual(errors, [])
             self.assertNotIn("jobicy", used_sources)
             self.assertEqual(len(items), 2)
