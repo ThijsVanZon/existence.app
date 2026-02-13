@@ -37,13 +37,8 @@
       </div>
 
       <div class="toolbar-field">
-        <label for="global-max">Max results per sleeve</label>
-        <select id="global-max">
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="30">30</option>
-          <option value="50">50</option>
-        </select>
+        <label>Results view</label>
+        <p class="toolbar-static">10 per pagina. Gebruik per sleeve Next/Previous om door alle resultaten te bladeren.</p>
       </div>
 
       <div class="toolbar-field toolbar-checks">
@@ -84,6 +79,7 @@
       <div id="summary-A" class="sleeve-summary"></div>
       <div id="error-A" class="error" style="display: none;"></div>
       <div id="results-A"></div>
+      <div id="pager-A" class="results-pager" hidden></div>
     </section>
 
     <section class="sleeve-panel" id="panel-B">
@@ -96,6 +92,7 @@
       <div id="summary-B" class="sleeve-summary"></div>
       <div id="error-B" class="error" style="display: none;"></div>
       <div id="results-B"></div>
+      <div id="pager-B" class="results-pager" hidden></div>
     </section>
 
     <section class="sleeve-panel" id="panel-C">
@@ -108,6 +105,7 @@
       <div id="summary-C" class="sleeve-summary"></div>
       <div id="error-C" class="error" style="display: none;"></div>
       <div id="results-C"></div>
+      <div id="pager-C" class="results-pager" hidden></div>
     </section>
 
     <section class="sleeve-panel" id="panel-D">
@@ -120,6 +118,7 @@
       <div id="summary-D" class="sleeve-summary"></div>
       <div id="error-D" class="error" style="display: none;"></div>
       <div id="results-D"></div>
+      <div id="pager-D" class="results-pager" hidden></div>
     </section>
 
     <section class="sleeve-panel" id="panel-E">
@@ -132,11 +131,14 @@
       <div id="summary-E" class="sleeve-summary"></div>
       <div id="error-E" class="error" style="display: none;"></div>
       <div id="results-E"></div>
+      <div id="pager-E" class="results-pager" hidden></div>
     </section>
   </div>
 
   <script>
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
+    const RESULTS_PER_PAGE = 10;
+    const DEFAULT_FETCH_LIMIT = 200;
     const sleeveMeta = {
       A: {
         name: 'Show Venue Operations',
@@ -169,7 +171,7 @@
         sources: ['indeed_web'],
         location_mode: 'nl_only',
         strict: false,
-        max_results: 30,
+        max_results: DEFAULT_FETCH_LIMIT,
         failover: false,
         use_cache: true
       },
@@ -178,6 +180,9 @@
       ],
     };
     let scrapeConfig = fallbackConfig;
+    const sleevePagination = Object.fromEntries(
+      sleeveKeys.map((key) => [key, { jobs: [], page: 1 }])
+    );
 
     function sourceLabelMap() {
       const mapping = {};
@@ -266,6 +271,65 @@
         : 'none';
       details.textContent = `Sources: ${sourcesText || 'none'} | Top fail reason: ${topReason}`;
       summaryWrap.appendChild(details);
+    }
+
+    function clearSleevePager(sleeveKey) {
+      sleevePagination[sleeveKey] = { jobs: [], page: 1 };
+      const pagerDiv = document.getElementById(`pager-${sleeveKey}`);
+      if (!pagerDiv) {
+        return;
+      }
+      pagerDiv.innerHTML = '';
+      pagerDiv.hidden = true;
+    }
+
+    function renderSleevePage(sleeveKey, requestedPage = 1) {
+      const resultsDiv = document.getElementById(`results-${sleeveKey}`);
+      const pagerDiv = document.getElementById(`pager-${sleeveKey}`);
+      const state = sleevePagination[sleeveKey] || { jobs: [], page: 1 };
+      const jobs = Array.isArray(state.jobs) ? state.jobs : [];
+
+      resultsDiv.innerHTML = '';
+      pagerDiv.innerHTML = '';
+
+      if (!jobs.length) {
+        pagerDiv.hidden = true;
+        return;
+      }
+
+      const total = jobs.length;
+      const pageCount = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
+      const safePage = Math.min(Math.max(1, requestedPage), pageCount);
+      const startIndex = (safePage - 1) * RESULTS_PER_PAGE;
+      const endIndex = Math.min(startIndex + RESULTS_PER_PAGE, total);
+
+      sleevePagination[sleeveKey] = { jobs, page: safePage };
+      jobs.slice(startIndex, endIndex).forEach(job => {
+        resultsDiv.appendChild(createJobResult(job));
+      });
+
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.className = 'pager-btn';
+      prevBtn.textContent = 'Previous';
+      prevBtn.disabled = safePage <= 1;
+      prevBtn.addEventListener('click', () => renderSleevePage(sleeveKey, safePage - 1));
+
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.className = 'pager-btn';
+      nextBtn.textContent = 'Next';
+      nextBtn.disabled = safePage >= pageCount;
+      nextBtn.addEventListener('click', () => renderSleevePage(sleeveKey, safePage + 1));
+
+      const info = document.createElement('span');
+      info.className = 'pager-info';
+      info.textContent = `Showing ${startIndex + 1}-${endIndex} of ${total} (page ${safePage}/${pageCount})`;
+
+      pagerDiv.appendChild(prevBtn);
+      pagerDiv.appendChild(info);
+      pagerDiv.appendChild(nextBtn);
+      pagerDiv.hidden = false;
     }
 
     function createJobResult(job) {
@@ -413,7 +477,6 @@
       failoverInput.checked = defaults.failover === true;
       failoverInput.disabled = profile === 'mvp';
       failoverWrap.style.opacity = profile === 'mvp' ? '0.55' : '1';
-      document.getElementById('global-max').value = String(defaults.max_results || 20);
 
       const sourceWrap = document.getElementById('global-sources');
       const unavailableWrapper = document.getElementById('unavailable-sources');
@@ -472,7 +535,10 @@
         sources = (scrapeConfig.defaults?.sources || []).slice();
       }
       const profile = String(scrapeConfig.profile || 'mvp').toLowerCase();
-      const maxResults = Number(document.getElementById('global-max').value || 20);
+      const maxResults = Math.max(
+        DEFAULT_FETCH_LIMIT,
+        Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
+      );
       const hasDirectScrape = sources.includes('indeed_web') || sources.includes('linkedin_web');
       const tunedMaxPages = hasDirectScrape ? 3 : 5;
       const tunedTargetRaw = hasDirectScrape
@@ -517,6 +583,7 @@
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
       summaryDiv.innerHTML = '';
+      clearSleevePager(sleeveKey);
       errorDiv.style.display = 'none';
       status.textContent = `Scraping sleeve ${sleeveKey} with selected filters...`;
 
@@ -573,6 +640,7 @@
             status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
           }
           if (!data.length) {
+            clearSleevePager(sleeveKey);
             if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
               const firstReason = payload.summary.top_fail_reasons[0];
               resultsDiv.textContent = `No jobs matched this sleeve with the current filters. Top fail reason: ${firstReason.reason} (${firstReason.count}).`;
@@ -582,9 +650,8 @@
             return;
           }
 
-          data.forEach(job => {
-            resultsDiv.appendChild(createJobResult(job));
-          });
+          sleevePagination[sleeveKey] = { jobs: data, page: 1 };
+          renderSleevePage(sleeveKey, 1);
         })
         .catch(error => {
           status.textContent = '';

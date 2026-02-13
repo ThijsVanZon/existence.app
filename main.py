@@ -1843,10 +1843,8 @@ def rank_and_filter_jobs(
     for failed in fail_jobs:
         fail_reason_counter[failed.get("_fail_reason") or "unknown_fail"] += 1
 
-    if len(pass_jobs) < PASS_FALLBACK_MIN_COUNT:
-        selected_jobs = pass_jobs + maybe_jobs
-    else:
-        selected_jobs = pass_jobs
+    # Always return PASS first, then MAYBE, so the UI can paginate without losing MAYBE visibility.
+    selected_jobs = pass_jobs + maybe_jobs
     if include_fail:
         selected_jobs = selected_jobs + fail_jobs
 
@@ -2802,7 +2800,7 @@ def _public_scrape_config():
             "sources": _default_sources(),
             "location_mode": "nl_only",
             "strict": False,
-            "max_results": 30,
+            "max_results": 200,
             "max_pages": DEFAULT_MAX_PAGES,
             "target_raw": DEFAULT_TARGET_RAW_PER_SLEEVE,
             "requests_per_second": DEFAULT_RATE_LIMIT_RPS,
@@ -2926,12 +2924,12 @@ def scrape():
     include_fail = request.args.get("include_fail", "0") == "1"
     use_legacy_response = request.args.get("legacy", "0") == "1"
 
-    max_results_raw = request.args.get("max_results", "20")
+    max_results_raw = request.args.get("max_results", "200")
     try:
         max_results = int(max_results_raw)
     except ValueError:
-        max_results = 20
-    max_results = max(5, min(max_results, 100))
+        max_results = 200
+    max_results = max(10, min(max_results, 500))
 
     max_pages_raw = request.args.get("max_pages", str(DEFAULT_MAX_PAGES))
     try:

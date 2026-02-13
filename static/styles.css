@@ -212,6 +212,13 @@ button,
   font-size: 0.9rem;
 }
 
+.toolbar-static {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .unavailable-sources {
   margin-top: 6px;
   color: var(--ink-muted);
@@ -292,23 +299,23 @@ select,
 }
 
 #panel-A h3 {
-  background: linear-gradient(90deg, rgba(var(--zircon-rgb), 0.8), rgba(var(--zircon-rgb), 0.5));
+  background: linear-gradient(90deg, rgba(var(--zircon-rgb), 0.82), rgba(var(--heliodor-rgb), 0.7));
 }
 
 #panel-B h3 {
-  background: linear-gradient(90deg, rgba(var(--amethyst-rgb), 0.76), rgba(var(--amethyst-rgb), 0.48));
+  background: linear-gradient(90deg, rgba(var(--heliodor-rgb), 0.8), rgba(var(--rubellite-rgb), 0.62));
 }
 
 #panel-C h3 {
-  background: linear-gradient(90deg, rgba(var(--rubellite-rgb), 0.66), rgba(var(--rubellite-rgb), 0.4));
+  background: linear-gradient(90deg, rgba(var(--rubellite-rgb), 0.76), rgba(var(--amethyst-rgb), 0.56));
 }
 
 #panel-D h3 {
-  background: linear-gradient(90deg, rgba(var(--zircon-rgb), 0.52), rgba(var(--amethyst-rgb), 0.38));
+  background: linear-gradient(90deg, rgba(var(--amethyst-rgb), 0.78), rgba(var(--zircon-rgb), 0.56));
 }
 
 #panel-E h3 {
-  background: linear-gradient(90deg, rgba(var(--heliodor-rgb), 0.82), rgba(var(--heliodor-rgb), 0.52));
+  background: linear-gradient(90deg, rgba(var(--zircon-rgb), 0.82), rgba(var(--heliodor-rgb), 0.7));
 }
 
 .sleeve-tagline {
@@ -461,6 +468,26 @@ select,
   gap: 8px;
   margin-top: 10px;
   flex-wrap: wrap;
+}
+
+.results-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 2px;
+  flex-wrap: wrap;
+}
+
+.pager-info {
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.pager-btn {
+  min-width: 92px;
+  padding: 5px 10px;
+  font-size: 0.82rem;
 }
 
 .job-link-btn {
