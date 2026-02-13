@@ -1,0 +1,54 @@
+import unittest
+
+import career_sleeves_v2 as sleeves_v2
+
+
+class TestCareerSleevesV2(unittest.TestCase):
+    def test_every_sleeve_has_tagline(self):
+        for sleeve_id, config in sleeves_v2.SLEEVE_CONFIG.items():
+            self.assertTrue(config.get("name"), f"missing name for {sleeve_id}")
+            self.assertTrue(config.get("tagline"), f"missing tagline for {sleeve_id}")
+
+    def test_language_required_vs_preferred_flags(self):
+        required_flags, _ = sleeves_v2.detect_language_flags(
+            "German required. Must have fluent German."
+        )
+        preferred_flags, _ = sleeves_v2.detect_language_flags(
+            "German language is a plus for this role."
+        )
+
+        self.assertTrue(required_flags["extra_language_required"])
+        self.assertFalse(required_flags["extra_language_preferred"])
+        self.assertIn("german", required_flags["extra_languages"])
+
+        self.assertFalse(preferred_flags["extra_language_required"])
+        self.assertTrue(preferred_flags["extra_language_preferred"])
+        self.assertIn("german", preferred_flags["extra_languages"])
+
+    def test_plural_matching_improves_keyword_detection(self):
+        score, details = sleeves_v2.score_sleeve(
+            "E",
+            (
+                "Partnerships manager in events and community programming "
+                "with festival culture and brand activations."
+            ),
+            "Partnerships Manager",
+        )
+        self.assertGreaterEqual(score, 3)
+        self.assertEqual(details["reason"], "ok")
+
+    def test_abroad_score_caps_at_schema_limit(self):
+        score, badges, _ = sleeves_v2.score_abroad(
+            (
+                "Remote hybrid fully remote distributed team work from home "
+                "work from abroad international remote travel site visits."
+            )
+        )
+        self.assertEqual(score, sleeves_v2.ABROAD_SCORE_CAP)
+        self.assertIn("remote_or_hybrid", badges)
+        self.assertIn("work_from_abroad_policy", badges)
+        self.assertIn("travel_component", badges)
+
+
+if __name__ == "__main__":
+    unittest.main()

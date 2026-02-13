@@ -17,14 +17,23 @@ def _phrase_in_text(prepared_text, phrase):
     normalized_phrase = _normalize_for_match(phrase)
     if not normalized_phrase:
         return False
-    return f" {normalized_phrase} " in prepared_text
+    if " " in normalized_phrase:
+        return f" {normalized_phrase} " in prepared_text
+
+    if normalized_phrase.endswith("y") and len(normalized_phrase) > 3:
+        plural_variant = normalized_phrase[:-1] + "ies"
+        pattern = rf"\b(?:{re.escape(normalized_phrase)}|{re.escape(plural_variant)})\b"
+        return bool(re.search(pattern, prepared_text))
+
+    pattern = rf"\b{re.escape(normalized_phrase)}(?:s|es)?\b"
+    return bool(re.search(pattern, prepared_text))
 
 
 def _find_hits(prepared_text, phrases):
     return {phrase for phrase in phrases if _phrase_in_text(prepared_text, phrase)}
 
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.1"
 ALLOW_LANGUAGES = ["nl", "en"]
 VALID_SLEEVES = {"A", "B", "C", "D", "E"}
 MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW = 3
@@ -115,6 +124,7 @@ SYNERGY_SIGNALS = {
 SLEEVE_CONFIG = {
     "A": {
         "name": "Show Systems & Venue Operations",
+        "tagline": "Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).",
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
@@ -175,6 +185,7 @@ SLEEVE_CONFIG = {
     },
     "B": {
         "name": "Workflow Ops & Automation",
+        "tagline": "Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).",
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
@@ -227,6 +238,7 @@ SLEEVE_CONFIG = {
     },
     "C": {
         "name": "Experience Production & Creative Tech",
+        "tagline": "Creative production: concept to delivery, immersive/brand/experience (project + travel).",
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
@@ -270,6 +282,7 @@ SLEEVE_CONFIG = {
     },
     "D": {
         "name": "Field Systems Engineering",
+        "tagline": "Field/commissioning/install: ownership op klantlocaties (travel ingebakken).",
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
@@ -314,6 +327,7 @@ SLEEVE_CONFIG = {
     },
     "E": {
         "name": "Scene Growth: Partnerships, Community & Programming",
+        "tagline": "Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).",
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
@@ -436,16 +450,6 @@ LANGUAGE_REQUIRED_MARKERS = [
     "c2-niveau",
 ]
 
-LANGUAGE_PREFERRED_MARKERS = [
-    "preferred",
-    "nice to have",
-    "a plus",
-    "bonus",
-    "pre",
-    "voorkeur",
-    "pluspunt",
-]
-
 LANGUAGE_CATALOG = [
     {"code": "en", "names": ["english", "engels"]},
     {"code": "nl", "names": ["dutch", "nederlands"]},
@@ -507,6 +511,128 @@ LANGUAGE_CATALOG = [
     {"code": "ha", "names": ["hausa"]},
     {"code": "ig", "names": ["igbo"]},
     {"code": "sq", "names": ["albanian", "albanees"]},
+    {"code": "aa", "names": ["afar"]},
+    {"code": "ab", "names": ["abkhazian", "abkhaz"]},
+    {"code": "ae", "names": ["avestan"]},
+    {"code": "ak", "names": ["akan"]},
+    {"code": "an", "names": ["aragonese"]},
+    {"code": "as", "names": ["assamese"]},
+    {"code": "av", "names": ["avaric", "avar"]},
+    {"code": "ay", "names": ["aymara"]},
+    {"code": "az", "names": ["azerbaijani", "azeri"]},
+    {"code": "ba", "names": ["bashkir"]},
+    {"code": "bh", "names": ["bihari"]},
+    {"code": "bi", "names": ["bislama"]},
+    {"code": "bm", "names": ["bambara"]},
+    {"code": "bo", "names": ["tibetan"]},
+    {"code": "br", "names": ["breton"]},
+    {"code": "bs", "names": ["bosnian"]},
+    {"code": "ce", "names": ["chechen"]},
+    {"code": "ch", "names": ["chamorro"]},
+    {"code": "co", "names": ["corsican"]},
+    {"code": "cr", "names": ["cree"]},
+    {"code": "cu", "names": ["church slavic", "old slavonic"]},
+    {"code": "cv", "names": ["chuvash"]},
+    {"code": "dv", "names": ["divehi", "maldivian"]},
+    {"code": "dz", "names": ["dzongkha"]},
+    {"code": "ee", "names": ["ewe"]},
+    {"code": "eo", "names": ["esperanto"]},
+    {"code": "ff", "names": ["fulah", "fulfulde"]},
+    {"code": "fj", "names": ["fijian"]},
+    {"code": "fo", "names": ["faroese"]},
+    {"code": "fy", "names": ["frisian", "western frisian"]},
+    {"code": "gd", "names": ["scottish gaelic", "gaelic"]},
+    {"code": "gn", "names": ["guarani"]},
+    {"code": "gu", "names": ["gujarati"]},
+    {"code": "gv", "names": ["manx"]},
+    {"code": "ho", "names": ["hiri motu"]},
+    {"code": "hy", "names": ["armenian"]},
+    {"code": "hz", "names": ["herero"]},
+    {"code": "ia", "names": ["interlingua"]},
+    {"code": "ie", "names": ["interlingue"]},
+    {"code": "ii", "names": ["sichuan yi", "yi"]},
+    {"code": "ik", "names": ["inupiaq"]},
+    {"code": "io", "names": ["ido"]},
+    {"code": "iu", "names": ["inuktitut"]},
+    {"code": "jv", "names": ["javanese"]},
+    {"code": "ka", "names": ["georgian"]},
+    {"code": "kg", "names": ["kongo"]},
+    {"code": "ki", "names": ["kikuyu"]},
+    {"code": "kj", "names": ["kuanyama"]},
+    {"code": "kk", "names": ["kazakh"]},
+    {"code": "kl", "names": ["kalaallisut", "greenlandic"]},
+    {"code": "km", "names": ["khmer", "cambodian"]},
+    {"code": "kn", "names": ["kannada"]},
+    {"code": "kr", "names": ["kanuri"]},
+    {"code": "ks", "names": ["kashmiri"]},
+    {"code": "ku", "names": ["kurdish"]},
+    {"code": "kv", "names": ["komi"]},
+    {"code": "kw", "names": ["cornish"]},
+    {"code": "ky", "names": ["kyrgyz", "kirghiz"]},
+    {"code": "la", "names": ["latin"]},
+    {"code": "lb", "names": ["luxembourgish", "letzeburgesch"]},
+    {"code": "lg", "names": ["ganda", "luganda"]},
+    {"code": "li", "names": ["limburgan", "limburgish"]},
+    {"code": "ln", "names": ["lingala"]},
+    {"code": "lo", "names": ["lao"]},
+    {"code": "lu", "names": ["luba-katanga"]},
+    {"code": "mg", "names": ["malagasy"]},
+    {"code": "mh", "names": ["marshallese"]},
+    {"code": "mi", "names": ["maori"]},
+    {"code": "mk", "names": ["macedonian"]},
+    {"code": "ml", "names": ["malayalam"]},
+    {"code": "mn", "names": ["mongolian"]},
+    {"code": "mr", "names": ["marathi"]},
+    {"code": "my", "names": ["burmese", "myanmar"]},
+    {"code": "na", "names": ["nauru"]},
+    {"code": "nb", "names": ["norwegian bokmal", "bokmal"]},
+    {"code": "nd", "names": ["north ndebele"]},
+    {"code": "ne", "names": ["nepali"]},
+    {"code": "ng", "names": ["ndonga"]},
+    {"code": "nn", "names": ["norwegian nynorsk", "nynorsk"]},
+    {"code": "nr", "names": ["south ndebele"]},
+    {"code": "nv", "names": ["navajo"]},
+    {"code": "ny", "names": ["chichewa", "nyanja"]},
+    {"code": "oc", "names": ["occitan"]},
+    {"code": "oj", "names": ["ojibwa", "ojibwe"]},
+    {"code": "om", "names": ["oromo"]},
+    {"code": "or", "names": ["odia", "oriya"]},
+    {"code": "os", "names": ["ossetian"]},
+    {"code": "pa", "names": ["punjabi", "panjabi"]},
+    {"code": "pi", "names": ["pali"]},
+    {"code": "ps", "names": ["pashto", "pushto"]},
+    {"code": "qu", "names": ["quechua"]},
+    {"code": "rm", "names": ["romansh"]},
+    {"code": "rn", "names": ["rundi"]},
+    {"code": "rw", "names": ["kinyarwanda"]},
+    {"code": "sa", "names": ["sanskrit"]},
+    {"code": "sc", "names": ["sardinian"]},
+    {"code": "sd", "names": ["sindhi"]},
+    {"code": "se", "names": ["northern sami"]},
+    {"code": "sg", "names": ["sango"]},
+    {"code": "si", "names": ["sinhala", "sinhalese"]},
+    {"code": "sm", "names": ["samoan"]},
+    {"code": "sn", "names": ["shona"]},
+    {"code": "ss", "names": ["swati"]},
+    {"code": "st", "names": ["southern sotho", "sotho"]},
+    {"code": "su", "names": ["sundanese"]},
+    {"code": "tg", "names": ["tajik"]},
+    {"code": "ti", "names": ["tigrinya"]},
+    {"code": "tk", "names": ["turkmen"]},
+    {"code": "tn", "names": ["tswana"]},
+    {"code": "to", "names": ["tonga"]},
+    {"code": "ts", "names": ["tsonga"]},
+    {"code": "tt", "names": ["tatar"]},
+    {"code": "tw", "names": ["twi"]},
+    {"code": "ty", "names": ["tahitian"]},
+    {"code": "ug", "names": ["uighur", "uyghur"]},
+    {"code": "uz", "names": ["uzbek"]},
+    {"code": "ve", "names": ["venda"]},
+    {"code": "vo", "names": ["volapuk"]},
+    {"code": "wa", "names": ["walloon"]},
+    {"code": "wo", "names": ["wolof"]},
+    {"code": "yi", "names": ["yiddish"]},
+    {"code": "za", "names": ["zhuang"]},
 ]
 
 _LANGUAGE_LOOKUP = {}
@@ -524,9 +650,6 @@ def detect_language_flags(raw_text):
     required_marker = any(
         _phrase_in_text(prepared_text, marker) for marker in LANGUAGE_REQUIRED_MARKERS
     )
-    preferred_marker = any(
-        _phrase_in_text(prepared_text, marker) for marker in LANGUAGE_PREFERRED_MARKERS
-    )
 
     extra_languages = set()
     for normalized_name, code in _LANGUAGE_LOOKUP.items():
@@ -538,7 +661,7 @@ def detect_language_flags(raw_text):
     ordered_languages = sorted(extra_languages)
     language_label = ", ".join(ordered_languages)
     required = bool(ordered_languages) and required_marker
-    preferred = bool(ordered_languages) and (preferred_marker or not required_marker)
+    preferred = bool(ordered_languages) and not required_marker
     notes = []
     if required:
         notes.append(f"Let op: deze vacature vereist ook {language_label} (naast NL/EN).")
@@ -668,4 +791,3 @@ def evaluate_soft_penalties(raw_text):
         total_penalty += int(rule.get("penalty_points", 0))
         reasons.append(rule.get("reason") or f"Penalty hits: {', '.join(sorted(hits))}")
     return total_penalty, reasons
-

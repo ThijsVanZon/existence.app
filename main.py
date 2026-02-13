@@ -43,161 +43,6 @@ CITY_COORDS_NL = {
     "enschede": (52.2215, 6.8937),
 }
 
-SLEEVE_KEYWORDS = {
-    "A": [
-        "av technician", "audiovisual technician", "audiovisueel",
-        "event technician", "show technician", "showtechniek",
-        "stage crew", "stagehand", "showcrew", "foh", "boh",
-        "monitor engineer", "live sound", "sound technician",
-        "lighting technician", "lichttechnicus", "geluidstechnicus",
-        "podiumtechniek", "licht", "geluid", "rigging", "led wall",
-        "projection", "video technician", "production technician",
-        "venue technician", "theater techniek", "festival production",
-        "festival", "venue", "touring", "concert",
-        "audio", "video", "broadcast", "streaming", "live production",
-    ],
-    "B": [
-        "operations", "operations specialist", "ops manager",
-        "revenue ops", "product ops", "customer success", "solutions engineer",
-        "implementation consultant", "enablement", "workflow",
-        "automation", "ai tooling", "ai workflow", "process improvement",
-        "no-code", "low-code", "rpa", "integrations", "zapier", "make",
-        "make.com", "airtable", "notion", "data operations",
-        "analytics ops", "tooling", "systems", "jira", "confluence",
-        "business analyst", "implementation", "procurement", "buyer",
-        "purchasing", "strategic sourcing", "inkoper",
-    ],
-    "C": [
-        "experience design", "experience designer", "immersive",
-        "creative producer", "producer", "project producer",
-        "content producer", "production coordinator", "project manager",
-        "project manager creative", "brand experience", "activation",
-        "event producer", "festival production", "exhibition", "museum",
-        "theme park creative", "scenography", "interactive installation",
-        "creative technologist", "installation", "storytelling",
-        "projectmanager", "projectmanager events", "projectmanager audio",
-        "event project manager", "audio project manager",
-    ],
-    "D": [
-        "field service engineer", "service engineer", "service technician",
-        "commissioning", "inbedrijfstelling", "installation", "installateur",
-        "maintenance", "troubleshooting", "support engineer",
-        "technical support", "onsite support", "on-site support",
-        "systems engineer", "service coordinator", "werkvoorbereider",
-        "technical operations", "field engineer", "site visits",
-        "klantlocatie", "servicecoordinator",
-        "reizend", "reiziger", "internationaal reizen",
-    ],
-    "E": [
-        "partnership manager", "partnerships manager", "community manager",
-        "event marketer", "event marketing", "brand partnerships",
-        "alliances", "bookings", "promoter", "venue relations",
-        "program coordinator", "talent relations", "artist relations",
-        "sponsorship", "festival partnerships", "event manager",
-        "eventmanager", "internationale events", "nightlife",
-        "nachtcultuur", "cultural programmer", "program curator",
-    ],
-}
-VALID_SLEEVES = set(SLEEVE_KEYWORDS.keys())
-
-SLEEVE_CONTEXT_KEYWORDS = {
-    "A": ["festival", "venue", "theater", "concert", "tour", "touring", "events", "livemuziek"],
-    "B": ["saas", "platform", "b2b software", "integrations", "tooling", "enablement", "supply chain", "procurement"],
-    "C": ["experience", "immersive", "storytelling", "concept-to-delivery", "themapark", "activation", "project delivery", "audio"],
-    "D": ["site visits", "travel", "op locatie", "klantlocatie", "field", "storingen", "service"],
-    "E": ["music", "festival", "nightlife", "culture", "events", "creator economy", "programmeur", "curation"],
-}
-
-SLEEVE_B_TOOLING_KEYWORDS = [
-    "automation", "ai tooling", "ai workflow", "no-code", "low-code", "rpa",
-    "integrations", "zapier", "make", "make.com", "airtable", "notion",
-    "jira", "confluence", "tooling", "systems",
-]
-
-SLEEVE_B_PROCUREMENT_KEYWORDS = [
-    "procurement", "buyer", "purchasing", "strategic sourcing", "inkoper",
-]
-
-SLEEVE_D_FIELD_KEYWORDS = [
-    "field service", "service engineer", "service technician", "commissioning",
-    "installation", "inbedrijfstelling", "maintenance", "troubleshooting",
-    "onsite support", "on-site support", "technical operations", "field engineer",
-]
-
-SLEEVE_D_COORDINATOR_KEYWORDS = [
-    "service coordinator", "servicecoordinator", "werkvoorbereider",
-]
-
-SLEEVE_C_STRONG_KEYWORDS = [
-    "creative producer", "content producer", "event producer", "project producer",
-    "experience design", "experience designer", "immersive", "brand experience",
-    "exhibition", "museum", "scenography", "interactive installation",
-    "creative technologist", "production coordinator",
-]
-
-SLEEVE_C_PROJECT_KEYWORDS = [
-    "projectmanager", "project manager", "projectmanager events",
-    "projectmanager audio", "event project manager", "audio project manager",
-]
-SLEEVE_E_MUST_HAVE_KEYWORDS = [
-    "community manager", "partnership manager", "partnerships manager",
-    "brand partnerships", "event marketing", "event marketer",
-    "sponsorship", "festival partnerships", "event manager",
-    "promoter", "bookings", "artist relations", "eventmanager",
-    "nightlife", "nachtcultuur", "programmeur", "programmer nightlife",
-    "cultural programmer", "program curator",
-]
-NEGATIVE_KEYWORDS = [
-    "cashier", "kassa", "vakkenvuller", "orderpicker", "telemarketing",
-    "callcenter", "geen reizen mogelijk", "alleen op locatie in nl",
-    "must live within", "commission only", "commission-only",
-]
-GLOBAL_NEGATIVE_KEYWORDS = [
-    "technical account manager", "account executive", "inside sales",
-    "sales development", "b2c sales", "recruiter", "callcenter",
-    "verzekering", "hypotheek", "sales only", "commission-only",
-    "door to door", "cold calling", "tele-sales",
-]
-GERMAN_EXCLUSION_KEYWORDS = [
-    "german required", "must speak german", "german speaker",
-    "deutsch", "deutschland", "dach", "dach-only",
-]
-
-FOREIGN_KEYWORDS = [
-    "remote", "work from abroad", "work-from-abroad", "anywhere",
-    "hybrid", "international travel", "travel", "reizen", "site visit",
-    "site visits", "on-site at client", "onsite at client", "rotatie",
-    "rotation", "workation", "global", "international", "emea",
-    "worldwide", "remote-first", "remote only", "work from home",
-]
-
-TRAVEL_ROLETYPE_KEYWORDS = [
-    "field service", "service engineer", "technical operations",
-    "production technician", "event technician", "venue technician",
-    "installation", "commissioning", "festival", "touring",
-]
-
-GROWTH_KEYWORDS = [
-    "owner", "ownership", "lead", "coordinate", "coordinator",
-    "project", "delivery", "stakeholder", "process improvement",
-    "automation", "technical depth", "implementation", "client impact",
-    "verantwoordelijkheid", "coordinatie",
-]
-
-SYNERGY_KEYWORDS = [
-    "event", "festival", "live", "music", "creative", "experience",
-    "immersive", "av", "audio", "video", "automation", "ai", "workflow",
-    "tooling", "systems", "production",
-]
-
-SLEEVE_SEARCH_TERMS = {
-    "A": ["av technician", "event technician", "stagehand", "live sound"],
-    "B": ["inkoper", "procurement specialist", "buyer", "product operations"],
-    "C": ["projectmanager events", "projectmanager audio", "creative producer", "event project manager"],
-    "D": ["servicecoordinator", "service coordinator", "field service engineer", "reizend technicus"],
-    "E": ["event manager", "nachtcultuur programmeur", "cultural programmer", "festival partnerships"],
-}
-
 NETHERLANDS_KEYWORDS = [
     "netherlands", "nederland", "dutch", "holland",
     "amsterdam", "rotterdam", "utrecht", "the hague", "den haag",
@@ -228,9 +73,6 @@ EU_REMOTE_HINTS = [
     "romania", "czech", "austria", "switzerland",
 ]
 GLOBAL_REMOTE_HINTS = ["worldwide", "anywhere", "global"]
-COUNTRY_BLOCKLIST_KEYWORDS = [
-    "germany", "deutschland", "berlin", "munich", "frankfurt", "dach",
-]
 
 REMOTIVE_API = "https://remotive.com/api/remote-jobs"
 REMOTEOK_API = "https://remoteok.com/api"
@@ -245,10 +87,6 @@ SERPAPI_URL = "https://serpapi.com/search.json"
 
 def _normalize_text(*parts):
     return " ".join(str(part or "") for part in parts).lower()
-
-
-def _find_hits(text, keywords):
-    return [keyword for keyword in keywords if keyword in text]
 
 
 def _infer_work_mode(text):
@@ -295,19 +133,14 @@ def _estimate_distance_km(location_text):
     return None, None
 
 
-def _passes_language_gate(text):
-    return not bool(_find_hits(text, GERMAN_EXCLUSION_KEYWORDS))
-
-
 def _passes_location_gate(text, location_mode):
     if location_mode == "global":
         return True
 
     has_non_eu_hint = any(keyword in text for keyword in NON_EU_COUNTRY_KEYWORDS)
-    has_blocked_country = any(keyword in text for keyword in COUNTRY_BLOCKLIST_KEYWORDS)
     is_netherlands = _is_netherlands_job(text)
     if location_mode == "nl_only":
-        return is_netherlands and not has_non_eu_hint and not has_blocked_country
+        return is_netherlands and not has_non_eu_hint
 
     if is_netherlands:
         return True
@@ -320,11 +153,7 @@ def _passes_location_gate(text, location_mode):
         return False
 
     if location_mode == "nl_eu":
-        return (
-            (has_eu_hint or has_global_remote_hint)
-            and not has_blocked_country
-            and not has_non_eu_hint
-        )
+        return (has_eu_hint or has_global_remote_hint) and not has_non_eu_hint
 
     return False
 
@@ -340,81 +169,6 @@ def _is_netherlands_job(*parts):
     if has_other_country_signal:
         return False
     return False
-
-
-def _score_sleeve(text, title_text, sleeve_keywords):
-    text_hits = _find_hits(text, sleeve_keywords)
-    title_hits = _find_hits(title_text, sleeve_keywords)
-    raw_hits = len(set(text_hits)) + len(set(title_hits))
-
-    if raw_hits >= 4:
-        return 5
-    if raw_hits == 3:
-        return 4
-    if raw_hits == 2:
-        return 3
-    if raw_hits == 1:
-        return 2
-    return 0
-
-
-def _count_unique_hits(text, keywords):
-    return len(set(_find_hits(text, keywords)))
-
-
-def _passes_sleeve_must_have(sleeve_key, text, title_text):
-    sleeve_keywords = SLEEVE_KEYWORDS.get(sleeve_key, [])
-    sleeve_hits = len(
-        set(_find_hits(text, sleeve_keywords)).union(_find_hits(title_text, sleeve_keywords))
-    )
-    context_hits = _count_unique_hits(text, SLEEVE_CONTEXT_KEYWORDS.get(sleeve_key, []))
-
-    if sleeve_key == "A":
-        return sleeve_hits >= 2 or (sleeve_hits >= 1 and context_hits >= 1)
-
-    if sleeve_key == "B":
-        tooling_hits = _count_unique_hits(text, SLEEVE_B_TOOLING_KEYWORDS)
-        remote_hits = _count_unique_hits(text, ["remote", "hybrid", "work from home"])
-        procurement_title_hits = _count_unique_hits(title_text, SLEEVE_B_PROCUREMENT_KEYWORDS)
-        procurement_text_hits = _count_unique_hits(text, SLEEVE_B_PROCUREMENT_KEYWORDS)
-        return (
-            (tooling_hits >= 1 and remote_hits >= 1)
-            or procurement_title_hits >= 1
-            or procurement_text_hits >= 2
-        )
-
-    if sleeve_key == "C":
-        title_strong_hits = _count_unique_hits(title_text, SLEEVE_C_STRONG_KEYWORDS)
-        text_strong_hits = _count_unique_hits(text, SLEEVE_C_STRONG_KEYWORDS)
-        project_title_hits = _count_unique_hits(title_text, SLEEVE_C_PROJECT_KEYWORDS)
-        project_text_hits = _count_unique_hits(text, SLEEVE_C_PROJECT_KEYWORDS)
-        return (
-            title_strong_hits >= 1
-            or project_title_hits >= 1
-            or text_strong_hits >= 2
-            or project_text_hits >= 2
-        )
-
-    if sleeve_key == "D":
-        field_hits = _count_unique_hits(text, SLEEVE_D_FIELD_KEYWORDS)
-        travel_hits = _count_unique_hits(
-            text,
-            ["travel", "reizen", "site visit", "site visits", "on-site", "onsite", "klantlocatie"],
-        )
-        coordinator_title_hits = _count_unique_hits(title_text, SLEEVE_D_COORDINATOR_KEYWORDS)
-        coordinator_text_hits = _count_unique_hits(text, SLEEVE_D_COORDINATOR_KEYWORDS)
-        return (
-            (field_hits >= 1 and travel_hits >= 1)
-            or coordinator_title_hits >= 1
-            or coordinator_text_hits >= 2
-        )
-
-    if sleeve_key == "E":
-        title_hits = _count_unique_hits(title_text, SLEEVE_E_MUST_HAVE_KEYWORDS)
-        text_hits = _count_unique_hits(text, SLEEVE_E_MUST_HAVE_KEYWORDS)
-        return title_hits >= 1 or text_hits >= 2
-
-    return True
 
 
 def rank_and_filter_jobs(
@@ -472,6 +226,8 @@ def rank_and_filter_jobs(
             if strict_sleeve:
                 primary_sleeve = target_sleeve
                 primary_score = target_score
+
+        primary_sleeve_config = sleeves_v2.SLEEVE_CONFIG[primary_sleeve]
 
         abroad_score, abroad_badges, abroad_details = sleeves_v2.score_abroad(full_text)
         has_required_abroad_signal = any(
@@ -536,6 +292,8 @@ def rank_and_filter_jobs(
                 "abroad_score": abroad_score,
                 "abroad_badges": abroad_badges,
                 "primary_sleeve_id": primary_sleeve,
+                "primary_sleeve_name": primary_sleeve_config.get("name", ""),
+                "primary_sleeve_tagline": primary_sleeve_config.get("tagline", ""),
                 "primary_sleeve_score": primary_score,
                 "sleeve_scores": sleeve_scores,
                 "reasons": reasons,
@@ -556,7 +314,7 @@ def rank_and_filter_jobs(
                     abroad_score,
                     primary_score,
                     synergy_score,
-                    sleeves_v2.SLEEVE_CONFIG[primary_sleeve]["name"],
+                    primary_sleeve_config.get("name", ""),
                 ),
                 "_sleeve_details": sleeve_details,
             }

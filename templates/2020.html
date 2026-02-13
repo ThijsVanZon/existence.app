@@ -71,7 +71,8 @@
 
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
-      <h3>Sleeve A - Live Entertainment / AV Ops</h3>
+      <h3>Sleeve A - Show Systems & Venue Operations</h3>
+      <p class="sleeve-tagline">Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).</p>
       <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="error-A" class="error" style="display: none;"></div>
@@ -79,7 +80,8 @@
     </section>
 
     <section class="sleeve-panel" id="panel-B">
-      <h3>Sleeve B - Tech/Software + AI Workflow</h3>
+      <h3>Sleeve B - Workflow Ops & Automation</h3>
+      <p class="sleeve-tagline">Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).</p>
       <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="error-B" class="error" style="display: none;"></div>
@@ -87,7 +89,8 @@
     </section>
 
     <section class="sleeve-panel" id="panel-C">
-      <h3>Sleeve C - Experience / Creative Production</h3>
+      <h3>Sleeve C - Experience Production & Creative Tech</h3>
+      <p class="sleeve-tagline">Creative production: concept to delivery, immersive/brand/experience (project + travel).</p>
       <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="error-C" class="error" style="display: none;"></div>
@@ -95,7 +98,8 @@
     </section>
 
     <section class="sleeve-panel" id="panel-D">
-      <h3>Sleeve D - Field Service / Technical Ops</h3>
+      <h3>Sleeve D - Field Systems Engineering</h3>
+      <p class="sleeve-tagline">Field/commissioning/install: ownership op klantlocaties (travel ingebakken).</p>
       <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="error-D" class="error" style="display: none;"></div>
@@ -103,7 +107,8 @@
     </section>
 
     <section class="sleeve-panel" id="panel-E">
-      <h3>Sleeve E - Community / Partnerships / Event Marketing</h3>
+      <h3>Sleeve E - Scene Growth: Partnerships, Community & Programming</h3>
+      <p class="sleeve-tagline">Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).</p>
       <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="error-E" class="error" style="display: none;"></div>
@@ -113,6 +118,28 @@
 
   <script>
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
+    const sleeveMeta = {
+      A: {
+        name: 'Show Systems & Venue Operations',
+        tagline: 'Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).'
+      },
+      B: {
+        name: 'Workflow Ops & Automation',
+        tagline: 'Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).'
+      },
+      C: {
+        name: 'Experience Production & Creative Tech',
+        tagline: 'Creative production: concept to delivery, immersive/brand/experience (project + travel).'
+      },
+      D: {
+        name: 'Field Systems Engineering',
+        tagline: 'Field/commissioning/install: ownership op klantlocaties (travel ingebakken).'
+      },
+      E: {
+        name: 'Scene Growth: Partnerships, Community & Programming',
+        tagline: 'Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).'
+      }
+    };
     const sleeveControllers = {};
     const fallbackConfig = {
       sources: [
@@ -145,9 +172,23 @@
       title.textContent = `${job.title || 'Unknown'} - ${job.company || 'Unknown'}`;
       card.appendChild(title);
 
+      const sleeveId = job.primary_sleeve_id || job.primary_sleeve || '-';
+      const sleeveName = job.primary_sleeve_name || sleeveMeta[sleeveId]?.name || '';
+      const sleeveTagline = job.primary_sleeve_tagline || sleeveMeta[sleeveId]?.tagline || '';
+
       const meta = document.createElement('p');
-      meta.textContent = `Location: ${job.location || 'Unknown'} | Mode: ${job.work_mode || 'Unknown'} | Primary sleeve: ${job.primary_sleeve || '-'} (${job.primary_sleeve_score || 0}/5)`;
+      const sleeveLabel = sleeveName
+        ? `${sleeveId} - ${sleeveName}`
+        : sleeveId;
+      meta.textContent = `Location: ${job.location || 'Unknown'} | Mode: ${job.work_mode || 'Unknown'} | Primary sleeve: ${sleeveLabel} (${job.primary_sleeve_score || 0}/5)`;
       card.appendChild(meta);
+
+      if (sleeveTagline) {
+        const sleeveTaglineRow = document.createElement('p');
+        sleeveTaglineRow.className = 'job-sleeve-tagline';
+        sleeveTaglineRow.textContent = sleeveTagline;
+        card.appendChild(sleeveTaglineRow);
+      }
 
       const mechanism = document.createElement('p');
       mechanism.textContent = `International-work mechanism: ${job.foreign_mechanism || 'Unknown'}`;

@@ -123,6 +123,18 @@ a:focus-visible {
   line-height: 1.25;
 }
 
+.sleeve-tagline {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: var(--ink-muted);
+  font-size: 0.94rem;
+}
+
+.job-sleeve-tagline {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
 .scrape-toolbar {
   border: 1px solid var(--line);
   border-radius: 14px;
