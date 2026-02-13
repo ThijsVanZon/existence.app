@@ -131,6 +131,24 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("language_flags", item)
         self.assertIn("hard_reject_reason", item)
 
+    def test_nl_only_filters_out_us_locations(self):
+        jobs = [
+            self._job(
+                "USRole",
+                "Remote workflow automation role.",
+                title="Implementation Consultant",
+                location="Denver, CO, United States",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="B",
+            min_target_score=3,
+            location_mode="nl_only",
+            strict_sleeve=False,
+        )
+        self.assertEqual(ranked, [])
+
 
 if __name__ == "__main__":
     unittest.main()

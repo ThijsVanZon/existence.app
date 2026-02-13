@@ -1274,6 +1274,7 @@ def rank_and_filter_jobs(
                     "synergy_score": synergy_score,
                     "penalty_points": penalty_points,
                     "total_positive_hits": total_positive_hits,
+                    "location_gate_match": location_gate_match,
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
@@ -1334,12 +1335,16 @@ def rank_and_filter_jobs(
             hard_reject_reason = scored.get("hard_reject_reason")
             primary_score = float(scored.get("primary_sleeve_score", 0))
             total_hits = int(scored.get("_score_components", {}).get("total_positive_hits", 0))
+            location_gate_match = bool(scored.get("_score_components", {}).get("location_gate_match", True))
             mismatch = scored.get("_score_components", {}).get("strict_target_mismatch", False)
             fail_reason = ""
 
             if hard_reject_reason:
                 decision = "FAIL"
                 fail_reason = hard_reject_reason
+            elif location_mode != "global" and not location_gate_match:
+                decision = "FAIL"
+                fail_reason = "location_out_of_scope"
             elif mismatch:
                 decision = "FAIL"
                 fail_reason = "target_sleeve_mismatch"
@@ -1386,6 +1391,8 @@ def rank_and_filter_jobs(
         promoted = []
         for failed in fail_jobs:
             if failed.get("hard_reject_reason"):
+                continue
+            if (failed.get("_fail_reason") or "").startswith("location_"):
                 continue
             failed["decision"] = "MAYBE"
             reasons = list(failed.get("reasons") or [])

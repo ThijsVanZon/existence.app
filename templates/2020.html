@@ -325,11 +325,20 @@
       if (!sources.length) {
         sources = (scrapeConfig.defaults?.sources || []).slice();
       }
+      const maxResults = Number(document.getElementById('global-max').value || 20);
+      const hasDirectScrape = sources.includes('indeed_web') || sources.includes('linkedin_web');
+      const tunedMaxPages = hasDirectScrape ? 3 : 5;
+      const tunedTargetRaw = hasDirectScrape
+        ? Math.max(40, Math.min(120, maxResults * 3))
+        : Math.max(60, Math.min(150, maxResults * 4));
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
       params.set('location_mode', document.getElementById('global-location').value);
       params.set('strict', document.getElementById('global-strict').checked ? '1' : '0');
-      params.set('max_results', document.getElementById('global-max').value);
+      params.set('max_results', String(maxResults));
+      params.set('max_pages', String(tunedMaxPages));
+      params.set('target_raw', String(tunedTargetRaw));
+      params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
       params.set('refresh', document.getElementById('global-cache').checked ? '0' : '1');
       params.set('failover', document.getElementById('global-failover').checked ? '1' : '0');
       params.set('sources', sources.join(','));
