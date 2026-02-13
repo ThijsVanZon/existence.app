@@ -1,11 +1,15 @@
 :root {
-  --bg-soft: #f4f6fb;
-  --ink: #12243a;
-  --ink-muted: #4f637a;
-  --line: #cfd9e7;
-  --accent: #2563eb;
-  --panel: #ffffff;
-  --panel-soft: #f8fbff;
+  --zircon: #00bfc9;
+  --heliodor: #ffc927;
+  --rubellite: #ff3f79;
+  --amethyst: #794fff;
+  --bg-soft: var(--heliodor);
+  --ink: var(--amethyst);
+  --ink-muted: var(--amethyst);
+  --line: var(--amethyst);
+  --accent: var(--amethyst);
+  --panel: var(--zircon);
+  --panel-soft: var(--heliodor);
 }
 
 body {
@@ -14,8 +18,8 @@ body {
   line-height: 1.45;
   color: var(--ink);
   background:
-    radial-gradient(circle at 20% 0%, #eaf1ff 0%, transparent 40%),
-    radial-gradient(circle at 90% 15%, #edf7ff 0%, transparent 35%),
+    radial-gradient(circle at 20% 0%, var(--zircon) 0%, transparent 42%),
+    radial-gradient(circle at 90% 15%, var(--amethyst) 0%, transparent 38%),
     var(--bg-soft);
 }
 
@@ -24,7 +28,7 @@ a {
 }
 
 a:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--amethyst);
   outline-offset: 2px;
 }
 
@@ -76,7 +80,7 @@ a:focus-visible {
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--rubellite);
   font-weight: 600;
 }
 
@@ -86,7 +90,6 @@ a:focus-visible {
   padding: 14px;
   margin-bottom: 12px;
   background: var(--panel);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .job-card h3 {
@@ -126,28 +129,28 @@ a:focus-visible {
 }
 
 .decision-pass {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--zircon);
+  color: var(--amethyst);
 }
 
 .decision-maybe {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--heliodor);
+  color: var(--amethyst);
 }
 
 .decision-fail {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--rubellite);
+  color: var(--heliodor);
 }
 
 .decision-neutral {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--amethyst);
+  color: var(--heliodor);
 }
 
 .decision-abroad {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--amethyst);
+  color: var(--heliodor);
 }
 
 .sleeve-grid {
@@ -162,7 +165,6 @@ a:focus-visible {
   border-radius: 14px;
   padding: 14px;
   background: var(--panel-soft);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
 .sleeve-panel.loading {
@@ -187,7 +189,7 @@ a:focus-visible {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #f8fbff;
+  background: var(--zircon);
 }
 
 .sleeve-summary p {
@@ -205,25 +207,25 @@ a:focus-visible {
 .metric-badge {
   border-radius: 999px;
   padding: 2px 8px;
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--amethyst);
+  color: var(--heliodor);
   font-size: 0.8rem;
   font-weight: 700;
 }
 
 .metric-pass {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--zircon);
+  color: var(--amethyst);
 }
 
 .metric-maybe {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--heliodor);
+  color: var(--amethyst);
 }
 
 .metric-fail {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--rubellite);
+  color: var(--heliodor);
 }
 
 .job-sleeve-tagline {
@@ -253,18 +255,25 @@ a:focus-visible {
 }
 
 .job-link-company {
-  background: #2563eb;
-  color: #fff;
+  background: var(--amethyst);
+  color: var(--heliodor);
 }
 
 .job-link-indeed {
-  background: #0ea5e9;
-  color: #fff;
+  background: var(--zircon);
+  color: var(--amethyst);
 }
 
 .job-link-fallback {
-  background: #1d4ed8;
-  color: #fff;
+  background: var(--heliodor);
+  color: var(--amethyst);
+}
+
+.job-link-disabled {
+  background: var(--heliodor);
+  color: var(--rubellite);
+  pointer-events: none;
+  opacity: 1;
 }
 
 .scrape-toolbar {
@@ -273,7 +282,6 @@ a:focus-visible {
   background: var(--panel);
   padding: 14px;
   margin-bottom: 18px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
 .toolbar-hint {
@@ -333,7 +341,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 6px 10px;
-  background: #eef4ff;
+  background: var(--heliodor);
 }
 
 .source-reason {
@@ -359,7 +367,7 @@ a:focus-visible {
 
 button {
   background: var(--accent);
-  color: #fff;
+  color: var(--heliodor);
   border: none;
   border-radius: 10px;
   padding: 8px 12px;
@@ -375,7 +383,8 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--heliodor);
+  color: var(--amethyst);
 }
 
 .videos,

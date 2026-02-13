@@ -10,7 +10,7 @@ import time
 import re
 import uuid
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 from scrapy import Selector
 import career_sleeves_v2 as sleeves_v2
 
@@ -965,6 +965,35 @@ def _decode_embedded_url(value):
     return text
 
 
+def _extract_external_destination_from_url(url):
+    parsed = urlparse(_clean_value(url, ""))
+    if not parsed.netloc:
+        return ""
+
+    redirect_keys = {
+        "adurl",
+        "dest",
+        "destination",
+        "redirect",
+        "redirecturl",
+        "url",
+        "u",
+        "target",
+    }
+    for key, value in parse_qsl(parsed.query, keep_blank_values=False):
+        if key.lower() not in redirect_keys:
+            continue
+        candidate = _decode_embedded_url(unquote(unquote(value)))
+        if candidate.startswith("/"):
+            candidate = requests.compat.urljoin(
+                f"{parsed.scheme or 'https'}://{parsed.netloc}",
+                candidate,
+            )
+        if _is_absolute_http_url(candidate) and "indeed." not in _host_for_url(candidate):
+            return candidate
+    return ""
+
+
 def _extract_indeed_links_from_detail(html_text, response_url):
     selector = Selector(text=html_text or "")
     response_url = _clean_value(response_url, "")
@@ -978,6 +1007,10 @@ def _extract_indeed_links_from_detail(html_text, response_url):
         href = requests.compat.urljoin(response_url, _decode_embedded_url(href_raw))
         if not _is_absolute_http_url(href):
             continue
+
+        external_destination = _extract_external_destination_from_url(href)
+        if external_destination:
+            company_candidates.append(external_destination)
 
         host = _host_for_url(href)
         text_blob = _normalize_text(
@@ -995,6 +1028,8 @@ def _extract_indeed_links_from_detail(html_text, response_url):
         if "indeed." in host:
             if not indeed_url:
                 indeed_url = href
+            if has_apply_marker:
+                company_candidates.append(href)
             continue
         if has_apply_marker:
             company_candidates.append(href)
@@ -1007,6 +1042,9 @@ def _extract_indeed_links_from_detail(html_text, response_url):
             candidate = requests.compat.urljoin(response_url, _decode_embedded_url(match.group(1)))
             if not _is_absolute_http_url(candidate):
                 continue
+            external_destination = _extract_external_destination_from_url(candidate)
+            if external_destination:
+                company_candidates.append(external_destination)
             host = _host_for_url(candidate)
             if "indeed." in host:
                 if not indeed_url:
@@ -1015,10 +1053,28 @@ def _extract_indeed_links_from_detail(html_text, response_url):
                 company_candidates.append(candidate)
 
     company_url = ""
+    deduped_candidates = []
+    seen = set()
     for candidate in company_candidates:
-        if _is_absolute_http_url(candidate):
+        if not _is_absolute_http_url(candidate):
+            continue
+        normalized = candidate.strip()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped_candidates.append(normalized)
+
+    for candidate in deduped_candidates:
+        if "indeed." not in _host_for_url(candidate):
             company_url = candidate
             break
+    if not company_url:
+        for candidate in deduped_candidates:
+            host = _host_for_url(candidate)
+            path = (urlparse(candidate).path or "").lower()
+            if "indeed." in host and any(token in path for token in ("apply", "pagead", "rc/clk")):
+                company_url = candidate
+                break
 
     return {
         "indeed_url": indeed_url if _is_absolute_http_url(indeed_url) else "",

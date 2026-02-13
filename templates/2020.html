@@ -207,13 +207,19 @@
       return /^https?:\/\//i.test(value);
     }
 
-    function createActionLink(label, href, extraClass = '') {
+    function createActionLink(label, href, extraClass = '', enabled = true) {
       const link = document.createElement('a');
       link.className = `job-link-btn ${extraClass}`.trim();
-      link.href = href;
+      link.href = enabled ? href : '#';
       link.textContent = label;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+      if (enabled) {
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+      } else {
+        link.classList.add('job-link-disabled');
+        link.setAttribute('aria-disabled', 'true');
+        link.tabIndex = -1;
+      }
       return link;
     }
 
@@ -255,7 +261,7 @@
       const abroadLocations = Array.isArray(job.abroad_locations) ? job.abroad_locations : [];
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
       const indeedUrl = isValidHttpUrl(job.indeed_url) ? job.indeed_url : primaryLink;
-      const companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : (indeedUrl || primaryLink);
+      const companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
 
       const header = document.createElement('div');
       header.className = 'job-card-header';
@@ -317,14 +323,16 @@
         createActionLink(
           'Open company posting',
           companyUrl || '#',
-          companyUrl && companyUrl !== indeedUrl ? 'job-link-company' : 'job-link-fallback'
+          'job-link-company',
+          Boolean(companyUrl)
         )
       );
       actions.appendChild(
         createActionLink(
           'Open on Indeed',
-          indeedUrl || companyUrl || '#',
-          'job-link-indeed'
+          indeedUrl || '#',
+          'job-link-indeed',
+          Boolean(indeedUrl)
         )
       );
       card.appendChild(actions);

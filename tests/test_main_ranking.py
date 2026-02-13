@@ -206,6 +206,16 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(links["indeed_url"], "https://nl.indeed.com/viewjob?jk=abc123")
         self.assertEqual(links["company_url"], "https://company.example/jobs/42")
 
+    def test_extract_external_destination_from_redirect_url(self):
+        redirect = (
+            "https://nl.indeed.com/pagead/clk"
+            "?jk=abc123&adurl=https%3A%2F%2Fcompany.example%2Fcareers%2F42"
+        )
+        self.assertEqual(
+            main._extract_external_destination_from_url(redirect),
+            "https://company.example/careers/42",
+        )
+
     def test_ranking_preserves_raw_link_for_opening(self):
         jobs = [
             self._job(
