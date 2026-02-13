@@ -34,6 +34,7 @@ Useful optional query params:
 - `no_new_unique_pages` = stop after N pages without new unique jobs (default: `2`)
 - `strict` = `1|0` target sleeve strictness (default: `0`)
 - `refresh` = `1|0` bypass source cache (default: `0`)
+- `failover` = `1|0` allow backend to add fallback sources on low yield/blocking (default: auto: `0` when explicit `sources` are passed, else `1`)
 - `include_fail` = `1|0` include FAIL records in returned `jobs` (default: `0`)
 - `incremental` = `1|0` return only unseen jobs from local state (default: `0`)
 - `state_window_days` = retention window for incremental seen-state (default: `14`)

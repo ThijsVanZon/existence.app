@@ -2149,6 +2149,7 @@ def fetch_jobs_from_sources(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    allow_failover=True,
     run_id="",
 ):
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
@@ -2194,7 +2195,7 @@ def fetch_jobs_from_sources(
         if diagnostics["blocked_detected"].get(source_name):
             blocked_primary.append(source_key)
     low_yield = unique_count < max(20, int(target_raw * 0.35))
-    should_failover = bool(blocked_primary) or low_yield
+    should_failover = bool(allow_failover and (blocked_primary or low_yield))
 
     if should_failover:
         reason = "blocked_primary" if blocked_primary else "low_yield"
@@ -2282,6 +2283,7 @@ def _public_scrape_config():
             "incremental": False,
             "state_window_days": DEFAULT_INCREMENTAL_WINDOW_DAYS,
             "use_cache": True,
+            "failover": False,
         },
         "location_modes": [
             {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
@@ -2450,6 +2452,11 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     selected_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
+    failover_raw = request.args.get("failover", "").strip()
+    if failover_raw in {"0", "1"}:
+        allow_failover = failover_raw == "1"
+    else:
+        allow_failover = not bool(selected_sources)
 
     items, fetch_errors, used_sources, fetch_diagnostics = fetch_jobs_from_sources(
         selected_sources,
@@ -2461,6 +2468,7 @@ def scrape():
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
+        allow_failover=allow_failover,
         run_id=run_id,
     )
     if not items and fetch_errors:
@@ -2493,7 +2501,9 @@ def scrape():
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "sleeve": sleeve_key,
         "location_mode": location_mode,
+        "requested_sources": selected_sources,
         "sources_used": used_sources,
+        "failover_enabled": allow_failover,
         "raw_count": int(funnel.get("raw", 0)),
         "deduped_count": int(funnel.get("after_dedupe", 0)),
         "pass_count": int(funnel.get("pass_count", 0)),

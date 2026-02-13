@@ -181,6 +181,56 @@ class TestScrapeEndpoint(unittest.TestCase):
         finally:
             main._fetch_source_with_cache = original_fetch_source
 
+    def test_failover_can_be_disabled(self):
+        original_fetch_source = main._fetch_source_with_cache
+        try:
+            def fake_fetch_source(source_key, *args, **kwargs):
+                diagnostics = main._new_diagnostics()
+                if source_key in {"indeed_web", "linkedin_web"}:
+                    return (
+                        [
+                            {
+                                "title": "Dup",
+                                "company": "Same",
+                                "location": "Amsterdam",
+                                "link": "https://example.com/dup",
+                                "source": "Indeed" if source_key == "indeed_web" else "LinkedIn",
+                            }
+                        ],
+                        None,
+                        diagnostics,
+                    )
+                if source_key == "jobicy":
+                    return (
+                        [
+                            {
+                                "title": "Unique One",
+                                "company": "U1",
+                                "location": "NL",
+                                "link": "https://example.com/u1",
+                                "source": "Jobicy",
+                            }
+                        ],
+                        None,
+                        diagnostics,
+                    )
+                return ([], None, diagnostics)
+
+            main._fetch_source_with_cache = fake_fetch_source
+
+            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                ["indeed_web", "linkedin_web"],
+                sleeve_key="A",
+                target_raw=10,
+                allow_failover=False,
+            )
+            self.assertEqual(errors, [])
+            self.assertNotIn("jobicy", used_sources)
+            self.assertEqual(len(items), 2)
+            self.assertEqual(diagnostics["auto_failover"], [])
+        finally:
+            main._fetch_source_with_cache = original_fetch_source
+
     def test_incremental_filter_skips_previously_seen_jobs(self):
         original_state_path = main.SEEN_JOBS_STATE_PATH
         try:
@@ -210,6 +260,43 @@ class TestScrapeEndpoint(unittest.TestCase):
                 self.assertEqual(second_skipped, 2)
         finally:
             main.SEEN_JOBS_STATE_PATH = original_state_path
+
+    def test_scrape_defaults_failover_off_when_sources_are_explicit(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            captured = {"allow_failover": None}
+
+            def fake_fetch(*args, **kwargs):
+                captured["allow_failover"] = kwargs.get("allow_failover")
+                return [], [], ["serpapi"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get("/scrape?sleeve=A&sources=serpapi")
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(captured["allow_failover"])
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
 
 
 if __name__ == "__main__":

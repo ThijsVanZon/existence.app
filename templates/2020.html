@@ -55,6 +55,10 @@
           <input type="checkbox" id="global-cache" checked>
           Use cache (faster)
         </label>
+        <label class="control-inline">
+          <input type="checkbox" id="global-failover">
+          Auto failover sources
+        </label>
       </div>
     </div>
 
@@ -159,6 +163,7 @@
         location_mode: 'nl_only',
         strict: false,
         max_results: 30,
+        failover: false,
         use_cache: true
       }
     };
@@ -263,6 +268,7 @@
       locationSelect.value = defaults.location_mode || 'nl_only';
       document.getElementById('global-strict').checked = defaults.strict !== false;
       document.getElementById('global-cache').checked = defaults.use_cache !== false;
+      document.getElementById('global-failover').checked = defaults.failover === true;
       document.getElementById('global-max').value = String(defaults.max_results || 20);
 
       const sourceWrap = document.getElementById('global-sources');
@@ -325,6 +331,7 @@
       params.set('strict', document.getElementById('global-strict').checked ? '1' : '0');
       params.set('max_results', document.getElementById('global-max').value);
       params.set('refresh', document.getElementById('global-cache').checked ? '0' : '1');
+      params.set('failover', document.getElementById('global-failover').checked ? '1' : '0');
       params.set('sources', sources.join(','));
       return `/scrape?${params.toString()}`;
     }
@@ -340,7 +347,7 @@
       }
       const controller = new AbortController();
       sleeveControllers[sleeveKey] = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 70000);
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
@@ -370,16 +377,35 @@
           }
 
           const payload = await response.json();
+          const jobs = Array.isArray(payload)
+            ? payload
+            : (Array.isArray(payload.jobs) ? payload.jobs : []);
+          const summary = (!Array.isArray(payload) && payload.summary && typeof payload.summary === 'object')
+            ? payload.summary
+            : null;
+          const sourcesFromSummary = summary && Array.isArray(summary.sources_used)
+            ? summary.sources_used.join(',')
+            : '';
           return {
-            jobs: Array.isArray(payload) ? payload : [],
-            sourcesUsed: response.headers.get('x-sources-used') || 'none'
+            jobs,
+            summary,
+            sourcesUsed: sourcesFromSummary || response.headers.get('x-sources-used') || 'none'
           };
         })
         .then(payload => {
           const data = payload.jobs;
-          status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
+          if (payload.summary) {
+            status.textContent = `Finished sleeve ${sleeveKey}. PASS ${payload.summary.pass_count || 0}, MAYBE ${payload.summary.maybe_count || 0}, FAIL ${payload.summary.fail_count || 0}. Sources: ${payload.sourcesUsed}.`;
+          } else {
+            status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
+          }
           if (!data.length) {
-            resultsDiv.textContent = 'No jobs matched this sleeve with the current filters. Try disabling strict matching or enabling Indeed/LinkedIn via SerpApi.';
+            if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
+              const firstReason = payload.summary.top_fail_reasons[0];
+              resultsDiv.textContent = `No jobs matched this sleeve with the current filters. Top fail reason: ${firstReason.reason} (${firstReason.count}).`;
+            } else {
+              resultsDiv.textContent = 'No jobs matched this sleeve with the current filters. Try disabling strict matching or broadening sources.';
+            }
             return;
           }
 
@@ -391,7 +417,7 @@
           status.textContent = '';
           const isTimeout = error.name === 'AbortError';
           errorDiv.textContent = isTimeout
-            ? `Scrape for sleeve ${sleeveKey} timed out after 70 seconds.`
+            ? `Scrape for sleeve ${sleeveKey} timed out after 120 seconds.`
             : `An error occurred while scraping jobs: ${error.message}`;
           errorDiv.style.display = 'block';
         })
