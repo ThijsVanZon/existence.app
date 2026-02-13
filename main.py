@@ -149,6 +149,7 @@ CANONICAL_QUERY_PARAMS = {"jk", "vjk", "jobId", "currentJobId", "id"}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 PRIMARY_DIRECT_SOURCES = {"indeed_web": "Indeed", "linkedin_web": "LinkedIn"}
 AUTO_FAILOVER_SOURCES = ["jobicy", "himalayas", "remotive", "remoteok", "serpapi"]
+VALID_SCRAPE_PROFILES = {"full", "mvp"}
 
 
 def _normalize_text(*parts):
@@ -1253,6 +1254,14 @@ def rank_and_filter_jobs(
         )
         prepared_text = sleeves_v2.prepare_text(raw_text)
         title_text = _normalize_text(title)
+        work_mode = _infer_work_mode(
+            _normalize_text(
+                location,
+                snippet,
+                full_description,
+                job.get("work_mode_hint"),
+            )
+        )
 
         language_flags, language_notes = sleeves_v2.detect_language_flags(raw_text)
         sleeve_scores, sleeve_details = sleeves_v2.score_all_sleeves(raw_text, title_text)
@@ -1306,6 +1315,7 @@ def rank_and_filter_jobs(
                 "url": link,
                 "source": source,
                 "date_posted": date_posted,
+                "work_mode": work_mode,
                 "snippet": snippet,
                 "full_description": full_description,
                 "raw_text": raw_text,
@@ -2064,6 +2074,37 @@ SOURCE_REGISTRY = {
 }
 
 
+def _active_scrape_profile():
+    profile = _clean_value(os.getenv("SCRAPE_PROFILE"), "full").lower()
+    if profile in VALID_SCRAPE_PROFILES:
+        return profile
+    return "full"
+
+
+def _configured_source_allowlist():
+    # Optional runtime override to gradually re-enable upgraded sources.
+    raw = _clean_value(os.getenv("SCRAPE_SOURCE_ALLOWLIST"), "").lower()
+    if not raw:
+        return set()
+    selected = {item.strip() for item in raw.split(",") if item.strip()}
+    return {source for source in selected if source in SOURCE_REGISTRY}
+
+
+def _profile_source_allowlist():
+    explicit_allowlist = _configured_source_allowlist()
+    if explicit_allowlist:
+        return explicit_allowlist
+
+    profile = _active_scrape_profile()
+    if profile == "mvp":
+        return {"indeed_web"}
+    return set(SOURCE_REGISTRY.keys())
+
+
+def _source_allowed_by_profile(source_key):
+    return source_key in _profile_source_allowlist()
+
+
 def _source_env_missing(source_key):
     config = SOURCE_REGISTRY[source_key]
     missing = []
@@ -2085,6 +2126,8 @@ def _source_health_block_reason(source_key):
 
 
 def _source_available(source_key):
+    if not _source_allowed_by_profile(source_key):
+        return False
     if _source_env_missing(source_key):
         return False
     if _source_health_block_reason(source_key):
@@ -2093,6 +2136,8 @@ def _source_available(source_key):
 
 
 def _source_availability_reason(source_key):
+    if not _source_allowed_by_profile(source_key):
+        return f"Disabled in scrape profile `{_active_scrape_profile()}`"
     missing_env = _source_env_missing(source_key)
     if missing_env:
         return f"Missing env: {', '.join(missing_env)}"
@@ -2223,6 +2268,7 @@ def fetch_jobs_from_sources(
     allow_failover=True,
     run_id="",
 ):
+    profile = _active_scrape_profile()
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
     if not requested:
         requested = _default_sources()
@@ -2266,7 +2312,11 @@ def fetch_jobs_from_sources(
         if diagnostics["blocked_detected"].get(source_name):
             blocked_primary.append(source_key)
     low_yield = unique_count < max(20, int(target_raw * 0.35))
-    should_failover = bool(allow_failover and (blocked_primary or low_yield))
+    should_failover = bool(
+        allow_failover
+        and profile != "mvp"
+        and (blocked_primary or low_yield)
+    )
 
     if should_failover:
         reason = "blocked_primary" if blocked_primary else "low_yield"
@@ -2324,6 +2374,8 @@ def fetch_jobs_from_sources(
 
 
 def _public_scrape_config():
+    profile = _active_scrape_profile()
+    allowlist = _profile_source_allowlist()
     sources = []
     for source_key, config in SOURCE_REGISTRY.items():
         available = _source_available(source_key)
@@ -2334,11 +2386,24 @@ def _public_scrape_config():
                 "label": config["label"],
                 "available": available,
                 "default_enabled": bool(config["default_enabled"] and available),
+                "enabled_in_profile": source_key in allowlist,
                 "reason": reason,
             }
         )
 
+    if profile == "mvp":
+        location_modes = [
+            {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
+        ]
+    else:
+        location_modes = [
+            {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
+            {"id": "nl_eu", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_eu"]},
+            {"id": "global", "label": sleeves_v2.LOCATION_MODE_LABELS["global"]},
+        ]
+
     return {
+        "profile": profile,
         "sources": sources,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "defaults": {
@@ -2356,11 +2421,7 @@ def _public_scrape_config():
             "use_cache": True,
             "failover": False,
         },
-        "location_modes": [
-            {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
-            {"id": "nl_eu", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_eu"]},
-            {"id": "global", "label": sleeves_v2.LOCATION_MODE_LABELS["global"]},
-        ],
+        "location_modes": location_modes,
     }
 
 
@@ -2456,6 +2517,7 @@ def scrape_config():
 @app.route('/scrape')
 def scrape():
     run_id = uuid.uuid4().hex[:12]
+    profile = _active_scrape_profile()
     sleeve_key = request.args.get("sleeve", "").upper().strip()
     if sleeve_key not in sleeves_v2.VALID_SLEEVES:
         allowed = ", ".join(sorted(sleeves_v2.VALID_SLEEVES))
@@ -2463,6 +2525,8 @@ def scrape():
 
     location_mode = request.args.get("location_mode", "nl_only").strip()
     if location_mode not in {"nl_only", "nl_eu", "global"}:
+        location_mode = "nl_only"
+    if profile == "mvp":
         location_mode = "nl_only"
 
     strict_sleeve = request.args.get("strict", "0") == "1"
@@ -2528,6 +2592,8 @@ def scrape():
         allow_failover = failover_raw == "1"
     else:
         allow_failover = not bool(selected_sources)
+    if profile == "mvp":
+        allow_failover = False
 
     items, fetch_errors, used_sources, fetch_diagnostics = fetch_jobs_from_sources(
         selected_sources,
@@ -2569,11 +2635,16 @@ def scrape():
     funnel = ranking_result.get("funnel") or {}
     summary = {
         "run_id": run_id,
+        "profile": profile,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "sleeve": sleeve_key,
         "location_mode": location_mode,
         "requested_sources": selected_sources,
         "sources_used": used_sources,
+        "sources_used_labels": [
+            SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
+            for source_key in used_sources
+        ],
         "failover_enabled": allow_failover,
         "raw_count": int(funnel.get("raw", 0)),
         "deduped_count": int(funnel.get("after_dedupe", 0)),

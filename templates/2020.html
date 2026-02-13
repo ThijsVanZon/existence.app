@@ -25,7 +25,7 @@
   <h2>Scraped Jobs Per Sleeve</h2>
   <section class="scrape-toolbar">
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
-    <p class="toolbar-hint">For Indeed and LinkedIn results, enable the SerpApi-based sources after adding your `SERPAPI_API_KEY` on the server.</p>
+    <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed NL only, no auto failover).</p>
     <div class="toolbar-grid">
       <div class="toolbar-field">
         <label for="global-location">Location scope</label>
@@ -55,7 +55,7 @@
           <input type="checkbox" id="global-cache" checked>
           Use cache (faster)
         </label>
-        <label class="control-inline">
+        <label class="control-inline" id="global-failover-wrap">
           <input type="checkbox" id="global-failover">
           Auto failover sources
         </label>
@@ -79,6 +79,7 @@
       <p class="sleeve-tagline">Live entertainment / AV ops: real-time techniek + beleving on-site (vaak travel).</p>
       <button type="button" onclick="startScraping('A')">Scrape Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
+      <div id="summary-A" class="sleeve-summary"></div>
       <div id="error-A" class="error" style="display: none;"></div>
       <div id="results-A"></div>
     </section>
@@ -88,6 +89,7 @@
       <p class="sleeve-tagline">Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).</p>
       <button type="button" onclick="startScraping('B')">Scrape Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
+      <div id="summary-B" class="sleeve-summary"></div>
       <div id="error-B" class="error" style="display: none;"></div>
       <div id="results-B"></div>
     </section>
@@ -97,6 +99,7 @@
       <p class="sleeve-tagline">Creative production: concept to delivery, immersive/brand/experience (project + travel).</p>
       <button type="button" onclick="startScraping('C')">Scrape Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
+      <div id="summary-C" class="sleeve-summary"></div>
       <div id="error-C" class="error" style="display: none;"></div>
       <div id="results-C"></div>
     </section>
@@ -106,6 +109,7 @@
       <p class="sleeve-tagline">Field/commissioning/install: ownership op klantlocaties (travel ingebakken).</p>
       <button type="button" onclick="startScraping('D')">Scrape Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
+      <div id="summary-D" class="sleeve-summary"></div>
       <div id="error-D" class="error" style="display: none;"></div>
       <div id="results-D"></div>
     </section>
@@ -115,6 +119,7 @@
       <p class="sleeve-tagline">Scene-building: partnerships/community/programming (expliciet geen TAM/AE sales).</p>
       <button type="button" onclick="startScraping('E')">Scrape Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
+      <div id="summary-E" class="sleeve-summary"></div>
       <div id="error-E" class="error" style="display: none;"></div>
       <div id="results-E"></div>
     </section>
@@ -146,68 +151,124 @@
     };
     const sleeveControllers = {};
     const fallbackConfig = {
+      profile: 'mvp',
       sources: [
-        { id: 'remotive', label: 'Remotive', available: true, default_enabled: true, reason: '' },
-        { id: 'remoteok', label: 'RemoteOK', available: true, default_enabled: true, reason: '' },
-        { id: 'jobicy', label: 'Jobicy', available: true, default_enabled: true, reason: '' },
-        { id: 'himalayas', label: 'Himalayas', available: true, default_enabled: true, reason: '' },
-        { id: 'themuse', label: 'The Muse', available: true, default_enabled: false, reason: '' },
-        { id: 'arbeitnow', label: 'Arbeitnow', available: true, default_enabled: false, reason: '' },
-        { id: 'adzuna', label: 'Adzuna (API key)', available: false, default_enabled: false, reason: '' },
-        { id: 'indeed_serpapi', label: 'Indeed via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
-        { id: 'linkedin_serpapi', label: 'LinkedIn via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
-        { id: 'serpapi', label: 'Google Jobs via SerpApi (API key)', available: false, default_enabled: false, reason: '' },
+        { id: 'indeed_web', label: 'Indeed (direct scraping)', available: true, default_enabled: true, reason: '' },
       ],
       defaults: {
-        sources: ['remotive', 'remoteok', 'jobicy', 'himalayas'],
+        sources: ['indeed_web'],
         location_mode: 'nl_only',
         strict: false,
         max_results: 30,
         failover: false,
         use_cache: true
-      }
+      },
+      location_modes: [
+        { id: 'nl_only', label: 'Netherlands focus' },
+      ],
     };
     let scrapeConfig = fallbackConfig;
+
+    function sourceLabelMap() {
+      const mapping = {};
+      (scrapeConfig.sources || []).forEach(source => {
+        mapping[source.id] = source.label;
+      });
+      return mapping;
+    }
+
+    function resolveWorkMode(job) {
+      const explicit = String(job.work_mode || '').trim();
+      if (explicit) {
+        return explicit;
+      }
+      const text = `${job.location || ''} ${job.snippet || ''} ${job.full_description || ''}`.toLowerCase();
+      if (text.includes('hybrid')) {
+        return 'Hybrid';
+      }
+      if (text.includes('remote')) {
+        return 'Remote';
+      }
+      if (text.includes('on-site') || text.includes('onsite')) {
+        return 'On-site';
+      }
+      return 'Unknown';
+    }
+
+    function createBadge(className, text) {
+      const badge = document.createElement('span');
+      badge.className = className;
+      badge.textContent = text;
+      return badge;
+    }
+
+    function renderSleeveSummary(sleeveKey, summary, sourcesText) {
+      const summaryWrap = document.getElementById(`summary-${sleeveKey}`);
+      summaryWrap.innerHTML = '';
+      if (!summary) {
+        return;
+      }
+
+      const metrics = document.createElement('div');
+      metrics.className = 'summary-metrics';
+      metrics.appendChild(createBadge('metric-badge', `RAW ${summary.raw_count || 0}`));
+      metrics.appendChild(createBadge('metric-badge', `DEDUPED ${summary.deduped_count || 0}`));
+      metrics.appendChild(createBadge('metric-badge metric-pass', `PASS ${summary.pass_count || 0}`));
+      metrics.appendChild(createBadge('metric-badge metric-maybe', `MAYBE ${summary.maybe_count || 0}`));
+      metrics.appendChild(createBadge('metric-badge metric-fail', `FAIL ${summary.fail_count || 0}`));
+      summaryWrap.appendChild(metrics);
+
+      const details = document.createElement('p');
+      const topReason = Array.isArray(summary.top_fail_reasons) && summary.top_fail_reasons.length
+        ? `${summary.top_fail_reasons[0].reason} (${summary.top_fail_reasons[0].count})`
+        : 'none';
+      details.textContent = `Sources: ${sourcesText || 'none'} | Top fail reason: ${topReason}`;
+      summaryWrap.appendChild(details);
+    }
 
     function createJobResult(job) {
       const card = document.createElement('article');
       card.className = 'job-card';
 
-      const title = document.createElement('h3');
-      title.textContent = `${job.title || 'Unknown'} - ${job.company || 'Unknown'}`;
-      card.appendChild(title);
-
+      const sourceLabels = sourceLabelMap();
+      const decision = (job.decision || 'PASS').toUpperCase();
       const sleeveId = job.primary_sleeve_id || job.primary_sleeve || '-';
-      const sleeveName = job.primary_sleeve_name || sleeveMeta[sleeveId]?.name || '';
-      const sleeveTagline = job.primary_sleeve_tagline || sleeveMeta[sleeveId]?.tagline || '';
+      const mode = resolveWorkMode(job);
 
-      const meta = document.createElement('p');
-      const sleeveLabel = sleeveName
-        ? `${sleeveId} - ${sleeveName}`
-        : sleeveId;
-      meta.textContent = `Location: ${job.location || 'Unknown'} | Mode: ${job.work_mode || 'Unknown'} | Primary sleeve: ${sleeveLabel} (${job.primary_sleeve_score || 0}/5)`;
-      card.appendChild(meta);
+      const header = document.createElement('div');
+      header.className = 'job-card-header';
+      const title = document.createElement('h3');
+      title.textContent = job.title || 'Unknown role';
+      const company = document.createElement('p');
+      company.className = 'job-company';
+      company.textContent = job.company || 'Unknown company';
+      header.appendChild(title);
+      header.appendChild(company);
+      card.appendChild(header);
 
-      if (sleeveTagline) {
-        const sleeveTaglineRow = document.createElement('p');
-        sleeveTaglineRow.className = 'job-sleeve-tagline';
-        sleeveTaglineRow.textContent = sleeveTagline;
-        card.appendChild(sleeveTaglineRow);
-      }
+      const badges = document.createElement('div');
+      badges.className = 'job-badges';
+      const decisionClass = decision === 'PASS'
+        ? 'decision-badge decision-pass'
+        : (decision === 'MAYBE' ? 'decision-badge decision-maybe' : 'decision-badge decision-fail');
+      badges.appendChild(createBadge(decisionClass, decision));
+      badges.appendChild(createBadge('decision-badge decision-neutral', `Sleeve ${sleeveId} ${job.primary_sleeve_score || 0}/5`));
+      card.appendChild(badges);
 
-      const mechanism = document.createElement('p');
-      mechanism.textContent = `International-work mechanism: ${job.foreign_mechanism || 'Unknown'}`;
-      card.appendChild(mechanism);
+      const primaryMeta = document.createElement('p');
+      primaryMeta.textContent = `Location: ${job.location || 'Unknown'} | Mode: ${mode}`;
+      card.appendChild(primaryMeta);
 
-      if (job.sleeve_scores) {
-        const sleeves = document.createElement('p');
-        sleeves.textContent = `Sleeves A-E: A:${job.sleeve_scores.A ?? 0} B:${job.sleeve_scores.B ?? 0} C:${job.sleeve_scores.C ?? 0} D:${job.sleeve_scores.D ?? 0} E:${job.sleeve_scores.E ?? 0}`;
-        card.appendChild(sleeves);
-      }
+      const secondaryMeta = document.createElement('p');
+      secondaryMeta.textContent = `Salary: ${job.salary || 'Not listed'} | Date: ${job.date || job.date_posted || 'Unknown'} | Source: ${sourceLabels[job.source] || job.source || 'Unknown'}`;
+      card.appendChild(secondaryMeta);
 
-      if (Array.isArray(job.why_relevant) && job.why_relevant.length) {
+      const reasons = Array.isArray(job.reasons) && job.reasons.length
+        ? job.reasons
+        : (Array.isArray(job.why_relevant) ? job.why_relevant : []);
+      if (reasons.length) {
         const whyList = document.createElement('ul');
-        job.why_relevant.slice(0, 3).forEach(reason => {
+        reasons.slice(0, 2).forEach(reason => {
           const li = document.createElement('li');
           li.textContent = reason;
           whyList.appendChild(li);
@@ -215,15 +276,8 @@
         card.appendChild(whyList);
       }
 
-      const aux = document.createElement('p');
-      const distanceText = typeof job.distance_km === 'number'
-        ? ` | Approx. distance: ${job.distance_km} km from Den Bosch`
-        : '';
-      aux.textContent = `Date: ${job.date || 'Unknown'} | Salary: ${job.salary || 'Not listed'} | Source: ${job.source || 'Unknown'}${distanceText}`;
-      card.appendChild(aux);
-
       const link = document.createElement('a');
-      link.href = job.link || '#';
+      link.href = job.link || job.url || '#';
       link.textContent = 'Open job posting';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -251,11 +305,16 @@
 
     function renderControls() {
       const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
+      const profile = String(scrapeConfig.profile || 'full').toLowerCase();
       const locationModes = scrapeConfig.location_modes || [
         { id: 'nl_only', label: 'Netherlands focus' },
         { id: 'nl_eu', label: 'Netherlands + EU remote' },
         { id: 'global', label: 'Global' }
       ];
+      const profileHint = document.getElementById('profile-hint');
+      profileHint.textContent = profile === 'mvp'
+        ? 'Active profile: MVP (Indeed NL only, no auto failover).'
+        : `Active profile: ${profile.toUpperCase()}.`;
 
       const locationSelect = document.getElementById('global-location');
       locationSelect.innerHTML = '';
@@ -268,7 +327,11 @@
       locationSelect.value = defaults.location_mode || 'nl_only';
       document.getElementById('global-strict').checked = defaults.strict !== false;
       document.getElementById('global-cache').checked = defaults.use_cache !== false;
-      document.getElementById('global-failover').checked = defaults.failover === true;
+      const failoverInput = document.getElementById('global-failover');
+      const failoverWrap = document.getElementById('global-failover-wrap');
+      failoverInput.checked = defaults.failover === true;
+      failoverInput.disabled = profile === 'mvp';
+      failoverWrap.style.opacity = profile === 'mvp' ? '0.55' : '1';
       document.getElementById('global-max').value = String(defaults.max_results || 20);
 
       const sourceWrap = document.getElementById('global-sources');
@@ -280,17 +343,17 @@
       const availableSources = (scrapeConfig.sources || []).filter(source => source.available);
       const unavailableSources = (scrapeConfig.sources || []).filter(source => !source.available);
       availableSources.forEach(source => {
-        const checkedByDefault = (defaults.sources || []).includes(source.id);
+        const checkedByDefault = (defaults.sources || []).includes(source.id) || availableSources.length === 1;
         const label = document.createElement('label');
         label.className = 'source-option source-pill';
         label.innerHTML = `
-          <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault ? 'checked' : ''}>
+          <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault ? 'checked' : ''} ${profile === 'mvp' ? 'disabled' : ''}>
           ${source.label}
         `;
         sourceWrap.appendChild(label);
       });
 
-      if (unavailableSources.length) {
+      if (profile !== 'mvp' && unavailableSources.length) {
         unavailableWrapper.hidden = false;
         unavailableSources.forEach(source => {
           const row = document.createElement('div');
@@ -305,6 +368,8 @@
       const sourceNote = document.getElementById('source-note');
       if (!availableSources.length) {
         sourceNote.textContent = 'No sources are currently available. Check API keys on the server.';
+      } else if (profile === 'mvp') {
+        sourceNote.textContent = `MVP mode: using ${availableSources[0].label} only.`;
       } else {
         sourceNote.textContent = `Recommended: ${availableSources
           .filter(source => (defaults.sources || []).includes(source.id))
@@ -325,6 +390,7 @@
       if (!sources.length) {
         sources = (scrapeConfig.defaults?.sources || []).slice();
       }
+      const profile = String(scrapeConfig.profile || 'full').toLowerCase();
       const maxResults = Number(document.getElementById('global-max').value || 20);
       const hasDirectScrape = sources.includes('indeed_web') || sources.includes('linkedin_web');
       const tunedMaxPages = hasDirectScrape ? 3 : 5;
@@ -340,7 +406,10 @@
       params.set('target_raw', String(tunedTargetRaw));
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
       params.set('refresh', document.getElementById('global-cache').checked ? '0' : '1');
-      params.set('failover', document.getElementById('global-failover').checked ? '1' : '0');
+      const failoverRequested = profile === 'mvp'
+        ? false
+        : document.getElementById('global-failover').checked;
+      params.set('failover', failoverRequested ? '1' : '0');
       params.set('sources', sources.join(','));
       return `/scrape?${params.toString()}`;
     }
@@ -349,6 +418,7 @@
       const resultsDiv = document.getElementById(`results-${sleeveKey}`);
       const errorDiv = document.getElementById(`error-${sleeveKey}`);
       const status = document.getElementById(`status-${sleeveKey}`);
+      const summaryDiv = document.getElementById(`summary-${sleeveKey}`);
       const panel = document.getElementById(`panel-${sleeveKey}`);
 
       if (sleeveControllers[sleeveKey]) {
@@ -360,6 +430,7 @@
 
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
+      summaryDiv.innerHTML = '';
       errorDiv.style.display = 'none';
       status.textContent = `Scraping sleeve ${sleeveKey} with selected filters...`;
 
@@ -392,19 +463,26 @@
           const summary = (!Array.isArray(payload) && payload.summary && typeof payload.summary === 'object')
             ? payload.summary
             : null;
-          const sourcesFromSummary = summary && Array.isArray(summary.sources_used)
-            ? summary.sources_used.join(',')
+          const sourcesFromSummary = summary && Array.isArray(summary.sources_used_labels)
+            ? summary.sources_used_labels.join(', ')
+            : (summary && Array.isArray(summary.sources_used)
+              ? summary.sources_used.join(', ')
+              : '');
+          const profileFromSummary = summary && typeof summary.profile === 'string'
+            ? summary.profile
             : '';
           return {
             jobs,
             summary,
+            profile: profileFromSummary || (scrapeConfig.profile || 'full'),
             sourcesUsed: sourcesFromSummary || response.headers.get('x-sources-used') || 'none'
           };
         })
         .then(payload => {
           const data = payload.jobs;
           if (payload.summary) {
-            status.textContent = `Finished sleeve ${sleeveKey}. PASS ${payload.summary.pass_count || 0}, MAYBE ${payload.summary.maybe_count || 0}, FAIL ${payload.summary.fail_count || 0}. Sources: ${payload.sourcesUsed}.`;
+            status.textContent = `Finished sleeve ${sleeveKey} (${String(payload.profile || '').toUpperCase()}).`;
+            renderSleeveSummary(sleeveKey, payload.summary, payload.sourcesUsed);
           } else {
             status.textContent = `Finished sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
           }

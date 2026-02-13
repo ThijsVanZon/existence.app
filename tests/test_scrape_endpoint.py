@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import main
 
@@ -294,6 +295,58 @@ class TestScrapeEndpoint(unittest.TestCase):
             response = self.client.get("/scrape?sleeve=A&sources=serpapi")
             self.assertEqual(response.status_code, 200)
             self.assertFalse(captured["allow_failover"])
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
+    def test_mvp_profile_only_exposes_indeed_source(self):
+        with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "mvp"}, clear=False):
+            config = main._public_scrape_config()
+
+        available_ids = [source["id"] for source in config["sources"] if source["available"]]
+        self.assertEqual(available_ids, ["indeed_web"])
+        self.assertEqual(config["profile"], "mvp")
+        self.assertEqual([mode["id"] for mode in config["location_modes"]], ["nl_only"])
+
+    def test_scrape_forces_nl_only_and_failover_off_in_mvp(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            captured = {"allow_failover": None, "location_mode": None}
+
+            def fake_fetch(*args, **kwargs):
+                captured["allow_failover"] = kwargs.get("allow_failover")
+                captured["location_mode"] = kwargs.get("location_mode")
+                return [], [], ["indeed_web"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "mvp"}, clear=False):
+                response = self.client.get(
+                    "/scrape?sleeve=A&sources=indeed_web&location_mode=global&failover=1"
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertFalse(captured["allow_failover"])
+            self.assertEqual(captured["location_mode"], "nl_only")
         finally:
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
