@@ -444,7 +444,7 @@
       if (!sources.length) {
         sources = (scrapeConfig.defaults?.sources || []).slice();
       }
-      const profile = String(scrapeConfig.profile || 'full').toLowerCase();
+      const profile = String(scrapeConfig.profile || 'mvp').toLowerCase();
       const maxResults = Number(document.getElementById('global-max').value || 20);
       const hasDirectScrape = sources.includes('indeed_web') || sources.includes('linkedin_web');
       const tunedMaxPages = hasDirectScrape ? 3 : 5;
