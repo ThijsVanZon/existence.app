@@ -3282,6 +3282,11 @@ def decade_2050():
     return render_template('2050.html')
 
 
+@app.route('/toadstools')
+def toadstools():
+    return render_template('toadstools.html')
+
+
 # Handles form submission for XKCD comic ID
 @app.route('/comic', methods=['GET', 'POST'])
 def read_form():
@@ -3329,15 +3334,53 @@ def scrape_config():
 
 @app.route('/company-posting')
 def company_posting():
+    def _is_external_company_url(url):
+        return _is_absolute_http_url(url) and "indeed." not in _host_for_url(url)
+
+    def _resolve_external_from_candidate(url):
+        candidate = _clean_value(url, "")
+        if _is_external_company_url(candidate):
+            return candidate
+        extracted = _extract_external_destination_from_url(candidate)
+        if _is_external_company_url(extracted):
+            return extracted
+        return ""
+
+    def _error_response(message, status=424):
+        payload = {"error": message, "code": "company_posting_unresolved"}
+        accepts_json = (
+            request.args.get("format", "").lower() == "json"
+            or request.accept_mimetypes.best == "application/json"
+        )
+        if accepts_json:
+            return jsonify(payload), status
+        html = (
+            "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Company Posting Error</title>"
+            "<style>body{font-family:Manrope,Arial,sans-serif;background:#f7f7f7;color:#111;"
+            "margin:0;padding:24px} .card{max-width:620px;margin:40px auto;padding:20px;"
+            "border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08)}"
+            "h1{margin:0 0 8px;font-size:1.2rem}p{margin:0 0 10px;line-height:1.4}"
+            "code{background:#f0f0f0;padding:2px 6px;border-radius:6px}</style></head>"
+            "<body><main class='card'><h1>Company posting URL not found</h1>"
+            f"<p>{message}</p>"
+            "<p>The scraper tried redirect parsing and detail-page extraction, but no external company URL was resolved.</p>"
+            "<p>Tip: open <code>Indeed Posting</code> and apply from there if needed.</p>"
+            "</main></body></html>"
+        )
+        return html, status, {"Content-Type": "text/html; charset=utf-8"}
+
     company_url = _clean_value(request.args.get("company_url"), "")
     indeed_url = _clean_value(request.args.get("indeed_url"), "")
 
-    if _is_absolute_http_url(company_url) and "indeed." not in _host_for_url(company_url):
-        return redirect(company_url, code=302)
+    resolved_company = _resolve_external_from_candidate(company_url)
+    if resolved_company:
+        return redirect(resolved_company, code=302)
 
     if _is_absolute_http_url(indeed_url):
-        extracted = _extract_external_destination_from_url(indeed_url)
-        if _is_absolute_http_url(extracted) and "indeed." not in _host_for_url(extracted):
+        extracted = _resolve_external_from_candidate(indeed_url)
+        if extracted:
             return redirect(extracted, code=302)
 
         try:
@@ -3349,14 +3392,26 @@ def company_posting():
             if response.ok:
                 detail_links = _extract_indeed_links_from_detail(response.text, response.url or indeed_url)
                 extracted_company = _clean_value(detail_links.get("company_url"), "")
-                if _is_absolute_http_url(extracted_company) and "indeed." not in _host_for_url(extracted_company):
+                if _is_external_company_url(extracted_company):
                     return redirect(extracted_company, code=302)
-        except requests.RequestException:
-            pass
+                extracted_response_url = _resolve_external_from_candidate(response.url or "")
+                if extracted_response_url:
+                    return redirect(extracted_response_url, code=302)
+        except requests.RequestException as exc:
+            return _error_response(
+                f"Could not resolve company URL from Indeed page ({_clean_value(exc, 'request_failed')}).",
+                status=424,
+            )
 
-        return redirect(indeed_url, code=302)
+        return _error_response(
+            "Could not resolve company URL from Indeed page after all extraction steps.",
+            status=424,
+        )
 
-    return redirect(url_for('decade_2020'))
+    return _error_response(
+        "Missing usable URL inputs. Provide either company_url or indeed_url.",
+        status=400,
+    )
 
 
 # Route to trigger scraping

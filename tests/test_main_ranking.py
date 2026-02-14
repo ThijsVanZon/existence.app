@@ -361,6 +361,25 @@ class TestMainRanking(unittest.TestCase):
         self.assertTrue(ranked)
         self.assertEqual(ranked[0]["company_url"], "")
 
+    def test_company_posting_route_redirects_when_external_company_url_exists(self):
+        with main.app.test_client() as client:
+            response = client.get(
+                "/company-posting",
+                query_string={"company_url": "https://company.example/jobs/42"},
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "https://company.example/jobs/42")
+
+    def test_company_posting_route_returns_error_when_unresolved(self):
+        with patch("main.requests.get", side_effect=main.requests.RequestException("network blocked")):
+            with main.app.test_client() as client:
+                response = client.get(
+                    "/company-posting",
+                    query_string={"indeed_url": "https://nl.indeed.com/viewjob?jk=abc123"},
+                )
+        self.assertEqual(response.status_code, 424)
+        self.assertIn("company posting url not found", response.get_data(as_text=True).lower())
+
 
 if __name__ == "__main__":
     unittest.main()
