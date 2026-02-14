@@ -290,7 +290,7 @@ select,
   opacity: 0.68;
 }
 
-.sleeve-panel h3 {
+.sleeve-panel > h3 {
   margin: 0 0 8px;
   line-height: 1.25;
   border-radius: 10px;
@@ -300,23 +300,23 @@ select,
   text-shadow: 0 1px 2px rgba(var(--black-rgb), 0.18);
 }
 
-#panel-A h3 {
+#panel-A > h3 {
   background: linear-gradient(100deg, rgba(var(--zircon-rgb), 0.9), rgba(var(--heliodor-rgb), 0.72));
 }
 
-#panel-B h3 {
+#panel-B > h3 {
   background: linear-gradient(100deg, rgba(var(--heliodor-rgb), 0.86), rgba(var(--rubellite-rgb), 0.68));
 }
 
-#panel-C h3 {
+#panel-C > h3 {
   background: linear-gradient(100deg, rgba(var(--rubellite-rgb), 0.84), rgba(var(--amethyst-rgb), 0.7));
 }
 
-#panel-D h3 {
+#panel-D > h3 {
   background: linear-gradient(100deg, rgba(var(--amethyst-rgb), 0.84), rgba(var(--zircon-rgb), 0.68));
 }
 
-#panel-E h3 {
+#panel-E > h3 {
   background: linear-gradient(100deg, rgba(var(--heliodor-rgb), 0.72), rgba(var(--zircon-rgb), 0.9));
 }
 
@@ -399,6 +399,11 @@ select,
 .job-card h3 {
   margin: 0 0 8px;
   font-size: 1.15rem;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  text-shadow: none;
 }
 
 .job-card-header {
