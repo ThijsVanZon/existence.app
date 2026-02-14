@@ -1,512 +1,363 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#e9e3d7">
-  <title>Among the Toadstools</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#1a1322">
+  <title>Toadstools</title>
   <style>
     :root {
-      --paper: #ece6da;
-      --ink: #1f1a17;
-      --moss: #2f5a44;
-      --moss-soft: rgba(47, 90, 68, 0.14);
-      --cap-red: #a33a34;
-      --cap-shadow: #792924;
-      --stem: #ddd2c4;
-      --spot: #f7f2eb;
-      --gold: #b4873e;
-      --plum: #4e365f;
-      --white: #ffffff;
-      --gyro-x: 0px;
-      --gyro-y: 0px;
-      --gyro-rotate-x: 0deg;
-      --gyro-rotate-y: 0deg;
-      --ambient-x: 0px;
-      --ambient-y: 0px;
+      --tilt-x: 0;
+      --tilt-y: 0;
+      --energy: 0;
+      --hue-shift: 0deg;
+      --glow: 0.8;
+      --bg-a: #1b1127;
+      --bg-b: #24193a;
+      --bg-c: #10243a;
+      --mycelium: rgba(218, 255, 226, 0.24);
     }
 
     * {
       box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
 
+    html,
     body {
       margin: 0;
-      min-height: 100vh;
-      min-height: 100dvh;
-      color: var(--ink);
-      font-family: "Manrope", sans-serif;
-      background:
-        radial-gradient(circle at 10% 5%, rgba(180, 135, 62, 0.2), transparent 30%),
-        radial-gradient(circle at 85% 12%, rgba(121, 41, 36, 0.14), transparent 34%),
-        radial-gradient(circle at 15% 82%, rgba(47, 90, 68, 0.18), transparent 36%),
-        var(--paper);
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-    }
-
-    body.night-glow {
-      background:
-        radial-gradient(circle at 20% 8%, rgba(186, 146, 83, 0.35), transparent 35%),
-        radial-gradient(circle at 82% 14%, rgba(121, 79, 255, 0.24), transparent 40%),
-        radial-gradient(circle at 50% 100%, rgba(47, 90, 68, 0.35), transparent 55%),
-        #17141f;
-      color: #f8f5ed;
-    }
-
-    .page {
-      width: min(860px, 100%);
-      margin: 0 auto;
-      padding:
-        calc(16px + env(safe-area-inset-top))
-        calc(14px + env(safe-area-inset-right))
-        calc(20px + env(safe-area-inset-bottom))
-        calc(14px + env(safe-area-inset-left));
-    }
-
-    .hero {
-      position: relative;
-      padding: 12px 8px 8px;
-      text-align: center;
-    }
-
-    .hero-star {
-      position: absolute;
-      top: 8px;
-      width: 54px;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      background:
-        conic-gradient(
-          from 0deg,
-          transparent 0deg 8deg,
-          rgba(129, 93, 39, 0.9) 8deg 16deg,
-          transparent 16deg 24deg
-        );
-      filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
-      opacity: 0.88;
-      transform: translate3d(
-        calc(var(--gyro-x) * 0.35 + var(--ambient-x) * 0.2),
-        calc(var(--gyro-y) * -0.25 + var(--ambient-y) * 0.2),
-        0
-      );
-      animation: starSpin 18s linear infinite;
-    }
-
-    .hero-star.left {
-      left: 0;
-    }
-
-    .hero-star.right {
-      right: 0;
-      animation-direction: reverse;
-    }
-
-    .hero h1 {
-      margin: 30px 0 10px;
-      font-family: "Baloo 2", sans-serif;
-      font-size: clamp(2rem, 9vw, 4rem);
-      line-height: 0.9;
-      color: var(--cap-red);
-      letter-spacing: 0.01em;
-    }
-
-    .hero p {
-      margin: 0 auto 8px;
-      max-width: 40ch;
-      font-size: clamp(0.95rem, 2.9vw, 1.1rem);
-      color: rgba(31, 26, 23, 0.78);
-    }
-
-    body.night-glow .hero p {
-      color: rgba(248, 245, 237, 0.82);
-    }
-
-    .info-strip {
-      margin: 14px auto 12px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .pill {
-      border: 0;
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-weight: 700;
-      font-size: 0.86rem;
-      letter-spacing: 0.01em;
-      color: var(--moss);
-      background: rgba(47, 90, 68, 0.12);
-      box-shadow: 0 2px 7px rgba(0, 0, 0, 0.06);
-    }
-
-    .meadow {
-      position: relative;
-      margin-top: 10px;
-      height: min(56vh, 520px);
-      min-height: 360px;
-      border-radius: 24px;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
-      background:
-        radial-gradient(ellipse at 20% 95%, rgba(47, 90, 68, 0.32), transparent 56%),
-        radial-gradient(ellipse at 88% 92%, rgba(180, 135, 62, 0.26), transparent 48%),
-        linear-gradient(to top, rgba(47, 90, 68, 0.23), transparent 35%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.14));
-      box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-        0 18px 36px rgba(39, 32, 24, 0.14);
+      background: #09070f;
       touch-action: manipulation;
+    }
+
+    .scene {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(255, 130, 180, 0.16), transparent 36%),
+        radial-gradient(circle at 82% 14%, rgba(110, 150, 255, 0.16), transparent 36%),
+        radial-gradient(circle at 50% 98%, rgba(60, 240, 180, 0.12), transparent 56%),
+        linear-gradient(165deg, var(--bg-a), var(--bg-b) 58%, var(--bg-c));
+      filter: hue-rotate(var(--hue-shift)) saturate(calc(1 + var(--energy) * 0.35));
+      transform: perspective(980px)
+        rotateX(calc(var(--tilt-y) * 8deg))
+        rotateY(calc(var(--tilt-x) * -10deg))
+        scale(calc(1 + var(--energy) * 0.01));
+      transform-origin: center center;
+      transition: transform 160ms ease-out, filter 220ms ease-out;
       isolation: isolate;
-      transform: perspective(900px) rotateX(var(--gyro-rotate-x)) rotateY(var(--gyro-rotate-y));
-      transition: transform 190ms ease-out, filter 220ms ease-out;
     }
 
-    .meadow::before {
-      content: "";
+    .bg-layer {
       position: absolute;
-      inset: -22% -12%;
-      background:
-        radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.28), transparent 30%),
-        radial-gradient(circle at 70% 45%, rgba(180, 135, 62, 0.18), transparent 34%),
-        radial-gradient(circle at 20% 70%, rgba(47, 90, 68, 0.18), transparent 34%);
-      mix-blend-mode: soft-light;
+      inset: -22%;
       pointer-events: none;
-      z-index: 1;
-      transform: translate3d(calc(var(--ambient-x) * 0.85), calc(var(--ambient-y) * 0.85), 0);
-      animation: meadowVeil 12s ease-in-out infinite alternate;
+      mix-blend-mode: screen;
+      z-index: 0;
     }
 
-    body.night-glow .meadow {
+    .layer-a {
       background:
-        radial-gradient(ellipse at 25% 94%, rgba(121, 79, 255, 0.35), transparent 60%),
-        radial-gradient(ellipse at 80% 95%, rgba(180, 135, 62, 0.26), transparent 52%),
-        linear-gradient(to top, rgba(34, 70, 54, 0.38), transparent 36%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-      box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-        0 20px 38px rgba(2, 0, 12, 0.44);
+        radial-gradient(circle at 20% 40%, rgba(255, 80, 180, 0.28), transparent 30%),
+        radial-gradient(circle at 78% 30%, rgba(100, 170, 255, 0.22), transparent 32%);
+      animation: wash 12s ease-in-out infinite alternate;
+    }
+
+    .layer-b {
+      background:
+        radial-gradient(circle at 55% 65%, rgba(96, 255, 218, 0.22), transparent 34%),
+        radial-gradient(circle at 35% 84%, rgba(245, 214, 122, 0.22), transparent 28%);
+      animation: wash 16s ease-in-out infinite alternate-reverse;
     }
 
     .mycelium {
       position: absolute;
-      inset: auto 0 0 0;
-      height: 34%;
-      opacity: 0.5;
+      inset: auto -20% -4% -20%;
+      height: 42%;
+      opacity: calc(0.55 + var(--energy) * 0.2);
+      pointer-events: none;
+      z-index: 1;
       background:
-        repeating-radial-gradient(circle at 8% 100%, rgba(255, 255, 255, 0.35) 0 1px, transparent 1px 20px),
-        repeating-radial-gradient(circle at 52% 100%, rgba(47, 90, 68, 0.32) 0 1px, transparent 1px 22px),
-        repeating-radial-gradient(circle at 90% 100%, rgba(255, 255, 255, 0.26) 0 1px, transparent 1px 18px);
-      z-index: 0;
-      transform: translate3d(
-        calc(var(--gyro-x) * 0.24 + var(--ambient-x) * 0.3),
-        calc(var(--gyro-y) * -0.18 + var(--ambient-y) * 0.3),
-        0
-      );
-      animation: myceliumPulse 7.5s ease-in-out infinite;
+        repeating-radial-gradient(circle at 8% 100%, var(--mycelium) 0 1px, transparent 1px 20px),
+        repeating-radial-gradient(circle at 40% 100%, rgba(196, 255, 232, 0.16) 0 1px, transparent 1px 24px),
+        repeating-radial-gradient(circle at 72% 100%, rgba(255, 232, 246, 0.16) 0 1px, transparent 1px 22px),
+        repeating-radial-gradient(circle at 98% 100%, rgba(185, 225, 255, 0.14) 0 1px, transparent 1px 20px);
+      transform: translate3d(calc(var(--tilt-x) * 18px), calc(var(--tilt-y) * -10px), 0);
+      animation: pulse 4.4s ease-in-out infinite;
     }
 
-    .mushroom {
+    .mycelium-b {
+      opacity: calc(0.38 + var(--energy) * 0.25);
+      transform: translate3d(calc(var(--tilt-x) * -12px), calc(var(--tilt-y) * -6px), 0);
+      filter: blur(0.4px);
+      animation-duration: 6.2s;
+    }
+
+    .fungi-field,
+    .spore-field {
       position: absolute;
-      border: 0;
-      background: none;
-      padding: 0;
-      cursor: pointer;
-      text-align: left;
-      transform-origin: center bottom;
-      transition: transform 220ms ease;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .fungi-field {
+      pointer-events: auto;
       z-index: 2;
-      -webkit-tap-highlight-color: transparent;
-      --m-base: translateX(0);
-      --m-rot: 0deg;
-      --mx: 0.32;
-      --my: 0.24;
-      transform: var(--m-base) rotate(var(--m-rot))
-        translate3d(
-          calc(var(--gyro-x) * var(--mx) + var(--ambient-x) * 0.22),
-          calc(var(--gyro-y) * var(--my) * -1 + var(--ambient-y) * 0.2),
-          0
-        );
     }
 
-    .mushroom:active {
-      filter: brightness(1.03);
+    .fungus {
+      position: absolute;
+      left: var(--x);
+      bottom: var(--y);
+      width: calc(84px * var(--scale));
+      height: calc(150px * var(--scale));
+      transform-origin: center bottom;
+      filter: saturate(calc(1.05 + var(--energy) * 0.55))
+        brightness(calc(0.9 + var(--glow) * 0.16))
+        drop-shadow(0 9px 14px rgba(0, 0, 0, 0.28));
+      pointer-events: none;
     }
 
-    .mushroom:focus-visible {
-      outline: 2px solid rgba(121, 79, 255, 0.65);
-      outline-offset: 6px;
-      border-radius: 20px;
+    .fungus .aura {
+      position: absolute;
+      left: 50%;
+      bottom: 2%;
+      width: 118%;
+      height: 36%;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, hsla(var(--tone), 90%, 72%, 0.32), transparent 70%);
+      opacity: calc(0.3 + var(--energy) * 0.5);
+      filter: blur(8px);
     }
 
-    .mushroom .cap {
-      display: block;
-      width: 100%;
-      height: 45%;
-      border-radius: 50% 50% 46% 46% / 70% 70% 34% 34%;
+    .fungus .stem {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: 33%;
+      height: 58%;
+      transform: translateX(-50%);
+      border-radius: 42% 42% 16% 16%;
       background:
-        radial-gradient(circle at 22% 30%, rgba(255, 255, 255, 0.28), transparent 26%),
-        radial-gradient(circle at 78% 20%, rgba(255, 255, 255, 0.18), transparent 23%),
-        linear-gradient(165deg, var(--cap-red), var(--cap-shadow));
-      position: relative;
-      box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.18);
-      animation: capBreath 4.6s ease-in-out infinite;
+        linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(0, 0, 0, 0.14)),
+        hsl(calc(var(--tone) - 24), 24%, 76%);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
     }
 
-    .mushroom .cap::before {
+    .fungus .cap {
+      position: absolute;
+      left: 50%;
+      bottom: 47%;
+      width: 100%;
+      height: 48%;
+      transform: translateX(-50%);
+      border-radius: 52% 52% 45% 45% / 72% 72% 34% 34%;
+      background:
+        radial-gradient(circle at 26% 24%, rgba(255, 255, 255, 0.36), transparent 26%),
+        radial-gradient(circle at 78% 16%, rgba(255, 255, 255, 0.2), transparent 22%),
+        linear-gradient(
+          160deg,
+          hsl(calc(var(--tone) + 16), 86%, 58%),
+          hsl(calc(var(--tone) - 8), 78%, 40%)
+        );
+      box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.2);
+    }
+
+    .fungus .gills {
+      position: absolute;
+      left: 50%;
+      bottom: 44%;
+      width: 82%;
+      height: 16%;
+      transform: translateX(-50%);
+      border-radius: 0 0 50% 50%;
+      background:
+        repeating-linear-gradient(
+          96deg,
+          rgba(255, 255, 255, 0.38) 0 2px,
+          rgba(255, 255, 255, 0.06) 2px 6px
+        );
+      opacity: 0.7;
+    }
+
+    .fungus .spots {
+      position: absolute;
+      left: 50%;
+      bottom: 54%;
+      width: 72%;
+      height: 22%;
+      transform: translateX(-50%);
+      opacity: 0.9;
+      background:
+        radial-gradient(circle at 13% 54%, rgba(255, 255, 255, 0.96) 0 10%, transparent 11%),
+        radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.82) 0 12%, transparent 13%),
+        radial-gradient(circle at 60% 66%, rgba(255, 255, 255, 0.9) 0 10%, transparent 11%),
+        radial-gradient(circle at 83% 28%, rgba(255, 255, 255, 0.74) 0 10%, transparent 11%);
+    }
+
+    .fungus.jelly .cap {
+      border-radius: 48% 52% 42% 58% / 66% 64% 36% 34%;
+      background:
+        radial-gradient(circle at 46% 14%, rgba(255, 255, 255, 0.45), transparent 30%),
+        linear-gradient(170deg, hsla(calc(var(--tone) + 24), 92%, 66%, 0.82), hsla(calc(var(--tone) - 6), 82%, 48%, 0.88));
+      backdrop-filter: blur(1px);
+    }
+
+    .fungus.jelly .spots {
+      opacity: 0.45;
+    }
+
+    .fungus.coral .stem {
+      width: 40%;
+      height: 50%;
+      border-radius: 48% 48% 24% 24%;
+    }
+
+    .fungus.coral .cap {
+      border-radius: 38% 62% 44% 56% / 58% 48% 52% 42%;
+    }
+
+    .fungus.chanterelle .cap {
+      border-radius: 44% 56% 58% 42% / 66% 62% 38% 34%;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(255, 245, 202, 0.55), transparent 30%),
+        linear-gradient(166deg, hsl(calc(var(--tone) + 10), 96%, 64%), hsl(calc(var(--tone) - 20), 82%, 46%));
+    }
+
+    .fungus.ink .cap {
+      border-radius: 56% 44% 52% 48% / 66% 74% 26% 34%;
+      background:
+        radial-gradient(circle at 45% 16%, rgba(255, 255, 255, 0.25), transparent 28%),
+        linear-gradient(168deg, hsl(calc(var(--tone) + 6), 55%, 34%), hsl(calc(var(--tone) - 22), 50%, 14%));
+    }
+
+    .fungus.glow .aura {
+      opacity: calc(0.48 + var(--energy) * 0.5);
+      filter: blur(12px);
+    }
+
+    .fungus.cluster .cap {
+      width: 80%;
+      height: 42%;
+      left: 34%;
+    }
+
+    .fungus.cluster::after {
       content: "";
       position: absolute;
-      inset: 18% 10% 16%;
+      left: 64%;
+      bottom: 43%;
+      width: 38%;
+      height: 25%;
+      border-radius: 50% 50% 45% 45% / 70% 70% 30% 30%;
       background:
-        radial-gradient(circle at 12% 30%, var(--spot) 0 7%, transparent 8%),
-        radial-gradient(circle at 55% 22%, var(--spot) 0 8%, transparent 9%),
-        radial-gradient(circle at 82% 40%, var(--spot) 0 7%, transparent 8%),
-        radial-gradient(circle at 35% 58%, var(--spot) 0 6%, transparent 7%),
-        radial-gradient(circle at 70% 68%, var(--spot) 0 6%, transparent 7%);
-      opacity: 0.95;
-    }
-
-    .mushroom .stem {
-      display: block;
-      width: 34%;
-      height: 56%;
-      margin: -8% auto 0;
-      border-radius: 40% 40% 16% 16%;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(0, 0, 0, 0.1)),
-        var(--stem);
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
-      animation: stemSway 5.8s ease-in-out infinite;
-    }
-
-    .mushroom .label {
-      display: inline-block;
-      margin-top: 7px;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--moss);
-      background: rgba(255, 255, 255, 0.6);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-
-    body.night-glow .mushroom .label {
-      color: #f7f4ea;
-      background: rgba(121, 79, 255, 0.26);
-    }
-
-    .mushroom[data-size="xl"] {
-      width: min(48vw, 300px);
-      height: min(56vw, 350px);
-    }
-
-    .mushroom[data-size="md"] {
-      width: min(30vw, 190px);
-      height: min(37vw, 225px);
-    }
-
-    .mushroom[data-size="sm"] {
-      width: min(24vw, 140px);
-      height: min(31vw, 185px);
-    }
-
-    .mushroom-1 {
-      left: 45%;
-      bottom: 4%;
-      --m-base: translateX(-50%);
-      --m-rot: 0deg;
-      --mx: 0.22;
-      --my: 0.16;
-    }
-
-    .mushroom-2 {
-      left: 14%;
-      bottom: 6%;
-      --m-base: translateX(0);
-      --m-rot: -3deg;
-      --mx: 0.48;
-      --my: 0.3;
-    }
-
-    .mushroom-3 {
-      right: 10%;
-      bottom: 12%;
-      --m-base: translateX(0);
-      --m-rot: 4deg;
-      --mx: -0.5;
-      --my: 0.32;
+        radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.34), transparent 30%),
+        linear-gradient(162deg, hsl(calc(var(--tone) + 18), 84%, 56%), hsl(calc(var(--tone) - 10), 76%, 40%));
+      box-shadow: inset 0 -4px 7px rgba(0, 0, 0, 0.2);
     }
 
     .spore {
       position: absolute;
-      width: var(--size, 8px);
-      height: var(--size, 8px);
+      left: var(--x);
+      top: var(--y);
+      width: var(--size);
+      height: var(--size);
       border-radius: 50%;
-      left: var(--x, 0px);
-      top: var(--y, 0px);
-      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(198, 224, 207, 0.55) 65%, transparent 100%);
-      pointer-events: none;
-      filter: blur(0.2px);
-      animation: drift var(--duration, 1500ms) ease-out forwards;
-      z-index: 4;
+      opacity: 0;
+      background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.96), hsla(var(--tone), 90%, 76%, 0.62) 66%, transparent 100%);
+      filter: blur(0.2px) drop-shadow(0 0 6px hsla(var(--tone), 90%, 76%, 0.5));
+      animation: spore-drift var(--life) linear forwards;
+      z-index: 5;
     }
 
-    body.night-glow .spore {
-      background: radial-gradient(circle at 30% 30%, rgba(234, 222, 255, 0.95), rgba(131, 214, 185, 0.54) 68%, transparent 100%);
-    }
-
-    @keyframes drift {
-      from {
-        opacity: 0.95;
-        transform: translate3d(0, 0, 0) scale(1);
-      }
-      to {
-        opacity: 0;
-        transform: translate3d(var(--dx, 0px), var(--dy, -90px), 0) scale(0.25);
-      }
-    }
-
-    @keyframes starSpin {
-      from { rotate: 0deg; }
-      to { rotate: 360deg; }
-    }
-
-    @keyframes meadowVeil {
-      0% { opacity: 0.38; }
-      100% { opacity: 0.58; }
-    }
-
-    @keyframes myceliumPulse {
-      0%, 100% { opacity: 0.46; }
-      50% { opacity: 0.68; }
-    }
-
-    @keyframes capBreath {
-      0%, 100% { transform: translateY(0) scale(1); }
-      50% { transform: translateY(-2px) scale(1.02); }
-    }
-
-    @keyframes stemSway {
-      0%, 100% { transform: rotate(0deg); }
-      50% { transform: rotate(1.25deg); }
-    }
-
-    .fact-panel {
-      margin-top: 12px;
-      border-radius: 18px;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.62);
-      box-shadow: 0 10px 20px rgba(39, 32, 24, 0.09);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-
-    body.night-glow .fact-panel {
-      background: rgba(19, 17, 27, 0.55);
-      box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
-    }
-
-    .fact-panel h2 {
-      margin: 0 0 6px;
-      font-family: "Baloo 2", sans-serif;
-      font-size: 1.4rem;
-      color: var(--moss);
-      line-height: 1;
-    }
-
-    body.night-glow .fact-panel h2 {
-      color: #a6f3d8;
-    }
-
-    .fact-panel p {
-      margin: 0;
-      font-size: 0.98rem;
-      line-height: 1.42;
-    }
-
-    .controls {
-      margin-top: 10px;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .control-btn {
-      border: 0;
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-family: "Manrope", sans-serif;
-      font-size: 0.84rem;
-      font-weight: 800;
-      color: var(--white);
-      background: linear-gradient(120deg, var(--moss), #456d59);
-      box-shadow: 0 8px 14px rgba(47, 90, 68, 0.22);
-      transition: transform 150ms ease, opacity 150ms ease;
-      opacity: 0.92;
+    .gyro-gate {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      z-index: 8;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.66) 48%, rgba(0, 0, 0, 0.88));
+      color: rgba(242, 248, 255, 0.95);
+      font: 600 0.92rem/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Manrope, sans-serif;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
       cursor: pointer;
+      transition: opacity 320ms ease, visibility 320ms ease;
+      user-select: none;
     }
 
-    .control-btn:active {
-      transform: translateY(1px);
+    .gyro-gate.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
     }
 
-    .control-btn.secondary {
-      background: linear-gradient(120deg, var(--plum), #6d4f86);
-      box-shadow: 0 8px 14px rgba(78, 54, 95, 0.25);
+    .gyro-orb {
+      position: absolute;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      border: 1px solid rgba(221, 252, 255, 0.24);
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.32), transparent 62%),
+        conic-gradient(from 0deg, rgba(114, 238, 204, 0.54), rgba(182, 122, 255, 0.54), rgba(255, 142, 182, 0.54), rgba(114, 238, 204, 0.54));
+      mix-blend-mode: screen;
+      filter: blur(0.4px);
+      animation: spin 5.8s linear infinite;
     }
 
-    .footer-note {
-      margin-top: 12px;
-      text-align: center;
-      font-size: 0.86rem;
-      color: rgba(31, 26, 23, 0.66);
+    .gyro-gate span {
+      position: relative;
+      z-index: 1;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: rgba(12, 12, 20, 0.46);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
 
-    body.night-glow .footer-note {
-      color: rgba(248, 245, 237, 0.7);
+    @keyframes pulse {
+      0%, 100% { opacity: 0.46; }
+      50% { opacity: 0.76; }
     }
 
-    @media (max-width: 560px) {
-      .hero-star {
-        width: 46px;
+    @keyframes wash {
+      0% { transform: translate3d(-3%, -2%, 0) scale(1); opacity: 0.82; }
+      100% { transform: translate3d(3%, 2%, 0) scale(1.08); opacity: 1; }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spore-drift {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, 0, 0) scale(0.4);
       }
-
-      .meadow {
-        min-height: 340px;
+      14% {
+        opacity: 0.95;
       }
-
-      .mushroom-1 {
-        left: 50%;
-        bottom: 3%;
-      }
-
-      .mushroom-2 {
-        left: 6%;
-        bottom: 7%;
-      }
-
-      .mushroom-3 {
-        right: 4%;
-        bottom: 14%;
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--dx), var(--dy), 0) scale(0.16);
       }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .hero-star,
+      .scene,
+      .bg-layer,
       .mycelium,
-      .mushroom .cap,
-      .mushroom .stem,
-      .meadow::before,
-      .mushroom,
-      .control-btn,
-      .spore {
+      .spore,
+      .gyro-orb {
         transition: none !important;
         animation: none !important;
       }
@@ -514,164 +365,152 @@
   </style>
 </head>
 <body>
-  <main class="page">
-    <header class="hero">
-      <span class="hero-star left" aria-hidden="true"></span>
-      <span class="hero-star right" aria-hidden="true"></span>
-      <h1>Among the<br>Toadstools</h1>
-      <p>A tiny playful forest inspired by hand-drawn poster magic and Fantastic Fungi energy. Tap around and see what grows.</p>
-      <div class="info-strip">
-        <span class="pill" id="spore-count">Spores: 0</span>
-        <span class="pill" id="pulse-state">Mycelium: Listening</span>
-      </div>
-    </header>
+  <main id="scene" class="scene" aria-label="Psychedelic fungi environment">
+    <div class="bg-layer layer-a"></div>
+    <div class="bg-layer layer-b"></div>
+    <div class="mycelium mycelium-a"></div>
+    <div class="mycelium mycelium-b"></div>
+    <section id="fungi-field" class="fungi-field"></section>
+    <section id="spore-field" class="spore-field"></section>
 
-    <section id="meadow" class="meadow" aria-label="Interactive mushroom meadow">
-      <div class="mycelium" aria-hidden="true"></div>
-
-      <button class="mushroom mushroom-1" data-size="xl" data-fact="Large toadstools are often ecosystem beacons: where one appears, underground networks are usually thriving too." aria-label="Reveal first mushroom fact">
-        <span class="cap"></span>
-        <span class="stem"></span>
-        <span class="label">Tap me</span>
-      </button>
-
-      <button class="mushroom mushroom-2" data-size="md" data-fact="Mycelium can transport nutrients and chemical signals between plants. Forests behave more like communities than isolated trees." aria-label="Reveal second mushroom fact">
-        <span class="cap"></span>
-        <span class="stem"></span>
-        <span class="label">Tap me</span>
-      </button>
-
-      <button class="mushroom mushroom-3" data-size="sm" data-fact="Fungi are master recyclers: they unlock nutrients from dead matter, turning decay into future life." aria-label="Reveal third mushroom fact">
-        <span class="cap"></span>
-        <span class="stem"></span>
-        <span class="label">Tap me</span>
-      </button>
-    </section>
-
-    <section class="fact-panel" aria-live="polite">
-      <h2>Forest Whisper</h2>
-      <p id="fact-text">Tap a mushroom or the meadow to release spores and reveal a fungal micro-story.</p>
-      <div class="controls">
-        <button id="mode-toggle" type="button" class="control-btn secondary">Toggle Bioluminescence</button>
-        <button id="motion-toggle" type="button" class="control-btn secondary">Enable Motion</button>
-        <button id="clear-spores" type="button" class="control-btn">Clear Spores</button>
-      </div>
-    </section>
-
-    <p class="footer-note">Designed for touch: works best on iPhone Safari, but desktop taps/clicks are supported too.</p>
+    <div id="gyro-gate" class="gyro-gate" role="button" aria-label="Enable motion controls">
+      <div class="gyro-orb" aria-hidden="true"></div>
+      <span>Tap To Enable Motion</span>
+    </div>
   </main>
 
   <script>
     (function () {
-      const meadow = document.getElementById("meadow");
-      const factText = document.getElementById("fact-text");
-      const sporeCount = document.getElementById("spore-count");
-      const pulseState = document.getElementById("pulse-state");
-      const modeToggle = document.getElementById("mode-toggle");
-      const motionToggle = document.getElementById("motion-toggle");
-      const clearSpores = document.getElementById("clear-spores");
-      const mushrooms = Array.from(document.querySelectorAll(".mushroom"));
-      const rootStyle = document.documentElement.style;
+      const scene = document.getElementById("scene");
+      const fungiField = document.getElementById("fungi-field");
+      const sporeField = document.getElementById("spore-field");
+      const gyroGate = document.getElementById("gyro-gate");
       const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const rootStyle = document.documentElement.style;
 
-      let sporesTotal = 0;
-      let touchPainting = false;
-      let lastMoveStamp = 0;
-      let motionEnabled = false;
-      let orientationAttached = false;
-      let ambientTicker = 0;
+      const fungi = [];
+      let targetX = 0;
+      let targetY = 0;
+      let motionX = 0;
+      let motionY = 0;
+      let motionReady = false;
+      let orientationBound = false;
 
-      function updateSporeCount() {
-        sporeCount.textContent = `Spores: ${sporesTotal}`;
+      const typePool = ["amanita", "jelly", "coral", "chanterelle", "ink", "glow", "cluster"];
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
       }
 
-      function setFact(message) {
-        factText.textContent = message;
+      function rand(min, max) {
+        return min + Math.random() * (max - min);
       }
 
-      function spawnSpores(clientX, clientY, amount, countTowardsTotal = true) {
-        const rect = meadow.getBoundingClientRect();
-        const baseX = Math.max(0, Math.min(rect.width, clientX - rect.left));
-        const baseY = Math.max(0, Math.min(rect.height, clientY - rect.top));
-        const count = Math.max(1, amount | 0);
-
-        for (let i = 0; i < count; i += 1) {
-          const spore = document.createElement("span");
-          spore.className = "spore";
-          spore.style.setProperty("--x", `${baseX + (Math.random() * 26 - 13)}px`);
-          spore.style.setProperty("--y", `${baseY + (Math.random() * 26 - 13)}px`);
-          spore.style.setProperty("--dx", `${Math.random() * 180 - 90}px`);
-          spore.style.setProperty("--dy", `${-40 - Math.random() * 170}px`);
-          spore.style.setProperty("--size", `${4 + Math.random() * 10}px`);
-          spore.style.setProperty("--duration", `${900 + Math.random() * 1300}ms`);
-          meadow.appendChild(spore);
-          window.setTimeout(() => spore.remove(), 2300);
+      function buildFungiForest() {
+        const total = 24;
+        const sortedX = [];
+        for (let i = 0; i < total; i += 1) {
+          sortedX.push(rand(3, 97));
         }
+        sortedX.sort((a, b) => a - b);
 
-        if (countTowardsTotal) {
-          sporesTotal += count;
-          updateSporeCount();
+        for (let i = 0; i < total; i += 1) {
+          const node = document.createElement("article");
+          const type = typePool[Math.floor(Math.random() * typePool.length)];
+          node.className = `fungus ${type}`;
+          node.innerHTML = "<span class='aura'></span><span class='stem'></span><span class='cap'></span><span class='gills'></span><span class='spots'></span>";
+
+          const scale = rand(0.42, 1.5);
+          const x = sortedX[i];
+          const y = rand(1, 24);
+          const tone = rand(4, 340).toFixed(2);
+          const depth = rand(0.4, 1.35);
+          const lean = rand(-8, 8);
+          const phase = rand(0, Math.PI * 2);
+          const bobAmp = rand(1.2, 7);
+          const swayAmp = rand(0.3, 3.8);
+          const bobSpeed = rand(0.72, 1.6);
+
+          node.style.setProperty("--x", `${x}%`);
+          node.style.setProperty("--y", `${y}%`);
+          node.style.setProperty("--scale", scale.toFixed(3));
+          node.style.setProperty("--tone", tone);
+          node.style.zIndex = String(20 + Math.floor(scale * 20));
+
+          fungiField.appendChild(node);
+          fungi.push({ node, depth, lean, phase, bobAmp, swayAmp, bobSpeed });
         }
       }
 
-      function updateAmbientDrift() {
-        ambientTicker += 0.02;
-        const driftX = Math.sin(ambientTicker) * 4.5;
-        const driftY = Math.cos(ambientTicker * 0.82) * 3.2;
-        rootStyle.setProperty("--ambient-x", `${driftX.toFixed(2)}px`);
-        rootStyle.setProperty("--ambient-y", `${driftY.toFixed(2)}px`);
-        window.requestAnimationFrame(updateAmbientDrift);
+      function spawnSpore(x, y, strength) {
+        const rect = scene.getBoundingClientRect();
+        const node = document.createElement("span");
+        node.className = "spore";
+
+        const sx = clamp(x - rect.left + rand(-16, 16), 0, rect.width);
+        const sy = clamp(y - rect.top + rand(-10, 10), 0, rect.height);
+        const size = rand(3, 10 + strength * 3);
+        const dx = rand(-90, 90) * (0.8 + strength * 0.28);
+        const dy = rand(-170, -42) * (0.8 + strength * 0.34);
+        const life = rand(1200, 2800);
+        const tone = (20 + (Math.random() * 320)).toFixed(2);
+
+        node.style.setProperty("--x", `${sx}px`);
+        node.style.setProperty("--y", `${sy}px`);
+        node.style.setProperty("--size", `${size.toFixed(2)}px`);
+        node.style.setProperty("--dx", `${dx.toFixed(2)}px`);
+        node.style.setProperty("--dy", `${dy.toFixed(2)}px`);
+        node.style.setProperty("--life", `${life.toFixed(0)}ms`);
+        node.style.setProperty("--tone", tone);
+
+        sporeField.appendChild(node);
+        window.setTimeout(() => node.remove(), life + 260);
       }
 
-      function spawnAmbientSpores() {
-        if (document.hidden) {
-          return;
+      function spawnBurst(x, y, base) {
+        const amount = clamp(Math.floor(6 + base * 14), 6, 26);
+        for (let i = 0; i < amount; i += 1) {
+          spawnSpore(x, y, base);
         }
-        const rect = meadow.getBoundingClientRect();
-        const x = rect.left + (Math.random() * rect.width);
-        const y = rect.top + (rect.height * (0.44 + Math.random() * 0.48));
-        const amount = 1 + Math.floor(Math.random() * 3);
-        spawnSpores(x, y, amount, false);
       }
 
-      function setGyroStyles(gamma, beta) {
-        const gx = Math.max(-18, Math.min(18, gamma || 0));
-        const gy = Math.max(-22, Math.min(22, beta || 0));
-        rootStyle.setProperty("--gyro-x", `${gx.toFixed(2)}px`);
-        rootStyle.setProperty("--gyro-y", `${gy.toFixed(2)}px`);
-        rootStyle.setProperty("--gyro-rotate-x", `${(-gy * 0.12).toFixed(2)}deg`);
-        rootStyle.setProperty("--gyro-rotate-y", `${(gx * 0.12).toFixed(2)}deg`);
-      }
-
-      function resetGyroStyles() {
-        rootStyle.setProperty("--gyro-x", "0px");
-        rootStyle.setProperty("--gyro-y", "0px");
-        rootStyle.setProperty("--gyro-rotate-x", "0deg");
-        rootStyle.setProperty("--gyro-rotate-y", "0deg");
+      function onPointerMove(event) {
+        const rect = scene.getBoundingClientRect();
+        const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        const ny = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+        targetX = clamp(nx, -1, 1);
+        targetY = clamp(ny, -1, 1);
       }
 
       function onDeviceOrientation(event) {
-        if (!motionEnabled) {
+        if (!motionReady) {
           return;
         }
         if (typeof event.gamma !== "number" || typeof event.beta !== "number") {
           return;
         }
-        setGyroStyles(event.gamma * 0.8, event.beta * 0.55);
+        const nx = clamp(event.gamma / 30, -1, 1);
+        const ny = clamp(event.beta / 40, -1, 1);
+        targetX = nx;
+        targetY = ny;
       }
 
-      function disableMotion(message) {
-        motionEnabled = false;
-        motionToggle.textContent = "Enable Motion";
-        resetGyroStyles();
-        if (message) {
-          setFact(message);
+      function mountOrientationListener() {
+        if (orientationBound) {
+          return;
         }
+        window.addEventListener("deviceorientation", onDeviceOrientation, true);
+        orientationBound = true;
       }
 
-      async function enableMotion() {
+      function hideGyroGate() {
+        gyroGate.classList.add("hidden");
+      }
+
+      async function requestGyroPermission() {
         if (!("DeviceOrientationEvent" in window)) {
-          disableMotion("This device/browser does not expose gyroscope events.");
+          hideGyroGate();
+          motionReady = true;
           return;
         }
 
@@ -679,96 +518,89 @@
           if (typeof DeviceOrientationEvent.requestPermission === "function") {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission !== "granted") {
-              disableMotion("Motion permission was denied.");
+              hideGyroGate();
+              motionReady = true;
               return;
             }
           }
-          if (!orientationAttached) {
-            window.addEventListener("deviceorientation", onDeviceOrientation, true);
-            orientationAttached = true;
-          }
-          motionEnabled = true;
-          motionToggle.textContent = "Disable Motion";
-          setFact("Motion enabled. Tilt your phone to bend the meadow.");
-        } catch (error) {
-          disableMotion("Could not enable motion sensors on this device.");
+          mountOrientationListener();
+          hideGyroGate();
+          motionReady = true;
+        } catch (_error) {
+          hideGyroGate();
+          motionReady = true;
         }
       }
 
-      function celebrateMushroom(button, x, y) {
-        const fact = button.getAttribute("data-fact") || "The forest is listening.";
-        setFact(fact);
-        pulseState.textContent = "Mycelium: Connected";
-        button.animate(
-          [
-            { transform: "translateY(0) scale(1)" },
-            { transform: "translateY(-8px) scale(1.04)" },
-            { transform: "translateY(0) scale(1)" }
-          ],
-          { duration: 380, easing: "ease-out" }
-        );
-        spawnSpores(x, y, 14);
+      function startGyroPrompt() {
+        if (reduceMotion) {
+          hideGyroGate();
+          motionReady = true;
+          return;
+        }
+
+        if (!("DeviceOrientationEvent" in window)) {
+          hideGyroGate();
+          motionReady = true;
+          return;
+        }
+
+        if (typeof DeviceOrientationEvent.requestPermission === "function") {
+          gyroGate.addEventListener("pointerdown", requestGyroPermission, { once: true, passive: true });
+          return;
+        }
+
+        mountOrientationListener();
+        hideGyroGate();
+        motionReady = true;
       }
 
-      mushrooms.forEach((button) => {
-        button.addEventListener("click", (event) => {
-          const x = event.clientX || (event.touches && event.touches[0] && event.touches[0].clientX) || 0;
-          const y = event.clientY || (event.touches && event.touches[0] && event.touches[0].clientY) || 0;
-          celebrateMushroom(button, x, y);
-        });
-      });
+      function animate(now) {
+        motionX += (targetX - motionX) * 0.09;
+        motionY += (targetY - motionY) * 0.09;
+        const energy = clamp(Math.abs(motionX) + Math.abs(motionY), 0, 1.6);
 
-      meadow.addEventListener("pointerdown", (event) => {
-        touchPainting = true;
-        pulseState.textContent = "Mycelium: Active";
-        spawnSpores(event.clientX, event.clientY, 10);
+        const hue = (Math.sin(now * 0.00011 + motionX * 1.9) * 58) + (Math.cos(now * 0.000085 - motionY * 1.5) * 28);
+        const glow = 0.72 + (Math.sin(now * 0.0012) * 0.12) + energy * 0.32;
+        rootStyle.setProperty("--tilt-x", motionX.toFixed(4));
+        rootStyle.setProperty("--tilt-y", motionY.toFixed(4));
+        rootStyle.setProperty("--energy", energy.toFixed(4));
+        rootStyle.setProperty("--hue-shift", `${hue.toFixed(2)}deg`);
+        rootStyle.setProperty("--glow", glow.toFixed(4));
+
+        for (let i = 0; i < fungi.length; i += 1) {
+          const f = fungi[i];
+          const drift = Math.sin(now * 0.001 * f.bobSpeed + f.phase) * f.bobAmp;
+          const sway = Math.sin(now * 0.0008 * (f.bobSpeed + 0.35) + f.phase * 0.7) * f.swayAmp;
+          const gx = motionX * f.depth * 28;
+          const gy = motionY * f.depth * -16;
+          const rot = f.lean + sway + (motionX * f.depth * 11);
+          f.node.style.transform =
+            `translate3d(calc(-50% + ${gx.toFixed(2)}px), ${(drift + gy).toFixed(2)}px, 0) rotate(${rot.toFixed(2)}deg)`;
+        }
+
+        if (!reduceMotion && Math.random() < (0.045 + energy * 0.07)) {
+          const rect = scene.getBoundingClientRect();
+          spawnSpore(
+            rect.left + rand(rect.width * 0.05, rect.width * 0.95),
+            rect.top + rand(rect.height * 0.38, rect.height * 0.95),
+            0.25 + energy
+          );
+        }
+
+        window.requestAnimationFrame(animate);
+      }
+
+      buildFungiForest();
+      startGyroPrompt();
+
+      scene.addEventListener("pointermove", onPointerMove, { passive: true });
+      scene.addEventListener("pointerdown", (event) => {
+        spawnBurst(event.clientX, event.clientY, 0.45 + clamp(Math.abs(motionX) + Math.abs(motionY), 0, 1));
       }, { passive: true });
-
-      meadow.addEventListener("pointermove", (event) => {
-        if (!touchPainting) {
-          return;
-        }
-        const now = Date.now();
-        if (now - lastMoveStamp < 85) {
-          return;
-        }
-        lastMoveStamp = now;
-        spawnSpores(event.clientX, event.clientY, 3);
-      }, { passive: true });
-
-      const stopPaint = () => {
-        touchPainting = false;
-        pulseState.textContent = "Mycelium: Listening";
-      };
-
-      meadow.addEventListener("pointerup", stopPaint, { passive: true });
-      meadow.addEventListener("pointercancel", stopPaint, { passive: true });
-      meadow.addEventListener("pointerleave", stopPaint, { passive: true });
-
-      modeToggle.addEventListener("click", () => {
-        document.body.classList.toggle("night-glow");
-        const mode = document.body.classList.contains("night-glow") ? "Bioluminescent" : "Daylight";
-        setFact(`Mood switched to ${mode}. Keep tapping to spread fresh spores.`);
-      });
-
-      motionToggle.addEventListener("click", async () => {
-        if (motionEnabled) {
-          disableMotion("Motion disabled. Auto-animations still continue.");
-          return;
-        }
-        await enableMotion();
-      });
-
-      clearSpores.addEventListener("click", () => {
-        meadow.querySelectorAll(".spore").forEach((node) => node.remove());
-        sporesTotal = 0;
-        updateSporeCount();
-        setFact("Spores cleared. The forest floor is ready for a new bloom.");
-      });
 
       if (!reduceMotion) {
-        window.setInterval(spawnAmbientSpores, 2100);
-        window.requestAnimationFrame(updateAmbientDrift);
+        window.requestAnimationFrame(animate);
       }
     })();
   </script>
