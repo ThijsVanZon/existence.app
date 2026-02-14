@@ -322,17 +322,17 @@ select,
 
 .sleeve-header-code {
   display: block;
-  font-size: 1.22rem;
-  line-height: 1.05;
-  font-weight: 800;
-}
-
-.sleeve-header-name {
-  display: block;
   margin-top: 2px;
   font-size: 0.9rem;
   line-height: 1.2;
   font-weight: 600;
+}
+
+.sleeve-header-name {
+  display: block;
+  font-size: 1.22rem;
+  line-height: 1.05;
+  font-weight: 800;
 }
 
 .sleeve-tagline {

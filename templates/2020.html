@@ -22,7 +22,6 @@
     </div>
   </nav>
 
-  <h2>Scraped Jobs Per Sleeve</h2>
   <section class="scrape-toolbar" hidden>
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
     <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed NL only, no auto failover).</p>
@@ -71,8 +70,8 @@
   <div class="sleeve-grid">
     <section class="sleeve-panel" id="panel-A">
       <h3>
-        <span class="sleeve-header-code">Career Sleeve A</span>
         <span class="sleeve-header-name">Music Events & Festivals</span>
+        <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
       <p class="sleeve-tagline">International live music productions where creative intent and on-site operations align across crews, artists, and stakeholders.</p>
       <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
@@ -87,8 +86,8 @@
 
     <section class="sleeve-panel" id="panel-B">
       <h3>
-        <span class="sleeve-header-code">Career Sleeve B</span>
         <span class="sleeve-header-name">Theme Parks & Destinations</span>
+        <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
       <p class="sleeve-tagline">Theme parks and immersive destinations: experience delivery plus operations discipline for safe, repeatable show quality.</p>
       <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
@@ -103,8 +102,8 @@
 
     <section class="sleeve-panel" id="panel-C">
       <h3>
-        <span class="sleeve-header-code">Career Sleeve C</span>
         <span class="sleeve-header-name">Data Centers & Facilities</span>
+        <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
       <p class="sleeve-tagline">AI/compute datacenter and facilities ops focused on uptime, safety, scaling, and execution across sites.</p>
       <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
@@ -119,8 +118,8 @@
 
     <section class="sleeve-panel" id="panel-D">
       <h3>
-        <span class="sleeve-header-code">Career Sleeve D</span>
         <span class="sleeve-header-name">Supply Chains & Ecosystems</span>
+        <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
       <p class="sleeve-tagline">International supply chains and ecosystems: vendor/partner alignment, rollout execution, and reliable cross-site flow.</p>
       <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
@@ -135,8 +134,8 @@
 
     <section class="sleeve-panel" id="panel-E">
       <h3>
-        <span class="sleeve-header-code">Career Sleeve E</span>
         <span class="sleeve-header-name">Custom / User-defined Sleeve</span>
+        <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
       <p class="sleeve-tagline">Custom sleeve configured by the user with role archetypes, keywords, locations, and exclusions.</p>
       <label class="extra-terms-label" for="extra-terms-E">Extra zoekwoorden (comma separated)</label>
@@ -266,6 +265,22 @@
       return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Nederland')}`;
     }
 
+    function safeDecodeUrlPart(value) {
+      let decoded = String(value || '');
+      for (let i = 0; i < 2; i += 1) {
+        try {
+          const next = decodeURIComponent(decoded);
+          if (next === decoded) {
+            break;
+          }
+          decoded = next;
+        } catch (error) {
+          break;
+        }
+      }
+      return decoded;
+    }
+
     function extractExternalFromIndeedUrl(url) {
       if (!isValidHttpUrl(url)) {
         return '';
@@ -278,7 +293,7 @@
           if (!raw) {
             continue;
           }
-          const decoded = decodeURIComponent(decodeURIComponent(raw));
+          const decoded = safeDecodeUrlPart(raw);
           if (!isValidHttpUrl(decoded)) {
             continue;
           }
@@ -291,6 +306,21 @@
         return '';
       }
       return '';
+    }
+
+    function buildCompanyResolverUrl(companyUrl, indeedUrl) {
+      const params = new URLSearchParams();
+      if (isValidHttpUrl(companyUrl)) {
+        params.set('company_url', companyUrl);
+      }
+      if (isValidHttpUrl(indeedUrl)) {
+        params.set('indeed_url', indeedUrl);
+      }
+      const qs = params.toString();
+      if (!qs) {
+        return '';
+      }
+      return `/company-posting?${qs}`;
     }
 
     function createActionLink(label, href, extraClass = '', enabled = true) {
@@ -409,9 +439,10 @@
       const distanceAnchor = String(job.distance_anchor || 'Home').trim() || 'Home';
       const proximityScore = Number.isFinite(job.proximity_score) ? Number(job.proximity_score) : null;
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
-      const indeedUrl = isValidHttpUrl(job.indeed_url)
+      const canonicalIndeedUrl = isValidHttpUrl(job.indeed_url)
         ? job.indeed_url
-        : (isValidHttpUrl(primaryLink) ? primaryLink : buildIndeedPostingFallbackUrl(job));
+        : (isValidHttpUrl(primaryLink) ? primaryLink : '');
+      const indeedUrl = canonicalIndeedUrl || buildIndeedPostingFallbackUrl(job);
       let companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
       if (isIndeedUrl(companyUrl)) {
         companyUrl = '';
@@ -420,11 +451,15 @@
         companyUrl = '';
       }
       if (!companyUrl) {
-        companyUrl = extractExternalFromIndeedUrl(indeedUrl);
+        companyUrl = extractExternalFromIndeedUrl(canonicalIndeedUrl);
       }
       if (companyUrl && isIndeedUrl(companyUrl)) {
         companyUrl = '';
       }
+      if (!companyUrl && isValidHttpUrl(primaryLink) && !isIndeedUrl(primaryLink)) {
+        companyUrl = primaryLink;
+      }
+      const companyResolverUrl = buildCompanyResolverUrl(companyUrl, canonicalIndeedUrl);
 
       const header = document.createElement('div');
       header.className = 'job-card-header';
@@ -496,9 +531,9 @@
       actions.appendChild(
         createActionLink(
           'Company Posting',
-          companyUrl || '#',
+          companyResolverUrl || '#',
           'job-link-company',
-          Boolean(companyUrl)
+          Boolean(companyResolverUrl)
         )
       );
       actions.appendChild(

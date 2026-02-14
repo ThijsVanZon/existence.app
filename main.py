@@ -3327,6 +3327,38 @@ def scrape_config():
     return jsonify(_public_scrape_config())
 
 
+@app.route('/company-posting')
+def company_posting():
+    company_url = _clean_value(request.args.get("company_url"), "")
+    indeed_url = _clean_value(request.args.get("indeed_url"), "")
+
+    if _is_absolute_http_url(company_url) and "indeed." not in _host_for_url(company_url):
+        return redirect(company_url, code=302)
+
+    if _is_absolute_http_url(indeed_url):
+        extracted = _extract_external_destination_from_url(indeed_url)
+        if _is_absolute_http_url(extracted) and "indeed." not in _host_for_url(extracted):
+            return redirect(extracted, code=302)
+
+        try:
+            response = requests.get(
+                indeed_url,
+                headers=_source_headers("Indeed", "nl_only"),
+                timeout=10,
+            )
+            if response.ok:
+                detail_links = _extract_indeed_links_from_detail(response.text, response.url or indeed_url)
+                extracted_company = _clean_value(detail_links.get("company_url"), "")
+                if _is_absolute_http_url(extracted_company) and "indeed." not in _host_for_url(extracted_company):
+                    return redirect(extracted_company, code=302)
+        except requests.RequestException:
+            pass
+
+        return redirect(indeed_url, code=302)
+
+    return redirect(url_for('decade_2020'))
+
+
 # Route to trigger scraping
 @app.route('/scrape')
 def scrape():
