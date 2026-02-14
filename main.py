@@ -1351,6 +1351,18 @@ def _decode_embedded_url(value):
     return text
 
 
+def _decode_url_repeatedly(value, rounds=4):
+    text = _clean_value(value, "")
+    if not text:
+        return ""
+    for _ in range(max(1, int(rounds))):
+        decoded = _decode_embedded_url(unquote(text))
+        if decoded == text:
+            break
+        text = decoded
+    return text
+
+
 def _extract_external_destination_from_url(url):
     parsed = urlparse(_clean_value(url, ""))
     if not parsed.netloc:
@@ -1360,16 +1372,28 @@ def _extract_external_destination_from_url(url):
         "adurl",
         "dest",
         "destination",
+        "destinationurl",
+        "desturl",
+        "dest_url",
         "redirect",
         "redirecturl",
+        "redirect_uri",
+        "next",
+        "rurl",
+        "clickurl",
+        "ad_url",
         "url",
         "u",
         "target",
     }
-    for key, value in parse_qsl(parsed.query, keep_blank_values=False):
+    query_pairs = list(parse_qsl(parsed.query, keep_blank_values=False))
+    if parsed.fragment and "=" in parsed.fragment:
+        query_pairs.extend(parse_qsl(parsed.fragment, keep_blank_values=False))
+
+    for key, value in query_pairs:
         if key.lower() not in redirect_keys:
             continue
-        candidate = _decode_embedded_url(unquote(unquote(value)))
+        candidate = _decode_url_repeatedly(value, rounds=5)
         if candidate.startswith("/"):
             candidate = requests.compat.urljoin(
                 f"{parsed.scheme or 'https'}://{parsed.netloc}",
@@ -1377,6 +1401,44 @@ def _extract_external_destination_from_url(url):
             )
         if _is_absolute_http_url(candidate) and "indeed." not in _host_for_url(candidate):
             return candidate
+    return ""
+
+
+def _resolve_external_from_indeed_redirect(url, timeout_seconds=8, max_hops=4, headers=None):
+    current = _clean_value(url, "")
+    if not _is_absolute_http_url(current):
+        return ""
+
+    for _ in range(max(1, int(max_hops))):
+        direct = _extract_external_destination_from_url(current)
+        if _is_absolute_http_url(direct) and "indeed." not in _host_for_url(direct):
+            return direct
+
+        if "indeed." not in _host_for_url(current):
+            return current
+
+        try:
+            response = requests.get(
+                current,
+                headers=headers,
+                timeout=timeout_seconds,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            return ""
+
+        location = _decode_url_repeatedly(response.headers.get("Location", ""), rounds=5)
+        if not location:
+            alt = _extract_external_destination_from_url(response.url or current)
+            if _is_absolute_http_url(alt) and "indeed." not in _host_for_url(alt):
+                return alt
+            return ""
+
+        next_url = requests.compat.urljoin(response.url or current, location)
+        if _is_absolute_http_url(next_url) and "indeed." not in _host_for_url(next_url):
+            return next_url
+        current = next_url
+
     return ""
 
 
@@ -3337,13 +3399,22 @@ def company_posting():
     def _is_external_company_url(url):
         return _is_absolute_http_url(url) and "indeed." not in _host_for_url(url)
 
-    def _resolve_external_from_candidate(url):
+    def _resolve_external_from_candidate(url, allow_network=False):
         candidate = _clean_value(url, "")
         if _is_external_company_url(candidate):
             return candidate
         extracted = _extract_external_destination_from_url(candidate)
         if _is_external_company_url(extracted):
             return extracted
+        if allow_network and _is_absolute_http_url(candidate) and "indeed." in _host_for_url(candidate):
+            resolved = _resolve_external_from_indeed_redirect(
+                candidate,
+                timeout_seconds=10,
+                max_hops=5,
+                headers=_source_headers("Indeed", "nl_only"),
+            )
+            if _is_external_company_url(resolved):
+                return resolved
         return ""
 
     def _error_response(message, status=424):
@@ -3373,13 +3444,18 @@ def company_posting():
 
     company_url = _clean_value(request.args.get("company_url"), "")
     indeed_url = _clean_value(request.args.get("indeed_url"), "")
+    job_url = _clean_value(request.args.get("job_url"), "")
 
-    resolved_company = _resolve_external_from_candidate(company_url)
+    resolved_company = _resolve_external_from_candidate(company_url, allow_network=False)
     if resolved_company:
         return redirect(resolved_company, code=302)
 
+    resolved_from_job = _resolve_external_from_candidate(job_url, allow_network=True)
+    if resolved_from_job:
+        return redirect(resolved_from_job, code=302)
+
     if _is_absolute_http_url(indeed_url):
-        extracted = _resolve_external_from_candidate(indeed_url)
+        extracted = _resolve_external_from_candidate(indeed_url, allow_network=True)
         if extracted:
             return redirect(extracted, code=302)
 
@@ -3394,9 +3470,15 @@ def company_posting():
                 extracted_company = _clean_value(detail_links.get("company_url"), "")
                 if _is_external_company_url(extracted_company):
                     return redirect(extracted_company, code=302)
-                extracted_response_url = _resolve_external_from_candidate(response.url or "")
+                extracted_response_url = _resolve_external_from_candidate(response.url or "", allow_network=True)
                 if extracted_response_url:
                     return redirect(extracted_response_url, code=302)
+                extracted_indeed_from_detail = _resolve_external_from_candidate(
+                    detail_links.get("indeed_url") or "",
+                    allow_network=True,
+                )
+                if extracted_indeed_from_detail:
+                    return redirect(extracted_indeed_from_detail, code=302)
         except requests.RequestException as exc:
             return _error_response(
                 f"Could not resolve company URL from Indeed page ({_clean_value(exc, 'request_failed')}).",
@@ -3409,7 +3491,7 @@ def company_posting():
         )
 
     return _error_response(
-        "Missing usable URL inputs. Provide either company_url or indeed_url.",
+        "Missing usable URL inputs. Provide company_url, indeed_url, or job_url.",
         status=400,
     )
 

@@ -308,13 +308,16 @@
       return '';
     }
 
-    function buildCompanyResolverUrl(companyUrl, indeedUrl) {
+    function buildCompanyResolverUrl(companyUrl, indeedUrl, jobUrl) {
       const params = new URLSearchParams();
       if (isValidHttpUrl(companyUrl)) {
         params.set('company_url', companyUrl);
       }
       if (isValidHttpUrl(indeedUrl)) {
         params.set('indeed_url', indeedUrl);
+      }
+      if (isValidHttpUrl(jobUrl)) {
+        params.set('job_url', jobUrl);
       }
       const qs = params.toString();
       if (!qs) {
@@ -459,7 +462,7 @@
       if (!companyUrl && isValidHttpUrl(primaryLink) && !isIndeedUrl(primaryLink)) {
         companyUrl = primaryLink;
       }
-      const companyResolverUrl = buildCompanyResolverUrl(companyUrl, canonicalIndeedUrl);
+      const companyResolverUrl = buildCompanyResolverUrl(companyUrl, canonicalIndeedUrl, primaryLink);
 
       const header = document.createElement('div');
       header.className = 'job-card-header';

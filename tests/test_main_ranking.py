@@ -380,6 +380,20 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(response.status_code, 424)
         self.assertIn("company posting url not found", response.get_data(as_text=True).lower())
 
+    def test_company_posting_route_resolves_from_job_url_redirect_param(self):
+        with main.app.test_client() as client:
+            response = client.get(
+                "/company-posting",
+                query_string={
+                    "job_url": (
+                        "https://nl.indeed.com/pagead/clk?"
+                        "jk=abc123&adurl=https%3A%2F%2Fcompany.example%2Fcareers%2F42"
+                    )
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "https://company.example/careers/42")
+
 
 if __name__ == "__main__":
     unittest.main()
