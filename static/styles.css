@@ -461,6 +461,11 @@ select,
   background: rgba(var(--amethyst-rgb), 0.1);
 }
 
+.decision-location {
+  color: var(--zircon);
+  background: rgba(var(--zircon-rgb), 0.12);
+}
+
 .job-sleeve-tagline {
   color: var(--ink-muted);
   font-style: italic;

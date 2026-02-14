@@ -72,7 +72,7 @@
     <section class="sleeve-panel" id="panel-A">
       <h3>
         <span class="sleeve-header-code">Career Sleeve A</span>
-        <span class="sleeve-header-name">International Music Events & Festivals</span>
+        <span class="sleeve-header-name">Music Events & Festivals</span>
       </h3>
       <p class="sleeve-tagline">International live music productions where creative intent and on-site operations align across crews, artists, and stakeholders.</p>
       <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
@@ -88,7 +88,7 @@
     <section class="sleeve-panel" id="panel-B">
       <h3>
         <span class="sleeve-header-code">Career Sleeve B</span>
-        <span class="sleeve-header-name">International Theme Parks & Destinations</span>
+        <span class="sleeve-header-name">Theme Parks & Destinations</span>
       </h3>
       <p class="sleeve-tagline">Theme parks and immersive destinations: experience delivery plus operations discipline for safe, repeatable show quality.</p>
       <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
@@ -104,7 +104,7 @@
     <section class="sleeve-panel" id="panel-C">
       <h3>
         <span class="sleeve-header-code">Career Sleeve C</span>
-        <span class="sleeve-header-name">International Data Centers & Facilities</span>
+        <span class="sleeve-header-name">Data Centers & Facilities</span>
       </h3>
       <p class="sleeve-tagline">AI/compute datacenter and facilities ops focused on uptime, safety, scaling, and execution across sites.</p>
       <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
@@ -120,7 +120,7 @@
     <section class="sleeve-panel" id="panel-D">
       <h3>
         <span class="sleeve-header-code">Career Sleeve D</span>
-        <span class="sleeve-header-name">International Supply Chains & Ecosystems</span>
+        <span class="sleeve-header-name">Supply Chains & Ecosystems</span>
       </h3>
       <p class="sleeve-tagline">International supply chains and ecosystems: vendor/partner alignment, rollout execution, and reliable cross-site flow.</p>
       <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
@@ -156,19 +156,19 @@
     const DEFAULT_FETCH_LIMIT = 200;
     const sleeveMeta = {
       A: {
-        name: 'International Music Events & Festivals',
+        name: 'Music Events & Festivals',
         tagline: 'International live music productions where creative intent and on-site operations align across crews, artists, and stakeholders.'
       },
       B: {
-        name: 'International Theme Parks & Destinations',
+        name: 'Theme Parks & Destinations',
         tagline: 'Theme parks and immersive destinations: experience delivery plus operations discipline for safe, repeatable show quality.'
       },
       C: {
-        name: 'International Data Centers & Facilities',
+        name: 'Data Centers & Facilities',
         tagline: 'AI/compute datacenter and facilities ops focused on uptime, safety, scaling, and execution across sites.'
       },
       D: {
-        name: 'International Supply Chains & Ecosystems',
+        name: 'Supply Chains & Ecosystems',
         tagline: 'International supply chains and ecosystems: vendor/partner alignment, rollout execution, and reliable cross-site flow.'
       },
       E: {
@@ -213,13 +213,24 @@
         return explicit;
       }
       const text = `${job.location || ''} ${job.snippet || ''} ${job.full_description || ''}`.toLowerCase();
-      if (text.includes('hybrid')) {
+      if (text.includes('hybrid') || text.includes('hybride')) {
         return 'Hybrid';
       }
-      if (text.includes('remote')) {
+      if (
+        text.includes('remote') ||
+        text.includes('op afstand') ||
+        text.includes('thuiswerk') ||
+        text.includes('werk vanuit huis')
+      ) {
         return 'Remote';
       }
-      if (text.includes('on-site') || text.includes('onsite')) {
+      if (
+        text.includes('on-site') ||
+        text.includes('onsite') ||
+        text.includes('on site') ||
+        text.includes('op locatie') ||
+        text.includes('op kantoor')
+      ) {
         return 'On-site';
       }
       return 'Unknown';
@@ -248,18 +259,38 @@
       }
     }
 
-    function buildCompanyPostingFallbackUrl(job) {
-      const company = String(job?.company || '').trim();
-      const title = String(job?.title || '').trim();
-      const query = `${company} ${title} careers`.trim() || 'company careers';
-      return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    }
-
     function buildIndeedPostingFallbackUrl(job) {
       const company = String(job?.company || '').trim();
       const title = String(job?.title || '').trim();
       const query = `${title} ${company}`.trim() || 'vacature';
       return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Nederland')}`;
+    }
+
+    function extractExternalFromIndeedUrl(url) {
+      if (!isValidHttpUrl(url)) {
+        return '';
+      }
+      try {
+        const parsed = new URL(url);
+        const redirectKeys = ['adurl', 'dest', 'destination', 'redirect', 'redirecturl', 'url', 'u', 'target'];
+        for (const key of redirectKeys) {
+          const raw = parsed.searchParams.get(key);
+          if (!raw) {
+            continue;
+          }
+          const decoded = decodeURIComponent(decodeURIComponent(raw));
+          if (!isValidHttpUrl(decoded)) {
+            continue;
+          }
+          const host = new URL(decoded).hostname.toLowerCase();
+          if (!host.includes('indeed.')) {
+            return decoded;
+          }
+        }
+      } catch (error) {
+        return '';
+      }
+      return '';
     }
 
     function createActionLink(label, href, extraClass = '', enabled = true) {
@@ -373,6 +404,10 @@
       const abroadPctText = String(job.abroad_percentage_text || '').trim();
       const abroadShare = abroadPctText || (Number.isFinite(job.abroad_percentage) ? `${job.abroad_percentage}%` : '');
       const abroadLocations = Array.isArray(job.abroad_locations) ? job.abroad_locations : [];
+      const mainLocation = String(job.main_location || job.location || 'Unknown').trim() || 'Unknown';
+      const distanceKm = Number.isFinite(job.distance_from_home_km) ? Number(job.distance_from_home_km) : null;
+      const distanceAnchor = String(job.distance_anchor || 'Home').trim() || 'Home';
+      const proximityScore = Number.isFinite(job.proximity_score) ? Number(job.proximity_score) : null;
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
       const indeedUrl = isValidHttpUrl(job.indeed_url)
         ? job.indeed_url
@@ -385,7 +420,10 @@
         companyUrl = '';
       }
       if (!companyUrl) {
-        companyUrl = buildCompanyPostingFallbackUrl(job);
+        companyUrl = extractExternalFromIndeedUrl(indeedUrl);
+      }
+      if (companyUrl && isIndeedUrl(companyUrl)) {
+        companyUrl = '';
       }
 
       const header = document.createElement('div');
@@ -410,6 +448,17 @@
         createBadge(
           'decision-badge decision-abroad',
           abroadShare ? `Abroad ${abroadScore}/4 ${abroadShare}` : `Abroad ${abroadScore}/4`
+        )
+      );
+      const locationBadgeText = distanceKm === null
+        ? `Main ${mainLocation} | ${distanceAnchor} distance n/a`
+        : `Main ${mainLocation} | ${distanceKm} km from ${distanceAnchor}`;
+      badges.appendChild(
+        createBadge(
+          'decision-badge decision-location',
+          proximityScore === null
+            ? locationBadgeText
+            : `${locationBadgeText} | ${proximityScore}/4`
         )
       );
       card.appendChild(badges);
@@ -447,9 +496,9 @@
       actions.appendChild(
         createActionLink(
           'Company Posting',
-          companyUrl || buildCompanyPostingFallbackUrl(job),
+          companyUrl || '#',
           'job-link-company',
-          true
+          Boolean(companyUrl)
         )
       );
       actions.appendChild(

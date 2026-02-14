@@ -27,14 +27,22 @@ source_health = {}
 SOURCE_FAILURE_THRESHOLD = 3
 SOURCE_FAILURE_COOLDOWN_SECONDS = 900
 
-# Location anchor: Copernicuslaan 105, 's-Hertogenbosch
-HOME_LAT = 51.6978
-HOME_LON = 5.3037
+# Location anchor: Copernicuslaan 105, 5223EC, 's-Hertogenbosch (BAG/PDOK centroid)
+HOME_LAT = 51.69531823
+HOME_LON = 5.28914427
+HOME_LOCATION_LABEL = "Home"
+HOME_LOCATION_FULL_LABEL = "Copernicuslaan 105, 5223EC 's-Hertogenbosch"
 
 CITY_COORDS_NL = {
+    "'s-hertogenbosch": (51.6978, 5.3037),
+    "s hertogenbosch": (51.6978, 5.3037),
     "s-hertogenbosch": (51.6978, 5.3037),
     "den bosch": (51.6978, 5.3037),
     "amsterdam": (52.3676, 4.9041),
+    "den haag": (52.0705, 4.3007),
+    "'s-gravenhage": (52.0705, 4.3007),
+    "s gravenhage": (52.0705, 4.3007),
+    "the hague": (52.0705, 4.3007),
     "rotterdam": (51.9244, 4.4777),
     "utrecht": (52.0907, 5.1214),
     "eindhoven": (51.4416, 5.4697),
@@ -47,6 +55,14 @@ CITY_COORDS_NL = {
     "maastricht": (50.8514, 5.6900),
     "haarlem": (52.3874, 4.6462),
     "delft": (52.0116, 4.3571),
+    "almere": (52.3508, 5.2647),
+    "zwolle": (52.5168, 6.0830),
+    "amersfoort": (52.1561, 5.3878),
+    "dordrecht": (51.8133, 4.6901),
+    "apeldoorn": (52.2112, 5.9699),
+    "leeuwarden": (53.2012, 5.7999),
+    "venlo": (51.3704, 6.1724),
+    "hengelo": (52.2676, 6.7930),
     "enschede": (52.2215, 6.8937),
 }
 
@@ -83,10 +99,13 @@ GLOBAL_REMOTE_HINTS = ["worldwide", "anywhere", "global"]
 ABROAD_PERCENT_CONTEXT_KEYWORDS = [
     "travel",
     "travelling",
+    "traveling",
     "international",
     "abroad",
     "buitenland",
     "overseas",
+    "cross-border",
+    "multi-country",
     "site visit",
     "site visits",
     "client site",
@@ -96,6 +115,9 @@ ABROAD_PERCENT_CONTEXT_KEYWORDS = [
     "onsite",
     "op locatie",
     "klantlocatie",
+    "reisbereid",
+    "reizen",
+    "internationaal reizen",
 ]
 ABROAD_GEO_TERMS = {
     "countries": [
@@ -231,11 +253,32 @@ def _normalize_text(*parts):
 
 
 def _infer_work_mode(text):
-    if "remote" in text:
-        return "Remote"
-    if "hybrid" in text:
+    normalized = _normalize_text(text)
+    hybrid_terms = [
+        "hybrid",
+        "hybride",
+    ]
+    remote_terms = [
+        "remote",
+        "op afstand",
+        "thuiswerk",
+        "werk vanuit huis",
+        "work from home",
+        "wfh",
+    ]
+    onsite_terms = [
+        "on-site",
+        "onsite",
+        "on site",
+        "op locatie",
+        "op kantoor",
+    ]
+
+    if any(term in normalized for term in hybrid_terms):
         return "Hybrid"
-    if "on-site" in text or "onsite" in text:
+    if any(term in normalized for term in remote_terms):
+        return "Remote"
+    if any(term in normalized for term in onsite_terms):
         return "On-site"
     return "Unknown"
 
@@ -717,6 +760,81 @@ def _estimate_distance_km(location_text):
     return None, None
 
 
+def _display_city_label(city_key):
+    key = _clean_value(city_key, "").lower()
+    special = {
+        "'s-hertogenbosch": "'s-Hertogenbosch",
+        "s-hertogenbosch": "'s-Hertogenbosch",
+        "s hertogenbosch": "'s-Hertogenbosch",
+        "den bosch": "Den Bosch",
+        "'s-gravenhage": "'s-Gravenhage",
+        "s gravenhage": "'s-Gravenhage",
+        "the hague": "The Hague",
+        "den haag": "Den Haag",
+    }
+    if key in special:
+        return special[key]
+    if not key:
+        return ""
+    tokens = re.split(r"[\s\-]+", key)
+    return " ".join(token.capitalize() for token in tokens if token)
+
+
+def _score_location_proximity(location_text, raw_text="", work_mode="Unknown"):
+    location_value = _clean_value(location_text, "")
+    distance_km, matched_city = _estimate_distance_km(location_value)
+    inferred_mode = _infer_work_mode(_normalize_text(location_value, raw_text, work_mode))
+    mode = inferred_mode if inferred_mode != "Unknown" else _clean_value(work_mode, "Unknown")
+    location_label = _clean_value(location_value, "Unknown")
+    if matched_city:
+        location_label = _display_city_label(matched_city)
+
+    if distance_km is None:
+        if mode in {"Remote", "Hybrid"} and _is_netherlands_job(location_value, raw_text):
+            score = 2.4
+            tier = "remote_or_hybrid"
+        elif _is_netherlands_job(location_value, raw_text):
+            score = 2.0
+            tier = "nl_unknown_distance"
+        else:
+            score = 0.8
+            tier = "outside_focus"
+    elif distance_km <= 20:
+        score = 4.0
+        tier = "very_close"
+    elif distance_km <= 40:
+        score = 3.6
+        tier = "close"
+    elif distance_km <= 80:
+        score = 3.1
+        tier = "commutable"
+    elif distance_km <= 120:
+        score = 2.6
+        tier = "extended_commute"
+    elif distance_km <= 180:
+        score = 2.0
+        tier = "far"
+    elif distance_km <= 260:
+        score = 1.3
+        tier = "very_far"
+    else:
+        score = 0.8
+        tier = "outside_focus"
+
+    if distance_km is not None and mode in {"Remote", "Hybrid"} and score < 2.2:
+        score = 2.2
+        tier = f"{tier}_remote_or_hybrid"
+
+    return {
+        "main_location": location_label,
+        "distance_km": distance_km,
+        "matched_city": _display_city_label(matched_city),
+        "score": round(float(score), 2),
+        "tier": tier,
+        "anchor": HOME_LOCATION_LABEL,
+    }
+
+
 def _context_has_abroad_keywords(raw_text, start, end):
     text = str(raw_text or "").lower()
     left = max(0, start - 64)
@@ -725,7 +843,7 @@ def _context_has_abroad_keywords(raw_text, start, end):
     return any(keyword in context for keyword in ABROAD_PERCENT_CONTEXT_KEYWORDS)
 
 
-def _extract_abroad_percentage(raw_text):
+def _legacy_extract_abroad_percentage(raw_text):
     text = str(raw_text or "")
     if not text:
         return None, ""
@@ -758,7 +876,7 @@ def _extract_abroad_percentage(raw_text):
     return candidates[0][0], candidates[0][1]
 
 
-def _extract_abroad_geo_mentions(raw_text):
+def _legacy_extract_abroad_geo_mentions(raw_text):
     prepared_text = sleeves_v2.prepare_text(raw_text)
     geo = {"countries": [], "regions": [], "continents": []}
     for category in ("countries", "regions", "continents"):
@@ -768,6 +886,173 @@ def _extract_abroad_geo_mentions(raw_text):
                 geo[category].append(label)
     locations = geo["countries"] + geo["regions"] + geo["continents"]
     return geo, locations
+
+
+def _legacy_extract_abroad_metadata(raw_text):
+    percentage, percentage_text = _legacy_extract_abroad_percentage(raw_text)
+    geo, locations = _legacy_extract_abroad_geo_mentions(raw_text)
+    return {
+        "percentage": percentage,
+        "percentage_text": percentage_text,
+        "countries": geo["countries"],
+        "regions": geo["regions"],
+        "continents": geo["continents"],
+        "locations": locations,
+    }
+
+
+def _extract_abroad_percentage(raw_text):
+    text = str(raw_text or "")
+    if not text:
+        return None, ""
+    normalized_text = text.replace("\u2013", "-").replace("\u2014", "-")
+
+    candidates = []
+    range_spans = []
+    for match in re.finditer(
+        r"(\d{1,3})\s*(?:-|to|tot)\s*(\d{1,3})\s*(?:%|percent|procent)",
+        normalized_text,
+        flags=re.IGNORECASE,
+    ):
+        start, end = match.span()
+        if not _context_has_abroad_keywords(normalized_text, start, end):
+            continue
+        first = int(match.group(1))
+        second = int(match.group(2))
+        low = max(0, min(100, min(first, second)))
+        high = max(0, min(100, max(first, second)))
+        candidates.append((high, f"{low}-{high}%"))
+        range_spans.append((start, end))
+
+    for match in re.finditer(
+        r"(\d{1,3})\s*(?:%|percent|procent)",
+        normalized_text,
+        flags=re.IGNORECASE,
+    ):
+        start, end = match.span()
+        if any(start < span_end and end > span_start for span_start, span_end in range_spans):
+            continue
+        if not _context_has_abroad_keywords(normalized_text, start, end):
+            continue
+        value = max(0, min(100, int(match.group(1))))
+        candidates.append((value, f"{value}%"))
+
+    if not candidates:
+        return None, ""
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][0], candidates[0][1]
+
+
+def _has_abroad_context(raw_text):
+    text = _normalize_text(raw_text)
+    context_terms = [
+        "international",
+        "global",
+        "abroad",
+        "overseas",
+        "travel",
+        "travelling",
+        "traveling",
+        "buitenland",
+        "cross-border",
+        "multi-country",
+        "site visit",
+        "client site",
+        "op locatie",
+        "klantlocatie",
+        "emea",
+        "european union",
+        "europe",
+    ]
+    return any(term in text for term in context_terms)
+
+
+def _alias_has_abroad_context(raw_text, alias):
+    text = str(raw_text or "").lower()
+    alias_text = _clean_value(alias, "").lower()
+    if not text or not alias_text:
+        return False
+    pattern = rf"\b{re.escape(alias_text)}\b"
+    for match in re.finditer(pattern, text):
+        if _context_has_abroad_keywords(text, *match.span()):
+            return True
+    return False
+
+
+def _extract_abroad_geo_mentions(raw_text):
+    prepared_text = sleeves_v2.prepare_text(raw_text)
+    has_context = _has_abroad_context(raw_text)
+    geo = {"countries": [], "regions": [], "continents": []}
+    for category in ("countries", "regions", "continents"):
+        for label, aliases in ABROAD_GEO_TERMS.get(category, []):
+            hits = sleeves_v2.find_hits(prepared_text, aliases)
+            if not hits:
+                continue
+            if label == "Netherlands":
+                continue
+            contextual_hit = has_context or any(_alias_has_abroad_context(raw_text, alias) for alias in aliases)
+            if contextual_hit and label not in geo[category]:
+                geo[category].append(label)
+    locations = geo["countries"] + geo["regions"] + geo["continents"]
+    return geo, locations
+
+
+def _enhance_abroad_score(base_score, base_badges, abroad_meta, raw_text):
+    score = float(base_score)
+    badges = []
+    seen = set()
+    for badge in list(base_badges or []):
+        normalized = _clean_value(badge, "")
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            badges.append(normalized)
+
+    percentage = abroad_meta.get("percentage")
+    geo_mentions = abroad_meta.get("locations") or []
+    text = _normalize_text(raw_text)
+    has_intensity_phrase = any(
+        phrase in text
+        for phrase in (
+            "frequent travel",
+            "regelmatig reizen",
+            "extensive travel",
+            "travel heavy",
+            "high travel",
+            "veel reizen",
+            "travel required",
+            "international mobility",
+        )
+    )
+
+    if percentage is not None:
+        if percentage >= 50:
+            score += 1.2
+        elif percentage >= 30:
+            score += 0.8
+        elif percentage >= 15:
+            score += 0.5
+        if "travel_percentage" not in seen:
+            badges.append("travel_percentage")
+            seen.add("travel_percentage")
+    elif has_intensity_phrase:
+        score += 0.5
+        if "travel_intensity" not in seen:
+            badges.append("travel_intensity")
+            seen.add("travel_intensity")
+
+    if len(geo_mentions) >= 3:
+        score += 0.9
+        if "geo_scope" not in seen:
+            badges.append("geo_scope")
+            seen.add("geo_scope")
+    elif len(geo_mentions) >= 1:
+        score += 0.5
+        if "geo_scope" not in seen:
+            badges.append("geo_scope")
+            seen.add("geo_scope")
+
+    score = max(0.0, min(float(sleeves_v2.ABROAD_SCORE_CAP), round(score, 2)))
+    return score, badges
 
 
 def _extract_abroad_metadata(raw_text):
@@ -891,6 +1176,59 @@ def _compact_whitespace(values):
     return _clean_value(" ".join(str(value or "") for value in values), "")
 
 
+def _looks_like_salary_text(value):
+    text = _clean_value(value, "")
+    if not text:
+        return False
+    pattern = (
+        r"(€|\$|£|¥|\beur\b|\busd\b|\bgbp\b|"
+        r"\bper\s*(uur|hour|maand|month|jaar|year)\b|"
+        r"/\s*(uur|h|maand|month|jaar|yr)|"
+        r"\d+\s*-\s*\d+|\d+[.,]?\d*\s*[kK])"
+    )
+    return bool(re.search(pattern, text, flags=re.IGNORECASE))
+
+
+def _extract_salary_from_chunks(chunks):
+    if not chunks:
+        return ""
+    seen = set()
+    for raw in chunks:
+        cleaned = _clean_value(raw, "")
+        if not cleaned:
+            continue
+        normalized = cleaned.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if _looks_like_salary_text(cleaned):
+            return cleaned
+    return ""
+
+
+def _normalize_indeed_location_and_mode(location_text):
+    location = _clean_value(location_text, "")
+    if not location:
+        return "", ""
+    normalized = location.lower()
+
+    patterns = [
+        (r"^\s*hybride?\s+werken\s+in\s+", "Hybrid"),
+        (r"^\s*remote\s+in\s+", "Remote"),
+        (r"^\s*op\s+afstand\s+in\s+", "Remote"),
+        (r"^\s*thuiswerk\s+in\s+", "Remote"),
+        (r"^\s*werk\s+vanuit\s+huis\s+in\s+", "Remote"),
+        (r"^\s*on[\s-]?site\s+in\s+", "On-site"),
+        (r"^\s*op\s+locatie\s+in\s+", "On-site"),
+        (r"^\s*op\s+kantoor\s+in\s+", "On-site"),
+    ]
+    for pattern, mode in patterns:
+        if re.search(pattern, normalized):
+            cleaned_location = re.sub(pattern, "", location, flags=re.IGNORECASE).strip(" -:,")
+            return (_clean_value(cleaned_location, location), mode)
+    return location, ""
+
+
 def _parse_indeed_cards(selector, response_url):
     cards = selector.css(
         "div.job_seen_beacon, div.slider_container, div[data-testid='jobSeenBeacon']"
@@ -903,6 +1241,29 @@ def _parse_indeed_cards(selector, response_url):
             or card.css("a[data-jk]::attr(href)").get()
         )
         snippet_parts = card.css("div.job-snippet *::text, [data-testid='text-snippet'] *::text").getall()
+        metadata_parts = card.css(
+            "[data-testid='attribute_snippet_testid'] *::text, "
+            "[data-testid='attribute_snippet'] *::text, "
+            "div.metadata *::text, "
+            "div.jobMetaDataGroup *::text, "
+            "div.jobsearch-JobMetadataHeader-item *::text"
+        ).getall()
+        salary_parts = card.css(
+            "div.salary-snippet-container *::text, "
+            "div.metadata.salary-snippet-container *::text, "
+            "span.estimated-salary *::text, "
+            "span.salaryText *::text, "
+            "[data-testid='attribute_snippet_testid'] *::text, "
+            "[data-testid='attribute_snippet_compensation'] *::text"
+        ).getall()
+        raw_location = (
+            card.css("[data-testid='text-location']::text").get()
+            or card.css("div.companyLocation::text").get()
+        )
+        location_value, location_mode_hint = _normalize_indeed_location_and_mode(raw_location)
+        salary_value = _extract_salary_from_chunks(salary_parts) or _extract_salary_from_chunks(metadata_parts)
+        metadata_text = _compact_whitespace(metadata_parts)
+        work_mode_hint = _compact_whitespace([location_mode_hint, metadata_text])
         parsed_item = {
             "title": _clean_value(
                 card.css("a.jcs-JobTitle span::text").get()
@@ -915,13 +1276,11 @@ def _parse_indeed_cards(selector, response_url):
                 or card.css("span.companyName::text").get(),
                 "",
             ),
-            "location": _clean_value(
-                card.css("[data-testid='text-location']::text").get()
-                or card.css("div.companyLocation::text").get(),
-                "",
-            ),
+            "location": _clean_value(location_value, ""),
             "link": requests.compat.urljoin(response_url, link) if link else "",
             "snippet": _compact_whitespace(snippet_parts),
+            "salary": _clean_value(salary_value, "Not listed"),
+            "work_mode_hint": work_mode_hint,
             "date": _clean_value(
                 card.css("span.date::text").get()
                 or card.css("span[data-testid='myJobsStateDate']::text").get(),
@@ -1039,6 +1398,20 @@ def _extract_indeed_links_from_detail(html_text, response_url):
         if external_destination:
             company_candidates.append(external_destination)
 
+        for attr_key, attr_value in (anchor.attrib or {}).items():
+            key_text = _clean_value(attr_key, "").lower()
+            if not key_text or ("url" not in key_text and "apply" not in key_text):
+                continue
+            candidate = requests.compat.urljoin(response_url, _decode_embedded_url(attr_value))
+            if not _is_absolute_http_url(candidate):
+                continue
+            external_candidate = _extract_external_destination_from_url(candidate)
+            if external_candidate:
+                company_candidates.append(external_candidate)
+                continue
+            if "indeed." not in _host_for_url(candidate):
+                company_candidates.append(candidate)
+
         host = _host_for_url(href)
         text_blob = _normalize_text(
             anchor.attrib.get("id"),
@@ -1061,6 +1434,7 @@ def _extract_indeed_links_from_detail(html_text, response_url):
 
     json_patterns = [
         r'"(?:applyUrl|companyApplyUrl|externalApplyUrl|externalUrl|companyPageUrl)"\s*:\s*"([^"]+)"',
+        r'"(?:applyLink|jobUrl|job_url|thirdPartyApplyUrl|redirectUrl|companyJobUrl|externalApplyLink)"\s*:\s*"([^"]+)"',
     ]
     for pattern in json_patterns:
         for match in re.finditer(pattern, html_text or "", flags=re.IGNORECASE):
@@ -1076,6 +1450,17 @@ def _extract_indeed_links_from_detail(html_text, response_url):
                     indeed_url = candidate
             else:
                 company_candidates.append(candidate)
+
+    for encoded in re.findall(r"https?%3A%2F%2F[^\s\"'<>]+", html_text or "", flags=re.IGNORECASE):
+        candidate = _decode_embedded_url(unquote(unquote(encoded)))
+        if not _is_absolute_http_url(candidate):
+            continue
+        external_candidate = _extract_external_destination_from_url(candidate)
+        if external_candidate:
+            company_candidates.append(external_candidate)
+            continue
+        if "indeed." not in _host_for_url(candidate):
+            company_candidates.append(candidate)
 
     company_url = ""
     deduped_candidates = []
@@ -1630,28 +2015,57 @@ def rank_and_filter_jobs(
         total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
 
         hard_reject_reason = sleeves_v2.detect_hard_reject(title, raw_text)
-        abroad_score, abroad_badges, _ = sleeves_v2.score_abroad(raw_text)
+        abroad_base_score, abroad_badges, _ = sleeves_v2.score_abroad(raw_text)
         abroad_meta = _extract_abroad_metadata(raw_text)
+        abroad_score, abroad_badges = _enhance_abroad_score(
+            abroad_base_score,
+            abroad_badges,
+            abroad_meta,
+            raw_text,
+        )
+        location_profile = _score_location_proximity(location, raw_text, work_mode)
+        location_proximity_score = float(location_profile.get("score", 0))
         synergy_score, synergy_hits = sleeves_v2.score_synergy(raw_text)
         penalty_points, penalty_reasons = sleeves_v2.evaluate_soft_penalties(raw_text)
 
+        weights = sleeves_v2.RANKING_WEIGHTS
         weighted_score = (
-            (abroad_score * sleeves_v2.RANKING_WEIGHTS["abroad_score"])
-            + (primary_score * sleeves_v2.RANKING_WEIGHTS["primary_sleeve_score"])
-            + (synergy_score * sleeves_v2.RANKING_WEIGHTS["synergy_score"])
+            (abroad_score * weights.get("abroad_score", 0.30))
+            + (primary_score * weights.get("primary_sleeve_score", 0.50))
+            + (synergy_score * weights.get("synergy_score", 0.20))
+            + (location_proximity_score * weights.get("location_proximity_score", 0.0))
         )
         location_gate_match = _passes_location_gate(raw_text, location_mode)
         location_penalty = 0 if location_gate_match else 4
         rank_score = (weighted_score * 20) - penalty_points - location_penalty
 
         primary_sleeve_config = sleeves_v2.SLEEVE_CONFIG[scoring_sleeve]
+        distance_km = location_profile.get("distance_km")
+        if distance_km is None:
+            proximity_reason = (
+                f"Main location {location_profile.get('main_location', 'Unknown')} "
+                f"(distance to {location_profile.get('anchor', HOME_LOCATION_LABEL)} unknown; "
+                f"proximity {location_proximity_score}/4)"
+            )
+        else:
+            proximity_reason = (
+                f"Main location {location_profile.get('main_location', 'Unknown')} "
+                f"({distance_km} km to {location_profile.get('anchor', HOME_LOCATION_LABEL)}; "
+                f"proximity {location_proximity_score}/4)"
+            )
+        travel_share_text = abroad_meta.get("percentage_text") or "n/a"
+        geo_scope_text = ", ".join((abroad_meta.get("locations") or [])[:4]) or "none"
         reasons = [
             (
                 f"Sleeve {scoring_sleeve} fit {primary_score}/5 "
                 f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} "
                 f"C:{sleeve_scores['C']} D:{sleeve_scores['D']} E:{sleeve_scores['E']})"
             ),
-            f"Abroad score {abroad_score}/4 via {', '.join(abroad_badges) or 'no explicit signal'}",
+            proximity_reason,
+            (
+                f"Abroad score {abroad_score}/4 via {', '.join(abroad_badges) or 'no explicit signal'} "
+                f"(travel share: {travel_share_text}; geo: {geo_scope_text})"
+            ),
             f"Keyword coverage {total_positive_hits} hits for sleeve {scoring_sleeve}",
         ]
         if language_notes:
@@ -1690,6 +2104,13 @@ def rank_and_filter_jobs(
                 "abroad_regions": abroad_meta["regions"],
                 "abroad_continents": abroad_meta["continents"],
                 "abroad_locations": abroad_meta["locations"],
+                "main_location": location_profile.get("main_location", location or "Unknown"),
+                "distance_from_home_km": location_profile.get("distance_km"),
+                "distance_anchor": location_profile.get("anchor", HOME_LOCATION_LABEL),
+                "distance_anchor_full": HOME_LOCATION_FULL_LABEL,
+                "distance_match_city": location_profile.get("matched_city"),
+                "proximity_score": location_proximity_score,
+                "proximity_tier": location_profile.get("tier"),
                 "decision": "FAIL",
                 "reasons": reasons,
                 "hard_reject_reason": hard_reject_reason or None,
@@ -1710,6 +2131,7 @@ def rank_and_filter_jobs(
                     "penalty_points": penalty_points,
                     "total_positive_hits": total_positive_hits,
                     "location_gate_match": location_gate_match,
+                    "location_proximity_score": location_proximity_score,
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
@@ -1719,6 +2141,8 @@ def rank_and_filter_jobs(
                     round(rank_score, 4),
                     weighted_score,
                     primary_score,
+                    location_proximity_score,
+                    abroad_score,
                     synergy_score,
                 ),
             }

@@ -183,6 +183,89 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("Europe", meta["continents"])
         self.assertIn("North America", meta["continents"])
 
+    def test_location_proximity_extracts_distance_from_den_bosch_anchor(self):
+        profile = main._score_location_proximity("Amsterdam, Netherlands")
+        self.assertIsNotNone(profile["distance_km"])
+        self.assertGreater(profile["distance_km"], 0)
+        self.assertEqual(profile["anchor"], "Home")
+
+    def test_ranking_prefers_jobs_closer_to_den_bosch_when_fit_is_equal(self):
+        snippet = "Event operations role with festival delivery and stakeholder coordination."
+        jobs = [
+            self._job("Near", snippet, location="Den Bosch, Netherlands"),
+            self._job("Far", snippet, location="Groningen, Netherlands"),
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="A",
+            min_target_score=3,
+            location_mode="nl_only",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 2)
+        self.assertEqual(ranked[0]["company"], "Near")
+        self.assertLess(
+            float(ranked[0].get("distance_from_home_km") or 0),
+            float(ranked[1].get("distance_from_home_km") or 999),
+        )
+
+    def test_output_contract_contains_location_proximity_fields(self):
+        jobs = [
+            self._job(
+                "LocationMeta",
+                "Workflow automation operations role with hybrid setup.",
+                title="Implementation Consultant",
+                location="Utrecht, Netherlands",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="B",
+            min_target_score=3,
+            location_mode="nl_only",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 1)
+        item = ranked[0]
+        self.assertIn("main_location", item)
+        self.assertIn("distance_from_home_km", item)
+        self.assertIn("distance_anchor", item)
+        self.assertIn("proximity_score", item)
+
+    def test_enhanced_abroad_score_includes_percentage_and_geo_scope(self):
+        raw_text = (
+            "Hybrid role with 40% international travel across EMEA, Germany and Spain."
+        )
+        meta = main._extract_abroad_metadata(raw_text)
+        score, badges = main._enhance_abroad_score(2, ["remote_or_hybrid"], meta, raw_text)
+        self.assertGreaterEqual(score, 3)
+        self.assertIn("travel_percentage", badges)
+        self.assertIn("geo_scope", badges)
+
+    def test_infer_work_mode_supports_dutch_terms(self):
+        self.assertEqual(main._infer_work_mode("Hybride werken in Amsterdam"), "Hybrid")
+        self.assertEqual(main._infer_work_mode("Op afstand in Nederland"), "Remote")
+        self.assertEqual(main._infer_work_mode("Op locatie in Utrecht"), "On-site")
+
+    def test_parse_indeed_cards_extracts_salary_and_mode_hint(self):
+        html = """
+        <div class="job_seen_beacon">
+          <h2 class="jobTitle"><a href="/rc/clk?jk=abc123">Role</a></h2>
+          <span data-testid="company-name">Company</span>
+          <div data-testid="text-location">Hybride werken in Amsterdam</div>
+          <div data-testid="attribute_snippet_testid">€ 3.500 - € 4.200 per maand</div>
+          <div class="job-snippet"><ul><li>Workflow en operations</li></ul></div>
+          <span class="date">Vandaag</span>
+        </div>
+        """
+        selector = main.Selector(text=html)
+        _, parsed = main._parse_indeed_cards(selector, "https://nl.indeed.com/jobs")
+        self.assertEqual(len(parsed), 1)
+        item = parsed[0]
+        self.assertEqual(item["location"], "Amsterdam")
+        self.assertEqual(item["salary"], "€ 3.500 - € 4.200 per maand")
+        self.assertIn("hybrid", item.get("work_mode_hint", "").lower())
+
     def test_profile_defaults_to_mvp(self):
         with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
             self.assertEqual(main._active_scrape_profile(), "mvp")
