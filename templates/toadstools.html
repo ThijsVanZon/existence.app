@@ -22,6 +22,12 @@
       --gold: #b4873e;
       --plum: #4e365f;
       --white: #ffffff;
+      --gyro-x: 0px;
+      --gyro-y: 0px;
+      --gyro-rotate-x: 0deg;
+      --gyro-rotate-y: 0deg;
+      --ambient-x: 0px;
+      --ambient-y: 0px;
     }
 
     * {
@@ -83,6 +89,12 @@
         );
       filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
       opacity: 0.88;
+      transform: translate3d(
+        calc(var(--gyro-x) * 0.35 + var(--ambient-x) * 0.2),
+        calc(var(--gyro-y) * -0.25 + var(--ambient-y) * 0.2),
+        0
+      );
+      animation: starSpin 18s linear infinite;
     }
 
     .hero-star.left {
@@ -91,6 +103,7 @@
 
     .hero-star.right {
       right: 0;
+      animation-direction: reverse;
     }
 
     .hero h1 {
@@ -150,6 +163,23 @@
         0 18px 36px rgba(39, 32, 24, 0.14);
       touch-action: manipulation;
       isolation: isolate;
+      transform: perspective(900px) rotateX(var(--gyro-rotate-x)) rotateY(var(--gyro-rotate-y));
+      transition: transform 190ms ease-out, filter 220ms ease-out;
+    }
+
+    .meadow::before {
+      content: "";
+      position: absolute;
+      inset: -22% -12%;
+      background:
+        radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.28), transparent 30%),
+        radial-gradient(circle at 70% 45%, rgba(180, 135, 62, 0.18), transparent 34%),
+        radial-gradient(circle at 20% 70%, rgba(47, 90, 68, 0.18), transparent 34%);
+      mix-blend-mode: soft-light;
+      pointer-events: none;
+      z-index: 1;
+      transform: translate3d(calc(var(--ambient-x) * 0.85), calc(var(--ambient-y) * 0.85), 0);
+      animation: meadowVeil 12s ease-in-out infinite alternate;
     }
 
     body.night-glow .meadow {
@@ -173,6 +203,12 @@
         repeating-radial-gradient(circle at 52% 100%, rgba(47, 90, 68, 0.32) 0 1px, transparent 1px 22px),
         repeating-radial-gradient(circle at 90% 100%, rgba(255, 255, 255, 0.26) 0 1px, transparent 1px 18px);
       z-index: 0;
+      transform: translate3d(
+        calc(var(--gyro-x) * 0.24 + var(--ambient-x) * 0.3),
+        calc(var(--gyro-y) * -0.18 + var(--ambient-y) * 0.3),
+        0
+      );
+      animation: myceliumPulse 7.5s ease-in-out infinite;
     }
 
     .mushroom {
@@ -186,10 +222,20 @@
       transition: transform 220ms ease;
       z-index: 2;
       -webkit-tap-highlight-color: transparent;
+      --m-base: translateX(0);
+      --m-rot: 0deg;
+      --mx: 0.32;
+      --my: 0.24;
+      transform: var(--m-base) rotate(var(--m-rot))
+        translate3d(
+          calc(var(--gyro-x) * var(--mx) + var(--ambient-x) * 0.22),
+          calc(var(--gyro-y) * var(--my) * -1 + var(--ambient-y) * 0.2),
+          0
+        );
     }
 
     .mushroom:active {
-      transform: translateY(-2px) scale(1.03);
+      filter: brightness(1.03);
     }
 
     .mushroom:focus-visible {
@@ -209,6 +255,7 @@
         linear-gradient(165deg, var(--cap-red), var(--cap-shadow));
       position: relative;
       box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.18);
+      animation: capBreath 4.6s ease-in-out infinite;
     }
 
     .mushroom .cap::before {
@@ -234,6 +281,7 @@
         linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(0, 0, 0, 0.1)),
         var(--stem);
       box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+      animation: stemSway 5.8s ease-in-out infinite;
     }
 
     .mushroom .label {
@@ -269,9 +317,32 @@
       height: min(31vw, 185px);
     }
 
-    .mushroom-1 { left: 45%; bottom: 4%; transform: translateX(-50%); }
-    .mushroom-2 { left: 14%; bottom: 6%; transform: rotate(-3deg); }
-    .mushroom-3 { right: 10%; bottom: 12%; transform: rotate(4deg); }
+    .mushroom-1 {
+      left: 45%;
+      bottom: 4%;
+      --m-base: translateX(-50%);
+      --m-rot: 0deg;
+      --mx: 0.22;
+      --my: 0.16;
+    }
+
+    .mushroom-2 {
+      left: 14%;
+      bottom: 6%;
+      --m-base: translateX(0);
+      --m-rot: -3deg;
+      --mx: 0.48;
+      --my: 0.3;
+    }
+
+    .mushroom-3 {
+      right: 10%;
+      bottom: 12%;
+      --m-base: translateX(0);
+      --m-rot: 4deg;
+      --mx: -0.5;
+      --my: 0.32;
+    }
 
     .spore {
       position: absolute;
@@ -300,6 +371,31 @@
         opacity: 0;
         transform: translate3d(var(--dx, 0px), var(--dy, -90px), 0) scale(0.25);
       }
+    }
+
+    @keyframes starSpin {
+      from { rotate: 0deg; }
+      to { rotate: 360deg; }
+    }
+
+    @keyframes meadowVeil {
+      0% { opacity: 0.38; }
+      100% { opacity: 0.58; }
+    }
+
+    @keyframes myceliumPulse {
+      0%, 100% { opacity: 0.46; }
+      50% { opacity: 0.68; }
+    }
+
+    @keyframes capBreath {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-2px) scale(1.02); }
+    }
+
+    @keyframes stemSway {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(1.25deg); }
     }
 
     .fact-panel {
@@ -403,6 +499,11 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .hero-star,
+      .mycelium,
+      .mushroom .cap,
+      .mushroom .stem,
+      .meadow::before,
       .mushroom,
       .control-btn,
       .spore {
@@ -452,6 +553,7 @@
       <p id="fact-text">Tap a mushroom or the meadow to release spores and reveal a fungal micro-story.</p>
       <div class="controls">
         <button id="mode-toggle" type="button" class="control-btn secondary">Toggle Bioluminescence</button>
+        <button id="motion-toggle" type="button" class="control-btn secondary">Enable Motion</button>
         <button id="clear-spores" type="button" class="control-btn">Clear Spores</button>
       </div>
     </section>
@@ -466,12 +568,18 @@
       const sporeCount = document.getElementById("spore-count");
       const pulseState = document.getElementById("pulse-state");
       const modeToggle = document.getElementById("mode-toggle");
+      const motionToggle = document.getElementById("motion-toggle");
       const clearSpores = document.getElementById("clear-spores");
       const mushrooms = Array.from(document.querySelectorAll(".mushroom"));
+      const rootStyle = document.documentElement.style;
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       let sporesTotal = 0;
       let touchPainting = false;
       let lastMoveStamp = 0;
+      let motionEnabled = false;
+      let orientationAttached = false;
+      let ambientTicker = 0;
 
       function updateSporeCount() {
         sporeCount.textContent = `Spores: ${sporesTotal}`;
@@ -481,7 +589,7 @@
         factText.textContent = message;
       }
 
-      function spawnSpores(clientX, clientY, amount) {
+      function spawnSpores(clientX, clientY, amount, countTowardsTotal = true) {
         const rect = meadow.getBoundingClientRect();
         const baseX = Math.max(0, Math.min(rect.width, clientX - rect.left));
         const baseY = Math.max(0, Math.min(rect.height, clientY - rect.top));
@@ -500,8 +608,91 @@
           window.setTimeout(() => spore.remove(), 2300);
         }
 
-        sporesTotal += count;
-        updateSporeCount();
+        if (countTowardsTotal) {
+          sporesTotal += count;
+          updateSporeCount();
+        }
+      }
+
+      function updateAmbientDrift() {
+        ambientTicker += 0.02;
+        const driftX = Math.sin(ambientTicker) * 4.5;
+        const driftY = Math.cos(ambientTicker * 0.82) * 3.2;
+        rootStyle.setProperty("--ambient-x", `${driftX.toFixed(2)}px`);
+        rootStyle.setProperty("--ambient-y", `${driftY.toFixed(2)}px`);
+        window.requestAnimationFrame(updateAmbientDrift);
+      }
+
+      function spawnAmbientSpores() {
+        if (document.hidden) {
+          return;
+        }
+        const rect = meadow.getBoundingClientRect();
+        const x = rect.left + (Math.random() * rect.width);
+        const y = rect.top + (rect.height * (0.44 + Math.random() * 0.48));
+        const amount = 1 + Math.floor(Math.random() * 3);
+        spawnSpores(x, y, amount, false);
+      }
+
+      function setGyroStyles(gamma, beta) {
+        const gx = Math.max(-18, Math.min(18, gamma || 0));
+        const gy = Math.max(-22, Math.min(22, beta || 0));
+        rootStyle.setProperty("--gyro-x", `${gx.toFixed(2)}px`);
+        rootStyle.setProperty("--gyro-y", `${gy.toFixed(2)}px`);
+        rootStyle.setProperty("--gyro-rotate-x", `${(-gy * 0.12).toFixed(2)}deg`);
+        rootStyle.setProperty("--gyro-rotate-y", `${(gx * 0.12).toFixed(2)}deg`);
+      }
+
+      function resetGyroStyles() {
+        rootStyle.setProperty("--gyro-x", "0px");
+        rootStyle.setProperty("--gyro-y", "0px");
+        rootStyle.setProperty("--gyro-rotate-x", "0deg");
+        rootStyle.setProperty("--gyro-rotate-y", "0deg");
+      }
+
+      function onDeviceOrientation(event) {
+        if (!motionEnabled) {
+          return;
+        }
+        if (typeof event.gamma !== "number" || typeof event.beta !== "number") {
+          return;
+        }
+        setGyroStyles(event.gamma * 0.8, event.beta * 0.55);
+      }
+
+      function disableMotion(message) {
+        motionEnabled = false;
+        motionToggle.textContent = "Enable Motion";
+        resetGyroStyles();
+        if (message) {
+          setFact(message);
+        }
+      }
+
+      async function enableMotion() {
+        if (!("DeviceOrientationEvent" in window)) {
+          disableMotion("This device/browser does not expose gyroscope events.");
+          return;
+        }
+
+        try {
+          if (typeof DeviceOrientationEvent.requestPermission === "function") {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission !== "granted") {
+              disableMotion("Motion permission was denied.");
+              return;
+            }
+          }
+          if (!orientationAttached) {
+            window.addEventListener("deviceorientation", onDeviceOrientation, true);
+            orientationAttached = true;
+          }
+          motionEnabled = true;
+          motionToggle.textContent = "Disable Motion";
+          setFact("Motion enabled. Tilt your phone to bend the meadow.");
+        } catch (error) {
+          disableMotion("Could not enable motion sensors on this device.");
+        }
       }
 
       function celebrateMushroom(button, x, y) {
@@ -560,12 +751,25 @@
         setFact(`Mood switched to ${mode}. Keep tapping to spread fresh spores.`);
       });
 
+      motionToggle.addEventListener("click", async () => {
+        if (motionEnabled) {
+          disableMotion("Motion disabled. Auto-animations still continue.");
+          return;
+        }
+        await enableMotion();
+      });
+
       clearSpores.addEventListener("click", () => {
         meadow.querySelectorAll(".spore").forEach((node) => node.remove());
         sporesTotal = 0;
         updateSporeCount();
         setFact("Spores cleared. The forest floor is ready for a new bloom.");
       });
+
+      if (!reduceMotion) {
+        window.setInterval(spawnAmbientSpores, 2100);
+        window.requestAnimationFrame(updateAmbientDrift);
+      }
     })();
   </script>
 </body>
