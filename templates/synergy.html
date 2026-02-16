@@ -8,14 +8,39 @@
   <style>
     .synergy-shell { max-width: 920px; margin: 18px auto 32px; }
     .synergy-column {
+      --synergy-inner-radius: 8px;
       border: none; border-radius: 22px; padding: 16px; display: grid; gap: 12px;
       background: linear-gradient(145deg, rgba(var(--white-rgb), 0.78), rgba(var(--white-rgb), 0.58));
       box-shadow: var(--shadow-soft); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
     }
     .synergy-sleeve-header {
-      margin: 0; padding: 8px 10px; border-radius: 10px; color: var(--white);
+      margin: 0; padding: 8px 10px; border-radius: var(--synergy-inner-radius); color: var(--white);
       text-shadow: 0 1px 2px rgba(var(--black-rgb), 0.18);
       background: linear-gradient(100deg, rgba(var(--amethyst-rgb), 0.84), rgba(var(--zircon-rgb), 0.68));
+    }
+    .synergy-sleeve-header-clickable {
+      cursor: pointer;
+    }
+    .synergy-sleeve-header-clickable:hover {
+      filter: brightness(1.02);
+    }
+    .synergy-sleeve-header-clickable:focus-visible {
+      outline: 2px solid rgba(var(--white-rgb), 0.92);
+      outline-offset: 2px;
+    }
+    .synergy-header-editor {
+      border: none;
+      border-radius: var(--synergy-inner-radius);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.8), rgba(var(--white-rgb), 0.62));
+    }
+    .synergy-header-editor-hint {
+      margin: 0;
+      color: var(--ink-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
     }
     .synergy-subtitle { margin: 0; color: var(--ink-muted); font-size: 0.92rem; font-weight: 600; }
     .synergy-row { display: grid; gap: 6px; }
@@ -23,33 +48,38 @@
     .synergy-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .synergy-editor-grid { display: grid; grid-template-columns: 180px 1fr; gap: 8px; }
     .synergy-row select, .synergy-row input, .synergy-inline input {
-      border: none; border-radius: 10px; padding: 8px 10px; color: var(--ink);
+      border: none; border-radius: var(--synergy-inner-radius); padding: 8px 10px; color: var(--ink);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.66));
     }
     .synergy-term-box {
-      border: none; border-radius: 14px; padding: 10px; display: grid; gap: 8px;
+      border: none; border-radius: var(--synergy-inner-radius); padding: 10px; display: grid; gap: 8px;
       background: linear-gradient(140deg, rgba(var(--amethyst-rgb), 0.06), rgba(var(--white-rgb), 0.45));
     }
     .synergy-term-chip {
       display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
-      padding: 4px 9px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--amethyst);
+      padding: 4px 4px 4px 9px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--amethyst);
       font-size: 0.8rem; font-weight: 600; white-space: nowrap;
     }
+    .synergy-term-chip-label { margin-right: 2px; }
     .synergy-term-chip button {
       border: none; border-radius: 999px; width: 18px; height: 18px; min-width: 18px;
       padding: 0; margin: 0; font-size: 0.8rem; line-height: 1;
       background: rgba(var(--amethyst-rgb), 0.2); color: var(--amethyst); opacity: 1;
       transform: none; transition: background 0.14s ease;
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .synergy-term-chip button:hover { transform: none; filter: none; background: rgba(var(--amethyst-rgb), 0.26); }
     .synergy-status {
-      border: none; border-radius: 12px; padding: 10px; min-height: 44px; display: flex; align-items: center;
+      border: none; border-radius: var(--synergy-inner-radius); padding: 10px; min-height: 44px; display: flex; align-items: center;
       font-size: 0.9rem; font-weight: 600; background: rgba(var(--heliodor-rgb), 0.18); color: rgba(var(--black-rgb), 0.82);
     }
     .synergy-status.is-success { background: rgba(var(--zircon-rgb), 0.2); }
     .synergy-status.is-error { background: rgba(var(--rubellite-rgb), 0.16); }
     .synergy-progress, .synergy-results {
-      border: none; border-radius: 14px; padding: 12px; display: grid; gap: 10px;
+      border: none; border-radius: var(--synergy-inner-radius); padding: 12px; display: grid; gap: 10px;
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.76), rgba(var(--white-rgb), 0.52));
     }
     .synergy-progress h3, .synergy-results h3 { margin: 0; font-size: 1rem; }
@@ -61,7 +91,7 @@
     .synergy-event-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 0.84rem; }
     .synergy-empty { color: var(--ink-muted); font-size: 0.86rem; font-weight: 600; }
     .synergy-result-list { display: grid; gap: 10px; max-height: 760px; overflow-y: auto; padding-right: 4px; }
-    .synergy-job-card { border: none; border-radius: 12px; padding: 10px; display: grid; gap: 7px; background: linear-gradient(145deg, rgba(var(--white-rgb), 0.84), rgba(var(--white-rgb), 0.62)); }
+    .synergy-job-card { border: none; border-radius: var(--synergy-inner-radius); padding: 10px; display: grid; gap: 7px; background: linear-gradient(145deg, rgba(var(--white-rgb), 0.84), rgba(var(--white-rgb), 0.62)); }
     .synergy-job-title { margin: 0; font-size: 0.98rem; color: var(--ink); }
     .synergy-job-meta { margin: 0; color: var(--ink-muted); font-size: 0.84rem; font-weight: 600; }
     .synergy-job-links { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -105,27 +135,39 @@
 
   <main class="synergy-shell">
     <section class="synergy-column">
-      <header class="synergy-sleeve-header">
-        <span id="headerName" class="sleeve-header-name">Supply Chains & Ecosystems</span>
-        <span id="headerCode" class="sleeve-header-code">Career Sleeve D</span>
+      <header
+        id="headerEditorTrigger"
+        class="synergy-sleeve-header synergy-sleeve-header-clickable"
+        role="button"
+        tabindex="0"
+        aria-label="Set sleeve letter and title"
+      >
+        <span id="headerName" class="sleeve-header-name">Select Letter &amp; Type Title</span>
+        <span id="headerCode" class="sleeve-header-code">CAREER SLEEVE ?</span>
       </header>
-      <p class="synergy-subtitle">Load a saved sleeve, then edit letter/title/terms and scrape in one column.</p>
+      <p class="synergy-subtitle">Click the header to set letter and title, press Enter to confirm, then scrape.</p>
+
+      <div id="headerEditorPanel" class="synergy-header-editor" hidden>
+        <div class="synergy-editor-grid">
+          <select id="sleeveLetterSelect" aria-label="Sleeve letter">
+            <option value="">Select sleeve letter</option>
+          </select>
+          <input
+            id="sleeveTitleInput"
+            type="text"
+            maxlength="120"
+            autocomplete="off"
+            placeholder="Type sleeve title..."
+          >
+        </div>
+        <p class="synergy-header-editor-hint">Press Enter to confirm.</p>
+      </div>
 
       <div class="synergy-row">
         <label>Workspace actions</label>
         <div class="synergy-inline">
           <button id="loadSleeveBtn" type="button">Load saved sleeve</button>
           <button id="newSleeveBtn" type="button">New empty</button>
-        </div>
-      </div>
-
-      <div class="synergy-row">
-        <label for="sleeveLetterSelect">Sleeve identity</label>
-        <div class="synergy-editor-grid">
-          <select id="sleeveLetterSelect" aria-label="Sleeve letter">
-            <option value="">Select sleeve letter</option>
-          </select>
-          <input id="sleeveTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type sleeve title...">
         </div>
       </div>
 
@@ -195,6 +237,8 @@
         resultList: document.getElementById("resultList"),
         headerName: document.getElementById("headerName"),
         headerCode: document.getElementById("headerCode"),
+        headerEditorTrigger: document.getElementById("headerEditorTrigger"),
+        headerEditorPanel: document.getElementById("headerEditorPanel"),
         loadDialog: document.getElementById("loadDialog"),
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
@@ -217,7 +261,6 @@
         });
         return out;
       };
-      const findFixed = (l) => (state.catalog.fixed || []).find((x) => x.letter === l) || null;
       const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
       const collectEditor = () => ({ letter: normalizeLetter(els.sleeveLetterSelect.value), title: String(els.sleeveTitleInput.value || "").trim(), terms: dedupeTerms(state.terms) });
 
@@ -241,11 +284,12 @@
           const chip = document.createElement("span");
           chip.className = "synergy-term-chip";
           const label = document.createElement("span");
+          label.className = "synergy-term-chip-label";
           label.textContent = term;
           chip.appendChild(label);
           const remove = document.createElement("button");
           remove.type = "button";
-          remove.textContent = "x";
+          remove.textContent = "×";
           remove.setAttribute("aria-label", `Remove ${term}`);
           remove.addEventListener("click", () => {
             state.terms = state.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
@@ -284,17 +328,33 @@
         if (current) els.sleeveLetterSelect.value = current;
       }
 
+      function openHeaderEditor() {
+        if (els.headerEditorPanel) {
+          els.headerEditorPanel.hidden = false;
+        }
+        if (els.sleeveLetterSelect) {
+          els.sleeveLetterSelect.focus();
+        }
+      }
+
+      function closeHeaderEditor() {
+        if (els.headerEditorPanel) {
+          els.headerEditorPanel.hidden = true;
+        }
+      }
+
+      function confirmHeaderEditor() {
+        updateHeaderPreview();
+        updateActionState();
+        closeHeaderEditor();
+      }
+
       function updateHeaderPreview() {
         const letter = normalizeLetter(els.sleeveLetterSelect.value);
         const inputTitle = String(els.sleeveTitleInput.value || "").trim();
-        let title = inputTitle;
-        if (!title && letter) {
-          const fixed = findFixed(letter);
-          if (fixed && fixed.title) title = fixed.title;
-        }
-        if (!title) title = "Supply Chains & Ecosystems";
+        const title = inputTitle || "Select Letter & Type Title";
         els.headerName.textContent = title;
-        els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve";
+        els.headerCode.textContent = letter ? `CAREER SLEEVE ${letter}` : "CAREER SLEEVE ?";
       }
 
       function updateActionState() {
@@ -460,6 +520,7 @@
               btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
               btn.addEventListener("click", () => {
                 applySleeveToEditor(sleeve);
+                closeHeaderEditor();
                 closeLoadDialog();
               });
               wrap.appendChild(btn);
@@ -626,6 +687,7 @@
           renderTerms();
           updateHeaderPreview();
           updateActionState();
+          closeHeaderEditor();
           setStatus("Editor reset. Configure a sleeve and scrape.", "info");
         });
         els.addTermBtn.addEventListener("click", () => {
@@ -639,8 +701,39 @@
           if (event.key === "Enter") { event.preventDefault(); els.addTermBtn.click(); }
         });
         els.clearTermsBtn.addEventListener("click", () => { state.terms = []; renderTerms(); });
-        els.sleeveLetterSelect.addEventListener("change", () => { updateHeaderPreview(); updateActionState(); });
+        els.headerEditorTrigger.addEventListener("click", () => {
+          openHeaderEditor();
+        });
+        els.headerEditorTrigger.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openHeaderEditor();
+          }
+        });
+        els.sleeveLetterSelect.addEventListener("change", () => {
+          updateHeaderPreview();
+          updateActionState();
+          els.sleeveTitleInput.focus();
+        });
         els.sleeveTitleInput.addEventListener("input", updateHeaderPreview);
+        els.sleeveLetterSelect.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            confirmHeaderEditor();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            closeHeaderEditor();
+          }
+        });
+        els.sleeveTitleInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            confirmHeaderEditor();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            closeHeaderEditor();
+          }
+        });
         els.saveSleeveBtn.addEventListener("click", () => saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error")));
         els.deleteSleeveBtn.addEventListener("click", () => deleteCurrentSleeve().catch(() => setStatus("Could not delete sleeve.", "error")));
         els.scrapeBtn.addEventListener("click", () => runScrape());
