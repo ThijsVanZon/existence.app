@@ -8,3 +8,5 @@ if BASE_DIR not in sys.path:
 
 from main import app as application
 
+# Compatibility alias for cPanel configs that still use "app" as entry point.
+app = application
