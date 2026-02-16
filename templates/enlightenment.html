@@ -576,13 +576,6 @@
       metrics.appendChild(createBadge('metric-badge metric-maybe', `MAYBE ${summary.maybe_count || 0}`));
       metrics.appendChild(createBadge('metric-badge metric-fail', `FAIL ${summary.fail_count || 0}`));
       summaryWrap.appendChild(metrics);
-
-      const details = document.createElement('p');
-      const topReason = Array.isArray(summary.top_fail_reasons) && summary.top_fail_reasons.length
-        ? `${summary.top_fail_reasons[0].reason} (${summary.top_fail_reasons[0].count})`
-        : 'none';
-      details.textContent = `Sources: ${sourcesText || 'none'} | Top fail reason: ${topReason}`;
-      summaryWrap.appendChild(details);
     }
 
     function clearSleevePager(sleeveKey) {
@@ -636,6 +629,42 @@
         ${recent.length ? `<ul class="progress-list">${listItems}</ul>` : ''}
       `;
       progressDiv.hidden = false;
+    }
+
+    function setProgressOutcome(sleeveKey, title, lines = [], tone = 'info') {
+      const progressDiv = document.getElementById(`progress-${sleeveKey}`);
+      if (!progressDiv) {
+        return;
+      }
+      let outcome = progressDiv.querySelector('.progress-outcome');
+      if (!outcome) {
+        outcome = document.createElement('div');
+        progressDiv.appendChild(outcome);
+      }
+      outcome.className = `progress-outcome progress-outcome-${tone}`;
+      outcome.innerHTML = '';
+
+      const heading = document.createElement('div');
+      heading.className = 'progress-outcome-title';
+      heading.textContent = title;
+      outcome.appendChild(heading);
+
+      const safeLines = Array.isArray(lines)
+        ? lines.map(line => String(line || '').trim()).filter(Boolean)
+        : [];
+      if (safeLines.length) {
+        const list = document.createElement('ul');
+        list.className = 'progress-outcome-list';
+        safeLines.forEach(line => {
+          const item = document.createElement('li');
+          item.textContent = line;
+          list.appendChild(item);
+        });
+        outcome.appendChild(list);
+      }
+
+      progressDiv.hidden = false;
+      progressDiv.scrollTop = progressDiv.scrollHeight;
     }
 
     function startProgressPolling(sleeveKey, runId) {
@@ -1023,7 +1052,7 @@
       stopProgressPolling(sleeveKey);
       startProgressPolling(sleeveKey, runId);
       errorDiv.style.display = 'none';
-      status.textContent = `Scraping Career Sleeve ${sleeveKey} with selected filters...`;
+      status.textContent = '';
 
       fetch(scrapeUrl, { signal: controller.signal })
         .then(async response => {
@@ -1073,12 +1102,27 @@
         })
         .then(payload => {
           const data = payload.jobs;
+          const profileText = String(payload.profile || '').toUpperCase();
+          const finalTitle = `Finished Career Sleeve ${sleeveKey}${profileText ? ` (${profileText})` : ''}.`;
+          const progressLines = [];
+
           if (payload.summary) {
-            status.textContent = `Finished Career Sleeve ${sleeveKey} (${String(payload.profile || '').toUpperCase()}).`;
             renderSleeveSummary(sleeveKey, payload.summary, payload.sourcesUsed);
+            if (payload.sourcesUsed) {
+              progressLines.push(`Sources used: ${payload.sourcesUsed}`);
+            }
+            if (Array.isArray(payload.summary.source_errors) && payload.summary.source_errors.length) {
+              progressLines.push(`Source diagnostics: ${payload.summary.source_errors.slice(0, 2).join(' | ')}`);
+            } else if (Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
+              const topReason = payload.summary.top_fail_reasons[0];
+              progressLines.push(`Top fail reason: ${topReason.reason} (${topReason.count})`);
+            }
           } else {
-            status.textContent = `Finished Career Sleeve ${sleeveKey}. Found ${data.length} relevant jobs. Sources: ${payload.sourcesUsed}.`;
+            if (payload.sourcesUsed) {
+              progressLines.push(`Sources used: ${payload.sourcesUsed}`);
+            }
           }
+
           if (!data.length) {
             clearSleevePager(sleeveKey);
             const sourceErrors = payload.summary && Array.isArray(payload.summary.source_errors)
@@ -1087,32 +1131,38 @@
             if (sourceErrors.length) {
               const blocked = sourceErrors.some(error => String(error || '').toLowerCase().includes('blocked_detected'));
               if (blocked) {
-                resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}. Indeed is blocking this server IP right now. Retry later, or configure SCRAPE_HTTP_PROXY/SCRAPE_HTTPS_PROXY on the server.`;
+                progressLines.push('Indeed is blocking this server IP right now.');
+                progressLines.push('Retry later, or configure SCRAPE_HTTP_PROXY / SCRAPE_HTTPS_PROXY on the server.');
               } else {
-                resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}.`;
+                progressLines.push('No jobs matched this Career Sleeve with current source diagnostics.');
               }
-              return;
-            }
-            if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
+            } else if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
               const firstReason = payload.summary.top_fail_reasons[0];
-              resultsDiv.textContent = `No jobs matched this Career Sleeve with the current filters. Top fail reason: ${firstReason.reason} (${firstReason.count}).`;
+              progressLines.push(`No jobs matched with current filters.`);
+              progressLines.push(`Top fail reason: ${firstReason.reason} (${firstReason.count}).`);
             } else {
-              resultsDiv.textContent = 'No jobs matched this Career Sleeve with the current filters. Try broadening terms.';
+              progressLines.push('No jobs matched this Career Sleeve with current filters.');
+              progressLines.push('Try broadening terms.');
             }
+            resultsDiv.textContent = '';
+            setProgressOutcome(sleeveKey, finalTitle, progressLines, sourceErrors.length ? 'warn' : 'info');
             return;
           }
 
           sleevePagination[sleeveKey] = { jobs: data, page: 1 };
           renderSleevePage(sleeveKey, 1);
+          progressLines.unshift(`Returned ${data.length} job result${data.length === 1 ? '' : 's'}.`);
+          setProgressOutcome(sleeveKey, finalTitle, progressLines, 'ok');
         })
         .catch(error => {
           status.textContent = '';
           stopProgressPolling(sleeveKey);
           const isTimeout = error.name === 'AbortError';
-          errorDiv.textContent = isTimeout
+          const message = isTimeout
             ? `Scrape for Career Sleeve ${sleeveKey} timed out after 120 seconds.`
             : `An error occurred while scraping jobs: ${error.message}`;
-          errorDiv.style.display = 'block';
+          errorDiv.style.display = 'none';
+          setProgressOutcome(sleeveKey, 'SCRAPE ERROR', [message], 'error');
         })
         .finally(() => {
           clearTimeout(timeoutId);
