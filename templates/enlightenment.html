@@ -24,7 +24,7 @@
 
   <section class="scrape-toolbar" hidden>
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
-    <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed NL only, no auto failover).</p>
+    <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed + LinkedIn direct sources, NL focus).</p>
     <div class="toolbar-grid">
       <div class="toolbar-field">
         <label for="global-location">Location scope</label>
@@ -186,12 +186,14 @@
     const TERMS_STORAGE_PREFIX = 'existence.sleeve_terms.v2.';
     const sleeveControllers = {};
     const sleeveProgressPollers = {};
+    const sourceHealthTimers = {};
     const sleeveTermState = {};
     let activeScrapeSleeve = '';
     const fallbackConfig = {
       profile: 'mvp',
       sources: [
         { id: 'indeed_web', label: 'Indeed (direct scraping)', available: true, default_enabled: true, reason: '' },
+        { id: 'linkedin_web', label: 'LinkedIn (direct scraping)', available: true, default_enabled: true, reason: '' },
       ],
       sleeve_terms_defaults: {
         A: [
@@ -239,7 +241,7 @@
         ]
       },
       defaults: {
-        sources: ['indeed_web'],
+        sources: ['indeed_web', 'linkedin_web'],
         location_mode: 'nl_only',
         strict: false,
         max_results: DEFAULT_FETCH_LIMIT,
@@ -358,7 +360,7 @@
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'term-chip-remove';
-        remove.textContent = '×';
+        remove.textContent = 'x';
         remove.setAttribute('aria-label', `Remove term ${term}`);
         remove.title = 'Remove term';
         remove.addEventListener('click', () => removeSleeveTerm(sleeveKey, index));
@@ -477,11 +479,20 @@
       }
     }
 
-    function buildIndeedPostingFallbackUrl(job) {
-      const company = String(job?.company || '').trim();
-      const title = String(job?.title || '').trim();
-      const query = `${title} ${company}`.trim() || 'job';
-      return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Netherlands')}`;
+    function isLinkedInUrl(url) {
+      if (!isValidHttpUrl(url)) {
+        return false;
+      }
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        return host.includes('linkedin.com') || host.endsWith('lnkd.in');
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function isPlatformUrl(url) {
+      return isIndeedUrl(url) || isLinkedInUrl(url);
     }
 
     function safeDecodeUrlPart(value) {
@@ -500,7 +511,7 @@
       return decoded;
     }
 
-    function extractExternalFromIndeedUrl(url) {
+    function extractExternalFromPlatformUrl(url) {
       if (!isValidHttpUrl(url)) {
         return '';
       }
@@ -517,7 +528,7 @@
             continue;
           }
           const host = new URL(decoded).hostname.toLowerCase();
-          if (!host.includes('indeed.')) {
+          if (!host.includes('indeed.') && !host.includes('linkedin.com') && !host.endsWith('lnkd.in')) {
             return decoded;
           }
         }
@@ -527,13 +538,16 @@
       return '';
     }
 
-    function buildCompanyResolverUrl(companyUrl, indeedUrl, jobUrl) {
+    function buildCompanyResolverUrl(companyUrl, indeedUrl, linkedinUrl, jobUrl) {
       const params = new URLSearchParams();
       if (isValidHttpUrl(companyUrl)) {
         params.set('company_url', companyUrl);
       }
       if (isValidHttpUrl(indeedUrl)) {
         params.set('indeed_url', indeedUrl);
+      }
+      if (isValidHttpUrl(linkedinUrl)) {
+        params.set('linkedin_url', linkedinUrl);
       }
       if (isValidHttpUrl(jobUrl)) {
         params.set('job_url', jobUrl);
@@ -594,6 +608,28 @@
         clearInterval(active);
         delete sleeveProgressPollers[sleeveKey];
       }
+    }
+
+    function stopSourceHealthTimer(sleeveKey) {
+      const active = sourceHealthTimers[sleeveKey];
+      if (active) {
+        clearInterval(active);
+        delete sourceHealthTimers[sleeveKey];
+      }
+    }
+
+    function formatCooldownSeconds(seconds) {
+      const value = Math.max(0, Number(seconds || 0));
+      if (!Number.isFinite(value)) {
+        return '0s';
+      }
+      const total = Math.floor(value);
+      const mins = Math.floor(total / 60);
+      const secs = total % 60;
+      if (mins > 0) {
+        return `${mins}m ${secs}s`;
+      }
+      return `${secs}s`;
     }
 
     function formatProgressTime(value) {
@@ -662,6 +698,96 @@
         });
         outcome.appendChild(list);
       }
+
+      progressDiv.hidden = false;
+      progressDiv.scrollTop = progressDiv.scrollHeight;
+    }
+
+    function renderSourceHealthInProgress(sleeveKey, sourceHealth, onRetry) {
+      stopSourceHealthTimer(sleeveKey);
+      const progressDiv = document.getElementById(`progress-${sleeveKey}`);
+      if (!progressDiv) {
+        return;
+      }
+      const healthEntries = sourceHealth && typeof sourceHealth === 'object'
+        ? Object.entries(sourceHealth)
+        : [];
+      if (!healthEntries.length) {
+        return;
+      }
+
+      let wrap = progressDiv.querySelector('.progress-source-health');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.className = 'progress-source-health';
+        progressDiv.appendChild(wrap);
+      }
+      wrap.innerHTML = '';
+
+      healthEntries.forEach(([sourceId, health]) => {
+        const state = String(health?.state || 'ok').toLowerCase();
+        const label = sourceLabelMap()[sourceId] || sourceId;
+        const stateRow = document.createElement('div');
+        stateRow.className = `progress-source-state progress-source-state-${state}`;
+        stateRow.textContent = `${label}: ${state.toUpperCase()}`;
+        wrap.appendChild(stateRow);
+
+        const lastError = String(health?.last_error || '').trim();
+        if (lastError) {
+          const errorRow = document.createElement('div');
+          errorRow.className = 'progress-source-error';
+          errorRow.textContent = `Last error: ${lastError}`;
+          wrap.appendChild(errorRow);
+        }
+
+        const nextRetryAt = Number(health?.next_retry_at || 0);
+        const cooldownFromApi = Number(health?.cooldown_seconds_remaining || 0);
+        const hasCooldown = nextRetryAt > 0 || cooldownFromApi > 0;
+        if (!hasCooldown) {
+          return;
+        }
+
+        const cooldownRow = document.createElement('div');
+        cooldownRow.className = 'progress-source-cooldown';
+        const cooldownLabel = document.createElement('span');
+        cooldownLabel.className = 'progress-source-cooldown-label';
+        cooldownLabel.textContent = 'Cooldown remaining:';
+        const cooldownValue = document.createElement('strong');
+        cooldownValue.className = 'progress-source-cooldown-value';
+        cooldownRow.appendChild(cooldownLabel);
+        cooldownRow.appendChild(cooldownValue);
+        wrap.appendChild(cooldownRow);
+
+        const retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'progress-retry-btn';
+        retryBtn.textContent = 'Retry source';
+        retryBtn.addEventListener('click', () => {
+          if (typeof onRetry === 'function') {
+            onRetry();
+          }
+        });
+        wrap.appendChild(retryBtn);
+
+        const updateCooldown = () => {
+          const now = Math.floor(Date.now() / 1000);
+          const byNextRetry = nextRetryAt > 0 ? Math.max(0, nextRetryAt - now) : 0;
+          const remaining = byNextRetry || Math.max(0, Math.floor(cooldownFromApi));
+          cooldownValue.textContent = formatCooldownSeconds(remaining);
+          retryBtn.disabled = remaining > 0;
+          retryBtn.textContent = remaining > 0
+            ? `Retry source in ${formatCooldownSeconds(remaining)}`
+            : 'Retry source now';
+          if (remaining <= 0) {
+            stopSourceHealthTimer(sleeveKey);
+          }
+        };
+
+        updateCooldown();
+        if (nextRetryAt > 0) {
+          sourceHealthTimers[sleeveKey] = setInterval(updateCooldown, 1000);
+        }
+      });
 
       progressDiv.hidden = false;
       progressDiv.scrollTop = progressDiv.scrollHeight;
@@ -768,25 +894,40 @@
       const primaryLink = isValidHttpUrl(job.link || job.url) ? (job.link || job.url) : '';
       const canonicalIndeedUrl = isValidHttpUrl(job.indeed_url)
         ? job.indeed_url
-        : (isValidHttpUrl(primaryLink) ? primaryLink : '');
-      const indeedUrl = canonicalIndeedUrl || buildIndeedPostingFallbackUrl(job);
+        : (isIndeedUrl(primaryLink) ? primaryLink : '');
+      const canonicalLinkedInUrl = isValidHttpUrl(job.linkedin_url)
+        ? job.linkedin_url
+        : (isLinkedInUrl(primaryLink) ? primaryLink : '');
+      const platformIndeedUrl = canonicalIndeedUrl || (isIndeedUrl(primaryLink) ? primaryLink : '');
+      const platformLinkedInUrl = canonicalLinkedInUrl || (isLinkedInUrl(primaryLink) ? primaryLink : '');
       let companyUrl = isValidHttpUrl(job.company_url) ? job.company_url : '';
-      if (isIndeedUrl(companyUrl)) {
+      if (isPlatformUrl(companyUrl)) {
         companyUrl = '';
       }
-      if (companyUrl && indeedUrl && companyUrl === indeedUrl) {
+      if (
+        companyUrl
+        && (
+          (platformIndeedUrl && companyUrl === platformIndeedUrl)
+          || (platformLinkedInUrl && companyUrl === platformLinkedInUrl)
+        )
+      ) {
         companyUrl = '';
       }
       if (!companyUrl) {
-        companyUrl = extractExternalFromIndeedUrl(canonicalIndeedUrl);
+        companyUrl = extractExternalFromPlatformUrl(platformIndeedUrl) || extractExternalFromPlatformUrl(platformLinkedInUrl);
       }
-      if (companyUrl && isIndeedUrl(companyUrl)) {
+      if (companyUrl && isPlatformUrl(companyUrl)) {
         companyUrl = '';
       }
-      if (!companyUrl && isValidHttpUrl(primaryLink) && !isIndeedUrl(primaryLink)) {
+      if (!companyUrl && isValidHttpUrl(primaryLink) && !isPlatformUrl(primaryLink)) {
         companyUrl = primaryLink;
       }
-      const companyResolverUrl = buildCompanyResolverUrl(companyUrl, canonicalIndeedUrl, primaryLink);
+      const companyResolverUrl = buildCompanyResolverUrl(
+        companyUrl,
+        platformIndeedUrl,
+        platformLinkedInUrl,
+        primaryLink
+      );
 
       const header = document.createElement('div');
       header.className = 'job-card-header';
@@ -857,20 +998,32 @@
       actions.className = 'job-actions';
       actions.appendChild(
         createActionLink(
-          'Open company site',
+          'Company URL',
           companyResolverUrl || '#',
           'job-link-company',
           Boolean(companyResolverUrl)
         )
       );
-      actions.appendChild(
-        createActionLink(
-          'Open Indeed',
-          indeedUrl || buildIndeedPostingFallbackUrl(job),
-          'job-link-indeed',
-          true
-        )
-      );
+      if (platformIndeedUrl) {
+        actions.appendChild(
+          createActionLink(
+            'Indeed URL',
+            platformIndeedUrl,
+            'job-link-indeed',
+            true
+          )
+        );
+      }
+      if (platformLinkedInUrl) {
+        actions.appendChild(
+          createActionLink(
+            'LinkedIn URL',
+            platformLinkedInUrl,
+            'job-link-linkedin',
+            true
+          )
+        );
+      }
       card.appendChild(actions);
 
       return card;
@@ -903,7 +1056,7 @@
       ];
       const profileHint = document.getElementById('profile-hint');
       profileHint.textContent = profile === 'mvp'
-        ? 'Active profile: MVP (Indeed NL only, no auto failover).'
+        ? 'Active profile: MVP (Indeed + LinkedIn direct sources, NL focus).'
         : `Active profile: ${profile.toUpperCase()}.`;
 
       const locationSelect = document.getElementById('global-location');
@@ -933,11 +1086,16 @@
       const unavailableSources = (scrapeConfig.sources || []).filter(source => !source.available);
       availableSources.forEach(source => {
         const checkedByDefault = (defaults.sources || []).includes(source.id) || availableSources.length === 1;
+        const sourceState = String(source.state || 'ok').toLowerCase();
+        const sourceCooldown = Number(source.cooldown_seconds_remaining || 0);
+        const sourceStateText = sourceState === 'ok'
+          ? 'OK'
+          : `${sourceState.toUpperCase()}${sourceCooldown > 0 ? ` (${formatCooldownSeconds(sourceCooldown)})` : ''}`;
         const label = document.createElement('label');
         label.className = 'source-option source-pill';
         label.innerHTML = `
           <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault ? 'checked' : ''} ${profile === 'mvp' ? 'disabled' : ''}>
-          ${source.label}
+          ${source.label} - ${sourceStateText}
         `;
         sourceWrap.appendChild(label);
       });
@@ -958,7 +1116,7 @@
       if (!availableSources.length) {
         sourceNote.textContent = 'No sources are currently available. Check API keys on the server.';
       } else if (profile === 'mvp') {
-        sourceNote.textContent = `MVP mode: using ${availableSources[0].label} only.`;
+        sourceNote.textContent = `MVP mode: using direct sources (${availableSources.map(source => source.label).join(', ')}).`;
       } else {
         sourceNote.textContent = `Recommended: ${availableSources
           .filter(source => (defaults.sources || []).includes(source.id))
@@ -977,17 +1135,34 @@
         .filter(Boolean);
     }
 
-    function buildScrapeUrl(sleeveKey, runId) {
-      const sources = ['indeed_web'];
+    function buildScrapeUrl(sleeveKey, runId, options = {}) {
+      const allowedSourceIds = ['indeed_web', 'linkedin_web'];
+      let sources = selectedSources().filter(sourceId => allowedSourceIds.includes(sourceId));
+      if (!sources.length) {
+        const defaultSources = Array.isArray(scrapeConfig.defaults?.sources) ? scrapeConfig.defaults.sources : [];
+        sources = defaultSources.filter(sourceId => allowedSourceIds.includes(sourceId));
+      }
+      if (!sources.length) {
+        sources = (scrapeConfig.sources || [])
+          .filter(source => source.available && allowedSourceIds.includes(source.id))
+          .map(source => source.id);
+      }
+      if (!sources.length) {
+        sources = ['indeed_web', 'linkedin_web'];
+      }
       const maxResults = Math.max(
         DEFAULT_FETCH_LIMIT,
         Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
       );
-      const hasDirectScrape = sources.includes('indeed_web');
-      const tunedMaxPages = hasDirectScrape ? 1 : 3;
-      const tunedTargetRaw = hasDirectScrape
-        ? Math.max(30, Math.min(90, maxResults * 2))
-        : Math.max(50, Math.min(130, maxResults * 3));
+      const forceSourceRetry = Boolean(options && options.forceSourceRetry);
+      const hasIndeed = sources.includes('indeed_web');
+      const hasLinkedIn = sources.includes('linkedin_web');
+      const tunedMaxPages = hasIndeed && hasLinkedIn ? 2 : (hasIndeed ? 1 : 3);
+      const tunedTargetRaw = hasIndeed && hasLinkedIn
+        ? Math.max(50, Math.min(150, maxResults * 3))
+        : (hasIndeed
+          ? Math.max(30, Math.min(90, maxResults * 2))
+          : Math.max(40, Math.min(120, maxResults * 3)));
       const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
       if (!queryTerms.length) {
         const errorDiv = document.getElementById(`error-${sleeveKey}`);
@@ -1006,8 +1181,9 @@
       params.set('target_raw', String(tunedTargetRaw));
       params.set('rps', '0.35');
       params.set('detail_rps', '0.20');
-      params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
-      params.set('refresh', '0');
+      params.set('no_new_unique_pages', hasIndeed && !hasLinkedIn ? '1' : '2');
+      params.set('refresh', forceSourceRetry ? '1' : '0');
+      params.set('retry_source', forceSourceRetry ? '1' : '0');
       params.set('failover', '0');
       params.set('sources', sources.join(','));
       params.set('run_id', String(runId || ''));
@@ -1017,7 +1193,7 @@
       return `/scrape?${params.toString()}`;
     }
 
-    function startScraping(sleeveKey) {
+    function startScraping(sleeveKey, options = {}) {
       const resultsDiv = document.getElementById(`results-${sleeveKey}`);
       const errorDiv = document.getElementById(`error-${sleeveKey}`);
       const status = document.getElementById(`status-${sleeveKey}`);
@@ -1031,7 +1207,7 @@
         errorDiv.style.display = 'block';
         return;
       }
-      const scrapeUrl = buildScrapeUrl(sleeveKey, runId);
+      const scrapeUrl = buildScrapeUrl(sleeveKey, runId, options);
       if (!scrapeUrl) {
         return;
       }
@@ -1050,6 +1226,7 @@
       summaryDiv.innerHTML = '';
       clearSleevePager(sleeveKey);
       stopProgressPolling(sleeveKey);
+      stopSourceHealthTimer(sleeveKey);
       startProgressPolling(sleeveKey, runId);
       errorDiv.style.display = 'none';
       status.textContent = '';
@@ -1131,7 +1308,7 @@
             if (sourceErrors.length) {
               const blocked = sourceErrors.some(error => String(error || '').toLowerCase().includes('blocked_detected'));
               if (blocked) {
-                progressLines.push('Indeed is blocking this server IP right now.');
+                progressLines.push('One or more sources are blocking this server IP right now.');
                 progressLines.push('Retry later, or configure SCRAPE_HTTP_PROXY / SCRAPE_HTTPS_PROXY on the server.');
               } else {
                 progressLines.push('No jobs matched this Career Sleeve with current source diagnostics.');
@@ -1146,6 +1323,11 @@
             }
             resultsDiv.textContent = '';
             setProgressOutcome(sleeveKey, finalTitle, progressLines, sourceErrors.length ? 'warn' : 'info');
+            if (payload.summary && payload.summary.source_health) {
+              renderSourceHealthInProgress(sleeveKey, payload.summary.source_health, () => {
+                startScraping(sleeveKey, { forceSourceRetry: true });
+              });
+            }
             return;
           }
 
@@ -1153,10 +1335,16 @@
           renderSleevePage(sleeveKey, 1);
           progressLines.unshift(`Returned ${data.length} job result${data.length === 1 ? '' : 's'}.`);
           setProgressOutcome(sleeveKey, finalTitle, progressLines, 'ok');
+          if (payload.summary && payload.summary.source_health) {
+            renderSourceHealthInProgress(sleeveKey, payload.summary.source_health, () => {
+              startScraping(sleeveKey, { forceSourceRetry: true });
+            });
+          }
         })
         .catch(error => {
           status.textContent = '';
           stopProgressPolling(sleeveKey);
+          stopSourceHealthTimer(sleeveKey);
           const isTimeout = error.name === 'AbortError';
           const message = isTimeout
             ? `Scrape for Career Sleeve ${sleeveKey} timed out after 120 seconds.`

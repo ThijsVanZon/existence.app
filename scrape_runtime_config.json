@@ -19,6 +19,11 @@
     "min_avg_parsed_per_page": 0.5,
     "min_queries_to_keep": 8
   },
+  "source_health": {
+    "block_threshold": 2,
+    "blocked_cooldown_seconds": 3600,
+    "error_cooldown_seconds": 600
+  },
   "anti_block": {
     "prefer_rss_first": true,
     "skip_html_if_rss_has_items": true,

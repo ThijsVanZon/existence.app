@@ -262,7 +262,7 @@ class TestMainRanking(unittest.TestCase):
     def test_scrape_config_mode_is_mvp(self):
         config = main._public_scrape_config()
         self.assertEqual(config["profile"], "mvp")
-        self.assertEqual(config["defaults"]["sources"], ["indeed_web"])
+        self.assertEqual(config["defaults"]["sources"], ["indeed_web", "linkedin_web"])
         self.assertEqual(config["defaults"]["location_mode"], "nl_only")
 
     def test_canonicalize_relative_url_returns_empty(self):

@@ -31,6 +31,9 @@ JOBS_CACHE_TTL_SECONDS = 600
 JOBS_CACHE_EMPTY_TTL_SECONDS = 45
 source_cache = {}
 source_health = {}
+SOURCE_HEALTH_DEFAULT_BLOCK_THRESHOLD = 2
+SOURCE_HEALTH_DEFAULT_BLOCK_COOLDOWN_SECONDS = 3600
+SOURCE_HEALTH_DEFAULT_ERROR_COOLDOWN_SECONDS = 600
 
 # Location anchor: Copernicuslaan 105, 5223EC, 's-Hertogenbosch (BAG/PDOK centroid)
 HOME_LAT = 51.69531823
@@ -189,6 +192,8 @@ INDEED_SEARCH_URL_BY_MODE = {
     "nl_eu": INDEED_SEARCH_URL_NL,
     "global": INDEED_SEARCH_URL,
 }
+LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+LINKEDIN_JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
 DEFAULT_MAX_PAGES = 4
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
 DEFAULT_RATE_LIMIT_RPS = 0.45
@@ -219,7 +224,7 @@ TRACKING_QUERY_PARAMS = {
 }
 CANONICAL_QUERY_PARAMS = {"jk", "vjk", "jobId", "currentJobId", "id"}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
-MVP_SOURCE_ID = "indeed_web"
+MVP_SOURCE_IDS = ["indeed_web", "linkedin_web"]
 MVP_LOCATION_MODE = "nl_only"
 SCRAPE_MODE = "mvp"
 SCRAPE_PROGRESS_TTL_SECONDS = 1800
@@ -411,6 +416,13 @@ def _host_for_url(url):
     return urlparse(_clean_value(url, "")).netloc.lower()
 
 
+def _is_platform_job_host(url):
+    host = _host_for_url(url)
+    if not host:
+        return False
+    return "indeed." in host or "linkedin.com" in host or host.endswith("lnkd.in")
+
+
 def _ensure_snapshot_dir():
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -460,6 +472,11 @@ def _load_runtime_config():
             "min_avg_parsed_per_page": 0.5,
             "min_queries_to_keep": 8,
         },
+        "source_health": {
+            "block_threshold": SOURCE_HEALTH_DEFAULT_BLOCK_THRESHOLD,
+            "blocked_cooldown_seconds": SOURCE_HEALTH_DEFAULT_BLOCK_COOLDOWN_SECONDS,
+            "error_cooldown_seconds": SOURCE_HEALTH_DEFAULT_ERROR_COOLDOWN_SECONDS,
+        },
         "anti_block": {
             "prefer_rss_first": True,
             "skip_html_if_rss_has_items": True,
@@ -478,6 +495,7 @@ def _load_runtime_config():
         "detail_fetch",
         "crawl",
         "query_performance",
+        "source_health",
         "anti_block",
     ):
         incoming = loaded.get(key)
@@ -1312,12 +1330,15 @@ def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
 
 def _source_headers(source_name, location_mode="nl_only", user_agent=""):
     mode = _normalized_location_mode(location_mode)
+    source_name_text = _clean_value(source_name, "").lower()
     if mode in {"nl_only", "nl_eu"}:
         accept_language = "nl-NL,nl;q=0.9,en-US;q=0.7,en;q=0.6"
         referer = "https://www.google.nl/"
     else:
         accept_language = "en-US,en;q=0.9,nl;q=0.8"
         referer = "https://www.google.com/"
+    if "linkedin" in source_name_text:
+        referer = "https://www.linkedin.com/jobs/"
     agent = _clean_value(user_agent, "")
     if not agent:
         agent = REQUEST_USER_AGENTS[0]
@@ -1590,6 +1611,145 @@ def _fetch_indeed_rss_fallback(
     return items, "", False
 
 
+def _extract_linkedin_job_id(value):
+    text = _clean_value(value, "")
+    if not text:
+        return ""
+    match = re.search(r"(?:jobPosting:|jobs/view/)(\d+)", text)
+    if match:
+        return match.group(1)
+    return ""
+
+
+def _detect_linkedin_blocked(body_text, cards_found=0, parsed_count=0):
+    text = _clean_value(body_text, "").lower()
+    if not text:
+        return False
+    hard_markers = [
+        "captcha",
+        "access denied",
+        "security verification",
+        "verify you are human",
+        "unusual traffic",
+    ]
+    if any(marker in text for marker in hard_markers):
+        return True
+    # LinkedIn often serves signin wall HTML to guest scraping; only treat as block
+    # when no useful cards were parsed.
+    soft_markers = [
+        "sign in to linkedin",
+        "join linkedin",
+        "login",
+        "challenge",
+    ]
+    if cards_found == 0 and parsed_count == 0 and any(marker in text for marker in soft_markers):
+        return True
+    return False
+
+
+def _parse_linkedin_cards(selector, response_url):
+    cards = selector.css("li")
+    parsed = []
+    for card in cards:
+        link = (
+            card.css("a.base-card__full-link::attr(href)").get()
+            or card.css("a.base-card-link::attr(href)").get()
+            or card.css("a::attr(href)").get()
+        )
+        title = _clean_value(
+            card.css("h3.base-search-card__title::text").get()
+            or card.css("h3::text").get(),
+            "",
+        )
+        company = _clean_value(
+            card.css("h4.base-search-card__subtitle a::text").get()
+            or card.css("h4.base-search-card__subtitle::text").get(),
+            "",
+        )
+        location = _clean_value(
+            card.css("span.job-search-card__location::text").get()
+            or card.css("span.base-search-card__metadata::text").get(),
+            "",
+        )
+        date_value = _clean_value(
+            card.css("time::attr(datetime)").get()
+            or card.css("time::text").get(),
+            "Unknown",
+        )
+        snippet = _compact_whitespace(
+            card.css(
+                "p.job-search-card__snippet *::text, "
+                "div.base-search-card__metadata *::text"
+            ).getall()
+        )
+        full_link = requests.compat.urljoin(response_url, link) if link else ""
+        job_id = (
+            _extract_linkedin_job_id(card.attrib.get("data-entity-urn"))
+            or _extract_linkedin_job_id(full_link)
+        )
+        parsed_item = {
+            "title": title,
+            "company": company,
+            "location": location,
+            "link": _clean_value(full_link, ""),
+            "snippet": _clean_value(snippet, ""),
+            "salary": "Not listed",
+            "work_mode_hint": _normalize_text(location, snippet),
+            "date": date_value,
+            "source": "LinkedIn",
+            "job_id": job_id,
+        }
+        if parsed_item["title"] or parsed_item["link"]:
+            parsed.append(parsed_item)
+    return cards, parsed
+
+
+def _extract_linkedin_links_from_detail(html_text, response_url):
+    selector = Selector(text=html_text or "")
+    response_url = _clean_value(response_url, "")
+    linkedin_url = response_url if "linkedin.com" in _host_for_url(response_url) else ""
+    company_candidates = []
+
+    for anchor in selector.css("a"):
+        href_raw = anchor.attrib.get("href", "")
+        if not href_raw:
+            continue
+        href = requests.compat.urljoin(response_url, _decode_embedded_url(href_raw))
+        if not _is_absolute_http_url(href):
+            continue
+        external_destination = _extract_external_destination_from_url(href)
+        if external_destination and not _is_platform_job_host(external_destination):
+            company_candidates.append(external_destination)
+        if not _is_platform_job_host(href):
+            text_blob = _normalize_text(
+                anchor.attrib.get("id"),
+                anchor.attrib.get("class"),
+                anchor.attrib.get("data-tracking-control-name"),
+                anchor.attrib.get("aria-label"),
+                _compact_whitespace(anchor.css("*::text").getall()),
+            )
+            if any(marker in text_blob for marker in ["apply", "external", "company website", "website"]):
+                company_candidates.append(href)
+        elif not linkedin_url:
+            linkedin_url = href
+
+    company_url = ""
+    seen = set()
+    for candidate in company_candidates:
+        normalized = _clean_value(candidate, "")
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        if not _is_platform_job_host(normalized):
+            company_url = normalized
+            break
+
+    return {
+        "linkedin_url": linkedin_url if _is_absolute_http_url(linkedin_url) else "",
+        "company_url": company_url if _is_absolute_http_url(company_url) else "",
+    }
+
+
 def _decode_embedded_url(value):
     text = _clean_value(value, "")
     if not text:
@@ -1814,7 +1974,7 @@ def _fetch_detail_page_text(
 ):
     link = _clean_value(url, "")
     if not link:
-        return "", True, 0, {"indeed_url": "", "company_url": ""}
+        return "", True, 0, {"indeed_url": "", "linkedin_url": "", "company_url": ""}
 
     response, error = _rate_limited_get(
         session,
@@ -1828,15 +1988,22 @@ def _fetch_detail_page_text(
     )
     error_count = 1 if error else 0
     if error or response is None:
-        return "", True, error_count, {"indeed_url": "", "company_url": ""}
+        return "", True, error_count, {"indeed_url": "", "linkedin_url": "", "company_url": ""}
 
-    detail_links = {"indeed_url": "", "company_url": ""}
+    detail_links = {"indeed_url": "", "linkedin_url": "", "company_url": ""}
     if source_name == "Indeed":
         detail_links = _extract_indeed_links_from_detail(response.text, response.url or link)
         if not detail_links.get("indeed_url") and _is_absolute_http_url(link):
             detail_links["indeed_url"] = link
+    elif source_name == "LinkedIn":
+        detail_links = _extract_linkedin_links_from_detail(response.text, response.url or link)
+        if not detail_links.get("linkedin_url") and _is_absolute_http_url(link):
+            detail_links["linkedin_url"] = link
 
-    blocked = response.status_code in {401, 403, 429} or sleeves.detect_blocked_html(response.text)
+    if source_name == "LinkedIn":
+        blocked = response.status_code in {401, 403, 429, 999} or _detect_linkedin_blocked(response.text)
+    else:
+        blocked = response.status_code in {401, 403, 429} or sleeves.detect_blocked_html(response.text)
     if blocked:
         _record_blocked(diagnostics, source_name)
         _save_html_snapshot(
@@ -1924,6 +2091,7 @@ def _fetch_indeed_jobs_direct(
             item["full_description"] = ""
             item["detail_fetch_failed"] = True
             item["indeed_url"] = _clean_value(item.get("link"), "")
+            item["linkedin_url"] = ""
             item["company_url"] = _extract_external_destination_from_url(item["indeed_url"])
             item["query"] = query
             item["query_location"] = location
@@ -2123,7 +2291,7 @@ def _fetch_indeed_jobs_direct(
                         full_description = ""
                         detail_failed = True
                         detail_errors = 0
-                        detail_links = {"indeed_url": "", "company_url": ""}
+                        detail_links = {"indeed_url": "", "linkedin_url": "", "company_url": ""}
                         base_indeed_url = _clean_value(item.get("link"), "")
                         base_company_url = _extract_external_destination_from_url(base_indeed_url)
                         if idx < detail_budget:
@@ -2151,6 +2319,7 @@ def _fetch_indeed_jobs_direct(
                             detail_links.get("indeed_url") or base_indeed_url,
                             "",
                         )
+                        item["linkedin_url"] = ""
                         item["company_url"] = _clean_value(
                             detail_links.get("company_url") or base_company_url,
                             "",
@@ -2262,6 +2431,296 @@ def _fetch_indeed_jobs_direct(
     return jobs, diagnostics
 
 
+def _fetch_linkedin_jobs_direct(
+    sleeve_key,
+    location_mode="nl_only",
+    max_pages=DEFAULT_MAX_PAGES,
+    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
+    diagnostics=None,
+    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
+    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
+    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
+    extra_terms=None,
+):
+    diagnostics = diagnostics or _new_diagnostics()
+    jobs = []
+    seen_unique = set()
+    domain_state = {}
+    queries = _query_bundle_for_sleeve(
+        sleeve_key,
+        query_terms=query_terms,
+        extra_terms=extra_terms,
+    )
+    locations = _location_passes_for_mode(location_mode)
+    session = requests.Session()
+    _configure_session_for_scrape(session)
+    session_user_agent = random.choice(REQUEST_USER_AGENTS)
+    request_headers = _source_headers("LinkedIn", location_mode, user_agent=session_user_agent)
+    anti_block_cfg = RUNTIME_CONFIG.get("anti_block") or {}
+    disable_detail_fetch = bool(anti_block_cfg.get("disable_detail_fetch", True))
+    detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
+    detail_reduced_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("reduced_budget_per_page", DEFAULT_DETAIL_FETCH_REDUCED_BUDGET))
+    detail_failures = 0
+    detail_attempts = 0
+
+    for query in queries:
+        for location in locations:
+            previous_jobs = len(jobs)
+            no_new_unique_streak = 0
+            last_response_body = ""
+            for page_idx in range(max_pages):
+                start = page_idx * 25
+                params = {"keywords": query, "location": location, "start": start}
+                response, error = _rate_limited_get(
+                    session,
+                    LINKEDIN_SEARCH_URL,
+                    params=params,
+                    headers=request_headers,
+                    domain_state=domain_state,
+                    requests_per_second=requests_per_second,
+                    timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+                    max_retries=DEFAULT_HTTP_RETRIES,
+                )
+                status = response.status_code if response is not None else 0
+                body = response.text if response is not None else ""
+                if body:
+                    last_response_body = body
+                cards_found = 0
+                parsed_count = 0
+                new_unique_count = 0
+                detailpages_fetched = 0
+                full_description_count = 0
+                error_count = 0
+                if error:
+                    error_count += 1
+                if response is None or status >= 400:
+                    error_count += 1
+                parsed_items = []
+                request_url = response.url if response is not None else LINKEDIN_SEARCH_URL
+                blocked = False
+
+                if response is not None and response.ok:
+                    selector = Selector(text=body)
+                    cards, parsed_items = _parse_linkedin_cards(selector, request_url)
+                    cards_found = len(cards)
+                    parsed_count = len(parsed_items)
+                    blocked = bool(
+                        status in {401, 403, 429, 999}
+                        or _detect_linkedin_blocked(body, cards_found=cards_found, parsed_count=parsed_count)
+                    )
+                    if blocked:
+                        time.sleep(random.uniform(1.2, 2.6))
+                        retry_response, retry_error = _rate_limited_get(
+                            session,
+                            LINKEDIN_SEARCH_URL,
+                            params=params,
+                            headers=request_headers,
+                            domain_state=domain_state,
+                            requests_per_second=max(0.2, requests_per_second * 0.7),
+                            timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+                            max_retries=1,
+                        )
+                        retry_status = retry_response.status_code if retry_response is not None else 0
+                        retry_body = retry_response.text if retry_response is not None else ""
+                        retry_cards_found = 0
+                        retry_parsed_count = 0
+                        retry_parsed_items = []
+                        retry_blocked = bool(
+                            retry_status in {401, 403, 429, 999}
+                            or _detect_linkedin_blocked(retry_body)
+                        )
+                        if retry_response is not None and retry_response.ok:
+                            retry_selector = Selector(text=retry_body)
+                            retry_cards, retry_parsed_items = _parse_linkedin_cards(
+                                retry_selector,
+                                retry_response.url or request_url,
+                            )
+                            retry_cards_found = len(retry_cards)
+                            retry_parsed_count = len(retry_parsed_items)
+                            retry_blocked = bool(
+                                retry_status in {401, 403, 429, 999}
+                                or _detect_linkedin_blocked(
+                                    retry_body,
+                                    cards_found=retry_cards_found,
+                                    parsed_count=retry_parsed_count,
+                                )
+                            )
+                        should_use_retry = bool(
+                            retry_response is not None
+                            and (
+                                not retry_blocked
+                                or (retry_response.ok and len(retry_body) > len(body))
+                            )
+                        )
+                        if should_use_retry:
+                            response, error = retry_response, retry_error
+                            status, body = retry_status, retry_body
+                            request_url = retry_response.url or request_url
+                            blocked = retry_blocked
+                            cards_found = retry_cards_found
+                            parsed_count = retry_parsed_count
+                            parsed_items = retry_parsed_items
+
+                    if cards_found == 0 or parsed_count == 0:
+                        error_count += 1
+                        _save_html_snapshot(
+                            "LinkedIn",
+                            query,
+                            page_idx + 1,
+                            body,
+                            "parse-empty",
+                            diagnostics,
+                        )
+
+                    if blocked:
+                        _record_blocked(diagnostics, "LinkedIn")
+                        error_count += 1
+
+                    fail_rate = (detail_failures / detail_attempts) if detail_attempts else 0.0
+                    detail_budget = 0 if disable_detail_fetch else min(detail_base_budget, len(parsed_items))
+                    if not disable_detail_fetch and (blocked or fail_rate > 0.5):
+                        detail_budget = min(detail_reduced_budget, len(parsed_items))
+
+                    for idx, item in enumerate(parsed_items):
+                        dedupe_key, _, _ = _build_dedupe_key(item)
+                        if dedupe_key in seen_unique:
+                            continue
+                        seen_unique.add(dedupe_key)
+                        new_unique_count += 1
+
+                        full_description = ""
+                        detail_failed = True
+                        detail_errors = 0
+                        detail_links = {"indeed_url": "", "linkedin_url": "", "company_url": ""}
+                        base_linkedin_url = _clean_value(item.get("link"), "")
+                        base_company_url = _extract_external_destination_from_url(base_linkedin_url)
+                        if idx < detail_budget:
+                            full_description, detail_failed, detail_errors, detail_links = _fetch_detail_page_text(
+                                session,
+                                item.get("link"),
+                                "LinkedIn",
+                                diagnostics,
+                                domain_state,
+                                detail_rps,
+                                location_mode,
+                                request_headers=request_headers,
+                            )
+                            detail_attempts += 1
+                            if detail_failed:
+                                detail_failures += 1
+                            detailpages_fetched += 1
+                            error_count += detail_errors
+                            if full_description:
+                                full_description_count += 1
+
+                        item["full_description"] = full_description
+                        item["detail_fetch_failed"] = bool(detail_failed)
+                        item["indeed_url"] = ""
+                        item["linkedin_url"] = _clean_value(
+                            detail_links.get("linkedin_url") or base_linkedin_url,
+                            "",
+                        )
+                        item["company_url"] = _clean_value(
+                            detail_links.get("company_url") or base_company_url,
+                            "",
+                        )
+                        item["query"] = query
+                        item["query_location"] = location
+                        item["source"] = "LinkedIn"
+                        jobs.append(item)
+                else:
+                    blocked = bool(
+                        status in {401, 403, 429, 999}
+                        or _detect_linkedin_blocked(body)
+                    )
+                    if blocked:
+                        _record_blocked(diagnostics, "LinkedIn")
+                    if response is not None:
+                        _save_html_snapshot(
+                            "LinkedIn",
+                            query,
+                            page_idx + 1,
+                            body,
+                            f"status-{status}",
+                            diagnostics,
+                        )
+
+                _log_page_metrics(
+                    diagnostics,
+                    source="LinkedIn",
+                    query=query,
+                    location=location,
+                    page=page_idx + 1,
+                    url=request_url,
+                    status=status,
+                    cards_found=cards_found,
+                    parsed_count=parsed_count,
+                    new_unique_count=new_unique_count,
+                    detailpages_fetched=detailpages_fetched,
+                    full_description_count=full_description_count,
+                    error_count=error_count,
+                    blocked_detected=blocked,
+                )
+                if new_unique_count == 0:
+                    no_new_unique_streak += 1
+                else:
+                    no_new_unique_streak = 0
+                if cards_found == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
+                    break
+                if len(seen_unique) >= target_raw:
+                    return jobs, diagnostics
+
+            if len(jobs) == previous_jobs:
+                _save_debug_event(
+                    "LinkedIn",
+                    query,
+                    0,
+                    "no-new-items",
+                    diagnostics,
+                    location=location,
+                    pages_attempted=max_pages,
+                    unique_items=len(seen_unique),
+                )
+                if last_response_body:
+                    _save_html_snapshot(
+                        "LinkedIn",
+                        query,
+                        0,
+                        last_response_body,
+                        "no-new-items",
+                        diagnostics,
+                    )
+    return jobs, diagnostics
+
+
+def _fetch_linkedin_web_jobs(
+    sleeve_key,
+    location_mode="nl_only",
+    max_pages=DEFAULT_MAX_PAGES,
+    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
+    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
+    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
+    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
+    extra_terms=None,
+    diagnostics=None,
+    **_kwargs,
+):
+    return _fetch_linkedin_jobs_direct(
+        sleeve_key,
+        location_mode=location_mode,
+        max_pages=max_pages,
+        target_raw=target_raw,
+        diagnostics=diagnostics,
+        requests_per_second=requests_per_second,
+        detail_rps=detail_rps,
+        no_new_unique_pages=no_new_unique_pages,
+        query_terms=query_terms,
+        extra_terms=extra_terms,
+    )
+
+
 def rank_and_filter_jobs(
     items,
     target_sleeve=None,
@@ -2299,33 +2758,68 @@ def rank_and_filter_jobs(
             link = ""
         date_posted = _clean_value(job.get("date") or job.get("date_posted"), "Unknown")
         salary = _clean_value(job.get("salary"), "Not listed")
+        source_text = source.lower()
+        link_host = _host_for_url(link)
         company_url = _clean_value(job.get("company_url") or job.get("external_url"), "")
-        if _is_absolute_http_url(company_url):
-            if "indeed." in _host_for_url(company_url):
-                extracted_company = _extract_external_destination_from_url(company_url)
-                company_url = (
-                    extracted_company
-                    if _is_absolute_http_url(extracted_company)
-                    and "indeed." not in _host_for_url(extracted_company)
-                    else ""
-                )
-        else:
+        if not _is_absolute_http_url(company_url) or _is_platform_job_host(company_url):
             company_url = ""
+
         indeed_url = _clean_value(job.get("indeed_url"), "")
         if not _is_absolute_http_url(indeed_url):
-            if "indeed" in source.lower() and _is_absolute_http_url(link):
+            if "indeed" in source_text and _is_absolute_http_url(link) and "indeed." in link_host:
                 indeed_url = link
             else:
                 indeed_url = ""
-        if not company_url and indeed_url:
-            company_url = _extract_external_destination_from_url(indeed_url)
-        if company_url and indeed_url:
-            canonical_company = _canonicalize_url(company_url) or company_url
-            canonical_indeed = _canonicalize_url(indeed_url) or indeed_url
-            if canonical_company == canonical_indeed:
-                company_url = ""
-        if not company_url and "indeed" not in source.lower() and _is_absolute_http_url(link):
+
+        linkedin_url = _clean_value(job.get("linkedin_url"), "")
+        if not _is_absolute_http_url(linkedin_url):
+            if "linkedin" in source_text and _is_absolute_http_url(link):
+                if "linkedin.com" in link_host or link_host.endswith("lnkd.in"):
+                    linkedin_url = link
+                else:
+                    linkedin_url = ""
+            else:
+                linkedin_url = ""
+
+        if not _is_absolute_http_url(link):
+            if _is_absolute_http_url(indeed_url):
+                link = indeed_url
+            elif _is_absolute_http_url(linkedin_url):
+                link = linkedin_url
+
+        if not company_url:
+            external_candidates = [
+                _clean_value(job.get("external_url"), ""),
+                _extract_external_destination_from_url(indeed_url),
+                _extract_external_destination_from_url(linkedin_url),
+                _extract_external_destination_from_url(link),
+            ]
+            for candidate in external_candidates:
+                if _is_absolute_http_url(candidate) and not _is_platform_job_host(candidate):
+                    company_url = candidate
+                    break
+
+        if (
+            not company_url
+            and _is_absolute_http_url(link)
+            and not _is_platform_job_host(link)
+            and "indeed" not in source_text
+            and "linkedin" not in source_text
+        ):
             company_url = link
+
+        if company_url:
+            canonical_company = _canonicalize_url(company_url) or company_url
+            if indeed_url:
+                canonical_indeed = _canonicalize_url(indeed_url) or indeed_url
+                if canonical_company == canonical_indeed:
+                    company_url = ""
+            if company_url and linkedin_url:
+                canonical_linkedin = _canonicalize_url(linkedin_url) or linkedin_url
+                if canonical_company == canonical_linkedin:
+                    company_url = ""
+            if company_url and _is_platform_job_host(company_url):
+                company_url = ""
 
         raw_text = _clean_value(
             " ".join(
@@ -2427,7 +2921,7 @@ def rank_and_filter_jobs(
         if penalty_reasons:
             reasons.append(penalty_reasons[0])
         if not location_gate_match:
-            reasons.append("Locatie buiten voorkeursregio; als lagere prioriteit gemarkeerd.")
+            reasons.append("Location outside preferred scope; ranked as lower priority.")
         reasons = reasons[:MAX_REASON_COUNT]
 
         scored_jobs.append(
@@ -2443,6 +2937,7 @@ def rank_and_filter_jobs(
                 "full_description": full_description,
                 "company_url": company_url,
                 "indeed_url": indeed_url,
+                "linkedin_url": linkedin_url,
                 "raw_text": raw_text,
                 "prepared_text": prepared_text.strip(),
                 "primary_sleeve_id": scoring_sleeve,
@@ -2738,6 +3233,13 @@ SOURCE_REGISTRY = {
         "query_based": True,
         "fetcher": _fetch_indeed_web_jobs,
     },
+    "linkedin_web": {
+        "label": "LinkedIn (direct scraping)",
+        "default_enabled": True,
+        "requires_env": [],
+        "query_based": True,
+        "fetcher": _fetch_linkedin_web_jobs,
+    },
 }
 
 
@@ -2750,37 +3252,157 @@ def _source_env_missing(source_key):
     return missing
 
 
-def _source_available(source_key):
-    if source_key != MVP_SOURCE_ID:
+def _source_health_settings():
+    cfg = RUNTIME_CONFIG.get("source_health") or {}
+    block_threshold = int(cfg.get("block_threshold", SOURCE_HEALTH_DEFAULT_BLOCK_THRESHOLD))
+    blocked_cooldown = int(cfg.get("blocked_cooldown_seconds", SOURCE_HEALTH_DEFAULT_BLOCK_COOLDOWN_SECONDS))
+    error_cooldown = int(cfg.get("error_cooldown_seconds", SOURCE_HEALTH_DEFAULT_ERROR_COOLDOWN_SECONDS))
+    return {
+        "block_threshold": max(1, block_threshold),
+        "blocked_cooldown_seconds": max(60, blocked_cooldown),
+        "error_cooldown_seconds": max(30, error_cooldown),
+    }
+
+
+def _classify_source_error_kind(error):
+    text = _clean_value(error, "").lower()
+    if not text:
+        return ""
+    blocked_markers = [
+        "blocked_detected",
+        "captcha",
+        "access denied",
+        "security check",
+        "unusual traffic",
+        "verify you are human",
+        "status_403",
+        "status_429",
+        " 403",
+        " 429",
+    ]
+    if any(marker in text for marker in blocked_markers):
+        return "blocked"
+    return "error"
+
+
+def _source_health_status(source_key):
+    settings = _source_health_settings()
+    now = time.time()
+    default_payload = {
+        "state": "ok",
+        "failure_streak": 0,
+        "last_error": "",
+        "last_error_kind": "",
+        "last_failure_at": 0,
+        "next_retry_at": 0,
+        "cooldown_seconds_remaining": 0,
+    }
+    health = source_health.get(source_key)
+    if not isinstance(health, dict):
+        return default_payload
+
+    failure_streak = int(health.get("failure_streak", 0) or 0)
+    last_error = _clean_value(health.get("last_error"), "")
+    last_error_kind = _clean_value(health.get("last_error_kind"), "").lower()
+    last_failure_at = float(health.get("last_failure_at", 0) or 0)
+    is_blocked = (
+        last_error_kind == "blocked"
+        and failure_streak >= settings["block_threshold"]
+    )
+    cooldown_seconds = (
+        settings["blocked_cooldown_seconds"]
+        if is_blocked
+        else settings["error_cooldown_seconds"]
+    )
+    next_retry_at = last_failure_at + cooldown_seconds if last_failure_at and last_error else 0
+    cooldown_remaining = max(0, int(next_retry_at - now)) if next_retry_at else 0
+
+    if not last_error:
+        state = "ok"
+    elif is_blocked and cooldown_remaining > 0:
+        state = "blocked"
+    elif cooldown_remaining > 0:
+        state = "degraded"
+    elif is_blocked:
+        state = "degraded"
+    else:
+        state = "degraded"
+
+    return {
+        "state": state,
+        "failure_streak": failure_streak,
+        "last_error": last_error,
+        "last_error_kind": last_error_kind,
+        "last_failure_at": int(last_failure_at) if last_failure_at else 0,
+        "next_retry_at": int(next_retry_at) if next_retry_at else 0,
+        "cooldown_seconds_remaining": int(cooldown_remaining),
+    }
+
+
+def _source_is_cooled_down(source_key):
+    status = _source_health_status(source_key)
+    return status.get("cooldown_seconds_remaining", 0) > 0
+
+
+def _source_available(source_key, force_retry=False):
+    if source_key not in MVP_SOURCE_IDS:
         return False
     if _source_env_missing(source_key):
+        return False
+    if not force_retry and _source_is_cooled_down(source_key):
         return False
     return True
 
 
 def _source_availability_reason(source_key):
-    if source_key != MVP_SOURCE_ID:
-        return "Disabled in MVP (Indeed-only mode)"
+    if source_key not in MVP_SOURCE_IDS:
+        return "Disabled in MVP (direct-source mode)"
     missing_env = _source_env_missing(source_key)
     if missing_env:
         return f"Missing env: {', '.join(missing_env)}"
+    status = _source_health_status(source_key)
+    if status.get("cooldown_seconds_remaining", 0) > 0:
+        state = status.get("state", "degraded")
+        if state == "blocked":
+            return (
+                f"Blocked cooldown active ({status.get('cooldown_seconds_remaining')}s left): "
+                f"{status.get('last_error') or 'blocked_detected'}"
+            )
+        return (
+            f"Source cooldown active ({status.get('cooldown_seconds_remaining')}s left): "
+            f"{status.get('last_error') or 'recent errors'}"
+        )
     return ""
 
 
 def _record_source_health(source_key, error):
-    health = source_health.get(source_key, {"failure_streak": 0, "last_failure_at": 0, "last_error": ""})
+    health = source_health.get(
+        source_key,
+        {
+            "failure_streak": 0,
+            "last_failure_at": 0,
+            "last_error": "",
+            "last_error_kind": "",
+        },
+    )
     if error:
         health["failure_streak"] = health.get("failure_streak", 0) + 1
         health["last_failure_at"] = time.time()
         health["last_error"] = _clean_value(error, "Unknown source error")
+        health["last_error_kind"] = _classify_source_error_kind(error)
     else:
         health["failure_streak"] = 0
         health["last_error"] = ""
+        health["last_error_kind"] = ""
     source_health[source_key] = health
 
 
 def _default_sources():
-    return [MVP_SOURCE_ID] if _source_available(MVP_SOURCE_ID) else []
+    return [
+        source_key
+        for source_key in MVP_SOURCE_IDS
+        if _source_available(source_key, force_retry=False)
+    ]
 
 
 def _cache_key_for(
@@ -2966,24 +3588,40 @@ def fetch_jobs_from_sources(
     extra_terms=None,
     allow_failover=True,
     run_id="",
+    force_source_retry=False,
 ):
     profile = SCRAPE_MODE
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    usable_sources = [source for source in [MVP_SOURCE_ID] if _source_available(source)]
+    candidate_sources = [source for source in requested if source in MVP_SOURCE_IDS]
+    if not candidate_sources:
+        candidate_sources = [source for source in MVP_SOURCE_IDS]
+    unavailable_reasons = {}
+    usable_sources = []
+    for source in candidate_sources:
+        if _source_available(source, force_retry=force_source_retry):
+            usable_sources.append(source)
+            continue
+        reason = _source_availability_reason(source)
+        unavailable_reasons[source] = reason or "Source unavailable"
     _progress_update(
         run_id,
         "source-plan",
         (
             f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
-            + (" (MVP lock: forced Indeed-only)" if requested and requested != [MVP_SOURCE_ID] else "")
+            + (" (MVP lock: direct sources only)" if requested and set(requested) - set(MVP_SOURCE_IDS) else "")
         ),
         requested_sources=requested,
         usable_sources=usable_sources,
         profile=profile,
         location_mode=location_mode,
+        force_source_retry=bool(force_source_retry),
+        unavailable_reasons=unavailable_reasons,
     )
     if not usable_sources:
-        return [], ["No available sources for the selected options."], [], _new_diagnostics()
+        errors = [f"{source}: {reason}" for source, reason in unavailable_reasons.items()] or [
+            "No available sources for the selected options."
+        ]
+        return [], errors, [], _new_diagnostics()
 
     items = []
     errors = []
@@ -3042,20 +3680,32 @@ def fetch_jobs_from_sources(
 
 def _public_scrape_config():
     profile = SCRAPE_MODE
-    source_key = MVP_SOURCE_ID
-    config = SOURCE_REGISTRY[source_key]
-    available = _source_available(source_key)
-    reason = _source_availability_reason(source_key)
-    sources = [
-        {
-            "id": source_key,
-            "label": config["label"],
-            "available": available,
-            "default_enabled": bool(config["default_enabled"] and available),
-            "enabled_in_profile": True,
-            "reason": reason,
-        }
-    ]
+    sources = []
+    source_health_payload = {}
+    for source_key in MVP_SOURCE_IDS:
+        config = SOURCE_REGISTRY.get(source_key)
+        if not config:
+            continue
+        available = _source_available(source_key, force_retry=False)
+        health_status = _source_health_status(source_key)
+        source_health_payload[source_key] = health_status
+        reason = _source_availability_reason(source_key)
+        sources.append(
+            {
+                "id": source_key,
+                "label": config["label"],
+                "available": available,
+                "default_enabled": bool(config["default_enabled"] and available),
+                "enabled_in_profile": True,
+                "reason": reason,
+                "state": health_status.get("state", "ok"),
+                "cooldown_seconds_remaining": int(health_status.get("cooldown_seconds_remaining", 0) or 0),
+                "next_retry_at": int(health_status.get("next_retry_at", 0) or 0),
+                "last_error": health_status.get("last_error", ""),
+                "last_error_kind": health_status.get("last_error_kind", ""),
+                "failure_streak": int(health_status.get("failure_streak", 0) or 0),
+            }
+        )
     location_modes = [
         {"id": MVP_LOCATION_MODE, "label": sleeves.LOCATION_MODE_LABELS[MVP_LOCATION_MODE]},
     ]
@@ -3063,6 +3713,7 @@ def _public_scrape_config():
     return {
         "profile": profile,
         "sources": sources,
+        "source_health": source_health_payload,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "sleeve_terms_defaults": {
             key: list(value)
@@ -3070,7 +3721,7 @@ def _public_scrape_config():
             if key in sleeves.VALID_SLEEVES
         },
         "defaults": {
-            "sources": [source_key],
+            "sources": [source.get("id") for source in sources if source.get("available")],
             "location_mode": MVP_LOCATION_MODE,
             "strict": False,
             "max_results": 200,
@@ -3202,7 +3853,7 @@ def scrape_progress(run_id):
 @app.route('/company-posting')
 def company_posting():
     def _is_external_company_url(url):
-        return _is_absolute_http_url(url) and "indeed." not in _host_for_url(url)
+        return _is_absolute_http_url(url) and not _is_platform_job_host(url)
 
     def _resolve_external_from_candidate(url, allow_network=False):
         candidate = _clean_value(url, "")
@@ -3211,7 +3862,10 @@ def company_posting():
         extracted = _extract_external_destination_from_url(candidate)
         if _is_external_company_url(extracted):
             return extracted
-        if allow_network and _is_absolute_http_url(candidate) and "indeed." in _host_for_url(candidate):
+        if not allow_network or not _is_absolute_http_url(candidate):
+            return ""
+        host = _host_for_url(candidate)
+        if "indeed." in host:
             resolved = _resolve_external_from_indeed_redirect(
                 candidate,
                 timeout_seconds=10,
@@ -3220,6 +3874,23 @@ def company_posting():
             )
             if _is_external_company_url(resolved):
                 return resolved
+        if "linkedin.com" in host or host.endswith("lnkd.in"):
+            try:
+                response = requests.get(
+                    candidate,
+                    headers=_source_headers("LinkedIn", "nl_only"),
+                    timeout=10,
+                )
+                if response.ok:
+                    detail_links = _extract_linkedin_links_from_detail(response.text, response.url or candidate)
+                    extracted_company = _clean_value(detail_links.get("company_url"), "")
+                    if _is_external_company_url(extracted_company):
+                        return extracted_company
+                    resolved_from_response = _extract_external_destination_from_url(response.url or "")
+                    if _is_external_company_url(resolved_from_response):
+                        return resolved_from_response
+            except requests.RequestException:
+                return ""
         return ""
 
     def _error_response(message, status=424):
@@ -3242,13 +3913,14 @@ def company_posting():
             "<body><main class='card'><h1>Company posting URL not found</h1>"
             f"<p>{message}</p>"
             "<p>The scraper tried redirect parsing and detail-page extraction, but no external company URL was resolved.</p>"
-            "<p>Tip: open <code>Indeed Posting</code> and apply from there if needed.</p>"
+            "<p>Tip: open <code>Indeed URL</code> or <code>LinkedIn URL</code> and apply from there if needed.</p>"
             "</main></body></html>"
         )
         return html, status, {"Content-Type": "text/html; charset=utf-8"}
 
     company_url = _clean_value(request.args.get("company_url"), "")
     indeed_url = _clean_value(request.args.get("indeed_url"), "")
+    linkedin_url = _clean_value(request.args.get("linkedin_url"), "")
     job_url = _clean_value(request.args.get("job_url"), "")
 
     resolved_company = _resolve_external_from_candidate(company_url, allow_network=False)
@@ -3259,44 +3931,57 @@ def company_posting():
     if resolved_from_job:
         return redirect(resolved_from_job, code=302)
 
+    attempted_sources = []
     if _is_absolute_http_url(indeed_url):
+        attempted_sources.append("Indeed")
         extracted = _resolve_external_from_candidate(indeed_url, allow_network=True)
         if extracted:
             return redirect(extracted, code=302)
 
+    if _is_absolute_http_url(linkedin_url):
+        attempted_sources.append("LinkedIn")
+        extracted = _resolve_external_from_candidate(linkedin_url, allow_network=True)
+        if extracted:
+            return redirect(extracted, code=302)
         try:
             response = requests.get(
-                indeed_url,
-                headers=_source_headers("Indeed", "nl_only"),
+                linkedin_url,
+                headers=_source_headers("LinkedIn", "nl_only"),
                 timeout=10,
             )
             if response.ok:
-                detail_links = _extract_indeed_links_from_detail(response.text, response.url or indeed_url)
+                detail_links = _extract_linkedin_links_from_detail(response.text, response.url or linkedin_url)
                 extracted_company = _clean_value(detail_links.get("company_url"), "")
                 if _is_external_company_url(extracted_company):
                     return redirect(extracted_company, code=302)
-                extracted_response_url = _resolve_external_from_candidate(response.url or "", allow_network=True)
-                if extracted_response_url:
-                    return redirect(extracted_response_url, code=302)
-                extracted_indeed_from_detail = _resolve_external_from_candidate(
-                    detail_links.get("indeed_url") or "",
+                extracted_linkedin_from_detail = _resolve_external_from_candidate(
+                    detail_links.get("linkedin_url") or "",
                     allow_network=True,
                 )
-                if extracted_indeed_from_detail:
-                    return redirect(extracted_indeed_from_detail, code=302)
+                if extracted_linkedin_from_detail:
+                    return redirect(extracted_linkedin_from_detail, code=302)
         except requests.RequestException as exc:
             return _error_response(
-                f"Could not resolve company URL from Indeed page ({_clean_value(exc, 'request_failed')}).",
+                f"Could not resolve company URL from LinkedIn page ({_clean_value(exc, 'request_failed')}).",
                 status=424,
             )
 
         return _error_response(
-            "Could not resolve company URL from Indeed page after all extraction steps.",
+            "Could not resolve company URL from LinkedIn page after all extraction steps.",
+            status=424,
+        )
+
+    if attempted_sources:
+        return _error_response(
+            (
+                "Could not resolve company URL from "
+                f"{' / '.join(attempted_sources)} page after all extraction steps."
+            ),
             status=424,
         )
 
     return _error_response(
-        "Missing usable URL inputs. Provide company_url, indeed_url, or job_url.",
+        "Missing usable URL inputs. Provide company_url, indeed_url, linkedin_url, or job_url.",
         status=400,
     )
 
@@ -3371,12 +4056,15 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     requested_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
-    selected_sources = [MVP_SOURCE_ID]
+    selected_sources = [source for source in requested_sources if source in MVP_SOURCE_IDS]
+    if not selected_sources:
+        selected_sources = [source for source in MVP_SOURCE_IDS]
     query_terms_param = request.args.get("query_terms", "")
     query_terms = _parse_query_terms(query_terms_param)
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
     allow_failover = False
+    force_source_retry = request.args.get("retry_source", "0") == "1"
 
     _progress_start(
         run_id,
@@ -3415,6 +4103,7 @@ def scrape():
         extra_terms=extra_terms,
         allow_failover=allow_failover,
         run_id=run_id,
+        force_source_retry=force_source_retry,
     )
     _progress_update(
         run_id,
@@ -3465,6 +4154,11 @@ def scrape():
             for source_key in used_sources
         ],
         "source_errors": fetch_errors,
+        "source_health": {
+            source_id: _source_health_status(source_id)
+            for source_id in SOURCE_REGISTRY
+        },
+        "force_source_retry": bool(force_source_retry),
         "failover_enabled": allow_failover,
         "raw_count": int(funnel.get("raw", 0)),
         "deduped_count": int(funnel.get("after_dedupe", 0)),

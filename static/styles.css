@@ -659,6 +659,58 @@ select,
   color: var(--rubellite);
 }
 
+.progress-source-health {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(var(--black-rgb), 0.16);
+}
+
+.progress-source-state {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.progress-source-state-ok {
+  color: var(--zircon);
+}
+
+.progress-source-state-degraded {
+  color: var(--heliodor);
+}
+
+.progress-source-state-blocked {
+  color: var(--rubellite);
+}
+
+.progress-source-error {
+  margin-top: 3px;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.progress-source-cooldown {
+  margin-top: 5px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.progress-source-cooldown-label {
+  font-size: 0.74rem;
+  color: var(--ink-muted);
+}
+
+.progress-source-cooldown-value {
+  font-size: 0.76rem;
+  color: var(--rubellite);
+}
+
+.progress-retry-btn {
+  margin-top: 6px;
+  padding: 5px 9px;
+  font-size: 0.75rem;
+}
+
 .pager-info {
   color: var(--ink-muted);
   font-size: 0.86rem;
@@ -696,6 +748,11 @@ select,
 .job-link-indeed {
   background: rgba(var(--zircon-rgb), 0.15);
   color: var(--zircon);
+}
+
+.job-link-linkedin {
+  background: rgba(var(--heliodor-rgb), 0.2);
+  color: var(--heliodor);
 }
 
 .job-link-fallback {
