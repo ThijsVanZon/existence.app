@@ -190,8 +190,8 @@ INDEED_SEARCH_URL_BY_MODE = {
 }
 DEFAULT_MAX_PAGES = 8
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
-DEFAULT_RATE_LIMIT_RPS = 1.5
-DEFAULT_DETAIL_RATE_LIMIT_RPS = 1.2
+DEFAULT_RATE_LIMIT_RPS = 0.8
+DEFAULT_DETAIL_RATE_LIMIT_RPS = 0.6
 DEFAULT_HTTP_TIMEOUT = 14
 DEFAULT_HTTP_RETRIES = 2
 PASS_FALLBACK_MIN_COUNT = 10
@@ -223,6 +223,23 @@ MVP_LOCATION_MODE = "nl_only"
 SCRAPE_MODE = "mvp"
 SCRAPE_PROGRESS_TTL_SECONDS = 1800
 SCRAPE_PROGRESS_MAX_EVENTS = 220
+REQUEST_USER_AGENTS = [
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+]
 scrape_progress_state = {}
 scrape_progress_lock = threading.Lock()
 
@@ -800,6 +817,8 @@ def _rate_limited_get(
     wait_for = min_interval - (time.time() - last_seen)
     if wait_for > 0:
         time.sleep(wait_for)
+    # Small jitter helps avoid deterministic request signatures.
+    time.sleep(random.uniform(0.05, 0.18))
 
     last_exc = ""
     for attempt in range(max_retries + 1):
@@ -1285,11 +1304,7 @@ def _source_headers(source_name, location_mode="nl_only"):
         accept_language = "en-US,en;q=0.9,nl;q=0.8"
         referer = "https://www.google.com/"
     return {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": random.choice(REQUEST_USER_AGENTS),
         "Accept-Language": accept_language,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Referer": referer,
@@ -3058,26 +3073,12 @@ def scrape():
         errors=fetch_errors,
     )
     if not items and fetch_errors:
-        _progress_finish(
+        _progress_update(
             run_id,
-            status="error",
-            error="All selected sources failed.",
-            summary={
-                "raw_count": 0,
-                "deduped_count": 0,
-                "pass_count": 0,
-                "maybe_count": 0,
-                "fail_count": 0,
-                "errors": fetch_errors,
-            },
+            "fetch-warning",
+            "All selected sources returned errors; returning empty result set with diagnostics.",
+            errors=fetch_errors,
         )
-        return jsonify(
-            {
-                "error": "All selected sources failed.",
-                "details": fetch_errors,
-                "diagnostics": fetch_diagnostics,
-            }
-        ), 502
 
     _progress_update(run_id, "ranking-start", "Ranking and filtering started")
     ranking_result = rank_and_filter_jobs(
@@ -3111,6 +3112,7 @@ def scrape():
             SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
             for source_key in used_sources
         ],
+        "source_errors": fetch_errors,
         "failover_enabled": allow_failover,
         "raw_count": int(funnel.get("raw", 0)),
         "deduped_count": int(funnel.get("after_dedupe", 0)),

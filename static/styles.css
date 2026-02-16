@@ -162,7 +162,8 @@ button,
 }
 
 .toolbar-field select,
-.sleeve-panel button,
+.sleeve-panel > button,
+.terms-reset-btn,
 .terms-input {
   width: 100%;
   max-width: 340px;
@@ -246,6 +247,14 @@ button:hover {
   opacity: 1;
 }
 
+button:disabled,
+.scrape-btn-disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
 button:active {
   transform: translateY(0);
 }
@@ -283,12 +292,14 @@ select,
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
   padding: 4px 7px 4px 9px;
   border-radius: 999px;
   background: rgba(var(--amethyst-rgb), 0.14);
   color: var(--amethyst);
   font-size: 0.78rem;
   font-weight: 600;
+  white-space: nowrap;
   transition: background 0.16s ease, transform 0.16s ease;
 }
 
@@ -299,6 +310,9 @@ select,
 
 .term-chip-label {
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .term-chip-remove {
@@ -361,7 +375,7 @@ select,
 
 .sleeve-panel {
   border: none;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 14px;
   background: linear-gradient(145deg, rgba(var(--white-rgb), 0.72), rgba(var(--white-rgb), 0.56));
   box-shadow: var(--shadow-soft);

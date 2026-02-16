@@ -362,6 +362,45 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
+    def test_scrape_returns_200_with_source_errors_when_all_sources_fail(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            def fake_fetch(*args, **kwargs):
+                return [], ["indeed_web: blocked_detected"], ["indeed_web"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get("/scrape?sleeve=A")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertIn("summary", payload)
+            self.assertEqual(
+                payload["summary"].get("source_errors"),
+                ["indeed_web: blocked_detected"],
+            )
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
 
 if __name__ == "__main__":
     unittest.main()

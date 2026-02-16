@@ -37,7 +37,7 @@
 
       <div class="toolbar-field">
         <label>Results view</label>
-        <p class="toolbar-static">10 per pagina. Gebruik per sleeve Next/Previous om door alle resultaten te bladeren.</p>
+        <p class="toolbar-static">10 per page. Use Next/Previous per sleeve to browse all results.</p>
       </div>
 
       <div class="toolbar-field toolbar-checks">
@@ -74,14 +74,14 @@
         <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
       <div class="terms-editor" data-sleeve="A">
-        <label class="terms-label" for="terms-input-A">Zoektermen</label>
+        <label class="terms-label" for="terms-input-A">Search terms</label>
         <div id="terms-chips-A" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type term and press Enter">
         <div class="terms-actions">
           <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('A')">Reset terms</button>
         </div>
       </div>
-      <button type="button" onclick="startScraping('A')">Scrape Career Sleeve A</button>
+      <button type="button" class="scrape-btn" data-sleeve="A" onclick="startScraping('A')">Scrape Career Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="progress-A" class="progress-field" hidden></div>
       <div id="summary-A" class="sleeve-summary"></div>
@@ -96,14 +96,14 @@
         <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
       <div class="terms-editor" data-sleeve="B">
-        <label class="terms-label" for="terms-input-B">Zoektermen</label>
+        <label class="terms-label" for="terms-input-B">Search terms</label>
         <div id="terms-chips-B" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type term and press Enter">
         <div class="terms-actions">
           <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('B')">Reset terms</button>
         </div>
       </div>
-      <button type="button" onclick="startScraping('B')">Scrape Career Sleeve B</button>
+      <button type="button" class="scrape-btn" data-sleeve="B" onclick="startScraping('B')">Scrape Career Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="progress-B" class="progress-field" hidden></div>
       <div id="summary-B" class="sleeve-summary"></div>
@@ -118,14 +118,14 @@
         <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
       <div class="terms-editor" data-sleeve="C">
-        <label class="terms-label" for="terms-input-C">Zoektermen</label>
+        <label class="terms-label" for="terms-input-C">Search terms</label>
         <div id="terms-chips-C" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type term and press Enter">
         <div class="terms-actions">
           <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('C')">Reset terms</button>
         </div>
       </div>
-      <button type="button" onclick="startScraping('C')">Scrape Career Sleeve C</button>
+      <button type="button" class="scrape-btn" data-sleeve="C" onclick="startScraping('C')">Scrape Career Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="progress-C" class="progress-field" hidden></div>
       <div id="summary-C" class="sleeve-summary"></div>
@@ -140,14 +140,14 @@
         <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
       <div class="terms-editor" data-sleeve="D">
-        <label class="terms-label" for="terms-input-D">Zoektermen</label>
+        <label class="terms-label" for="terms-input-D">Search terms</label>
         <div id="terms-chips-D" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type term and press Enter">
         <div class="terms-actions">
           <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('D')">Reset terms</button>
         </div>
       </div>
-      <button type="button" onclick="startScraping('D')">Scrape Career Sleeve D</button>
+      <button type="button" class="scrape-btn" data-sleeve="D" onclick="startScraping('D')">Scrape Career Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="progress-D" class="progress-field" hidden></div>
       <div id="summary-D" class="sleeve-summary"></div>
@@ -162,14 +162,14 @@
         <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
       <div class="terms-editor" data-sleeve="E">
-        <label class="terms-label" for="terms-input-E">Zoektermen</label>
+        <label class="terms-label" for="terms-input-E">Search terms</label>
         <div id="terms-chips-E" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type term and press Enter">
         <div class="terms-actions">
           <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('E')">Reset terms</button>
         </div>
       </div>
-      <button type="button" onclick="startScraping('E')">Scrape Career Sleeve E</button>
+      <button type="button" class="scrape-btn" data-sleeve="E" onclick="startScraping('E')">Scrape Career Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="progress-E" class="progress-field" hidden></div>
       <div id="summary-E" class="sleeve-summary"></div>
@@ -183,10 +183,11 @@
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
     const RESULTS_PER_PAGE = 10;
     const DEFAULT_FETCH_LIMIT = 200;
-    const TERMS_STORAGE_PREFIX = 'existence.sleeve_terms.v1.';
+    const TERMS_STORAGE_PREFIX = 'existence.sleeve_terms.v2.';
     const sleeveControllers = {};
     const sleeveProgressPollers = {};
     const sleeveTermState = {};
+    let activeScrapeSleeve = '';
     const fallbackConfig = {
       profile: 'mvp',
       sources: [
@@ -194,29 +195,29 @@
       ],
       sleeve_terms_defaults: {
         A: [
-          'music event operations manager',
+          'music event operations',
           'festival producer',
-          'tour manager',
-          'concert production manager',
-          'live production manager',
+          'tour',
+          'concert production',
+          'live production',
           'artist liaison',
-          'show operations manager',
-          'event operations manager'
+          'show operations',
+          'event operations'
         ],
         B: [
-          'theme park operations manager',
-          'attractions operations manager',
-          'guest experience manager',
-          'show operations manager',
-          'ride operations manager',
-          'destination operations manager',
-          'resort operations manager',
+          'theme park operations',
+          'attractions operations',
+          'guest experience',
+          'show operations',
+          'ride operations',
+          'destination operations',
+          'resort operations',
           'immersive destination operations'
         ],
         C: [
           'data center operations',
           'critical facilities technician',
-          'facility operations manager',
+          'facility operations',
           'commissioning engineer data center',
           'mission critical operations',
           'compute infrastructure operations',
@@ -224,24 +225,17 @@
           'capacity expansion data center'
         ],
         D: [
-          'supply chain operations manager',
-          'logistics operations manager',
-          'vendor operations manager',
-          'partner operations manager',
-          'ecosystem operations manager',
-          'rollout manager',
-          'implementation manager supply chain',
-          'distribution operations manager'
+          'supply chain operations',
+          'logistics operations',
+          'vendor operations',
+          'partner operations',
+          'ecosystem operations',
+          'rollout',
+          'implementation supply chain',
+          'distribution operations'
         ],
         E: [
-          'operations manager',
-          'program manager',
-          'project manager',
-          'implementation manager',
-          'operations coordinator',
-          'workflow operations',
-          'delivery operations',
-          'cross-functional operations'
+          // Intentionally empty: fully user-defined sleeve.
         ]
       },
       defaults: {
@@ -347,7 +341,7 @@
       if (!terms.length) {
         const empty = document.createElement('span');
         empty.className = 'term-chip-empty';
-        empty.textContent = 'Geen termen ingesteld. Voeg er minstens 1 toe.';
+        empty.textContent = 'No terms configured. Add at least one term.';
         chipsWrap.appendChild(empty);
         return;
       }
@@ -450,6 +444,16 @@
       return 'Unknown';
     }
 
+    function setScrapeButtonsLocked(activeSleeve) {
+      const scrapeButtons = document.querySelectorAll('.scrape-btn[data-sleeve]');
+      scrapeButtons.forEach((button) => {
+        const sleeve = button.getAttribute('data-sleeve') || '';
+        const shouldDisable = Boolean(activeSleeve) && sleeve !== activeSleeve;
+        button.disabled = shouldDisable;
+        button.classList.toggle('scrape-btn-disabled', shouldDisable);
+      });
+    }
+
     function createBadge(className, text) {
       const badge = document.createElement('span');
       badge.className = className;
@@ -476,8 +480,8 @@
     function buildIndeedPostingFallbackUrl(job) {
       const company = String(job?.company || '').trim();
       const title = String(job?.title || '').trim();
-      const query = `${title} ${company}`.trim() || 'vacature';
-      return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Nederland')}`;
+      const query = `${title} ${company}`.trim() || 'job';
+      return `https://nl.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent('Netherlands')}`;
     }
 
     function safeDecodeUrlPart(value) {
@@ -934,6 +938,7 @@
       }
 
       initializeTermEditors();
+      setScrapeButtonsLocked(activeScrapeSleeve);
     }
 
     function selectedSources() {
@@ -950,11 +955,19 @@
         Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
       );
       const hasDirectScrape = sources.includes('indeed_web');
-      const tunedMaxPages = hasDirectScrape ? 3 : 5;
+      const tunedMaxPages = hasDirectScrape ? 2 : 4;
       const tunedTargetRaw = hasDirectScrape
         ? Math.max(40, Math.min(120, maxResults * 3))
         : Math.max(60, Math.min(150, maxResults * 4));
       const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
+      if (!queryTerms.length) {
+        const errorDiv = document.getElementById(`error-${sleeveKey}`);
+        if (errorDiv) {
+          errorDiv.textContent = `Add at least one search term before scraping Career Sleeve ${sleeveKey}.`;
+          errorDiv.style.display = 'block';
+        }
+        return '';
+      }
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
       params.set('location_mode', 'nl_only');
@@ -962,6 +975,8 @@
       params.set('max_results', String(maxResults));
       params.set('max_pages', String(tunedMaxPages));
       params.set('target_raw', String(tunedTargetRaw));
+      params.set('rps', '0.65');
+      params.set('detail_rps', '0.45');
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
       params.set('refresh', '0');
       params.set('failover', '0');
@@ -982,12 +997,24 @@
       const runId = `${sleeveKey}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
       addSleeveTermsFromInput(sleeveKey);
 
+      if (activeScrapeSleeve && activeScrapeSleeve !== sleeveKey) {
+        errorDiv.textContent = `Wait until Career Sleeve ${activeScrapeSleeve} is finished. We run one scrape at a time to reduce blocking.`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+      const scrapeUrl = buildScrapeUrl(sleeveKey, runId);
+      if (!scrapeUrl) {
+        return;
+      }
+
       if (sleeveControllers[sleeveKey]) {
         sleeveControllers[sleeveKey].abort();
       }
       const controller = new AbortController();
       sleeveControllers[sleeveKey] = controller;
       const timeoutId = setTimeout(() => controller.abort(), 120000);
+      activeScrapeSleeve = sleeveKey;
+      setScrapeButtonsLocked(activeScrapeSleeve);
 
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
@@ -998,7 +1025,7 @@
       errorDiv.style.display = 'none';
       status.textContent = `Scraping Career Sleeve ${sleeveKey} with selected filters...`;
 
-      fetch(buildScrapeUrl(sleeveKey, runId), { signal: controller.signal })
+      fetch(scrapeUrl, { signal: controller.signal })
         .then(async response => {
           const contentType = (response.headers.get('content-type') || '').toLowerCase();
           const isJson = contentType.includes('application/json');
@@ -1054,6 +1081,13 @@
           }
           if (!data.length) {
             clearSleevePager(sleeveKey);
+            const sourceErrors = payload.summary && Array.isArray(payload.summary.source_errors)
+              ? payload.summary.source_errors.filter(Boolean)
+              : [];
+            if (sourceErrors.length) {
+              resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}.`;
+              return;
+            }
             if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
               const firstReason = payload.summary.top_fail_reasons[0];
               resultsDiv.textContent = `No jobs matched this Career Sleeve with the current filters. Top fail reason: ${firstReason.reason} (${firstReason.count}).`;
@@ -1080,6 +1114,10 @@
           panel.classList.remove('loading');
           if (sleeveControllers[sleeveKey] === controller) {
             delete sleeveControllers[sleeveKey];
+          }
+          if (activeScrapeSleeve === sleeveKey) {
+            activeScrapeSleeve = '';
+            setScrapeButtonsLocked('');
           }
         });
     }

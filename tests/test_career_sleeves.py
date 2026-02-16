@@ -73,6 +73,18 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertGreaterEqual(score, 3)
         self.assertEqual(details["reason"], "ok")
 
+    def test_blocked_detection_requires_stronger_signal(self):
+        self.assertFalse(
+            sleeves.detect_blocked_html(
+                "<html><body><a>Sign in to continue</a><div>Jobs list</div></body></html>"
+            )
+        )
+        self.assertTrue(
+            sleeves.detect_blocked_html(
+                "<html><body><h1>Captcha</h1><p>Verify you are human</p></body></html>"
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -542,29 +542,29 @@ SLEEVE_CONFIG = {
 
 SLEEVE_SEARCH_TERMS = {
     "A": [
-        "music event operations manager",
+        "music event operations",
         "festival producer",
-        "tour manager",
-        "concert production manager",
-        "live production manager",
+        "tour",
+        "concert production",
+        "live production",
         "artist liaison",
-        "show operations manager",
-        "event operations manager",
+        "show operations",
+        "event operations",
     ],
     "B": [
-        "theme park operations manager",
-        "attractions operations manager",
-        "guest experience manager",
-        "show operations manager",
-        "ride operations manager",
-        "destination operations manager",
-        "resort operations manager",
+        "theme park operations",
+        "attractions operations",
+        "guest experience",
+        "show operations",
+        "ride operations",
+        "destination operations",
+        "resort operations",
         "immersive destination operations",
     ],
     "C": [
         "data center operations",
         "critical facilities technician",
-        "facility operations manager",
+        "facility operations",
         "commissioning engineer data center",
         "mission critical operations",
         "compute infrastructure operations",
@@ -572,24 +572,17 @@ SLEEVE_SEARCH_TERMS = {
         "capacity expansion data center",
     ],
     "D": [
-        "supply chain operations manager",
-        "logistics operations manager",
-        "vendor operations manager",
-        "partner operations manager",
-        "ecosystem operations manager",
-        "rollout manager",
-        "implementation manager supply chain",
-        "distribution operations manager",
+        "supply chain operations",
+        "logistics operations",
+        "vendor operations",
+        "partner operations",
+        "ecosystem operations",
+        "rollout",
+        "implementation supply chain",
+        "distribution operations",
     ],
     "E": [
-        "operations manager",
-        "program manager",
-        "project manager",
-        "implementation manager",
-        "operations coordinator",
-        "workflow operations",
-        "delivery operations",
-        "cross-functional operations",
+        # Intentionally empty: fully user-defined sleeve.
     ],
 }
 
@@ -854,7 +847,26 @@ def detect_hard_reject(raw_title, raw_text):
 
 def detect_blocked_html(html_text):
     prepared = _prepare_text(html_text)
-    return any(_phrase_in_text(prepared, marker) for marker in BLOCKED_PAGE_HINTS)
+    if not prepared:
+        return False
+
+    strong_markers = [
+        "captcha",
+        "are you a robot",
+        "access denied",
+        "security check",
+        "unusual traffic",
+        "verify you are human",
+    ]
+    if any(_phrase_in_text(prepared, marker) for marker in strong_markers):
+        return True
+
+    weak_markers = [
+        "blocked",
+        "sign in to continue",
+    ]
+    weak_hits = sum(1 for marker in weak_markers if _phrase_in_text(prepared, marker))
+    return weak_hits >= 2
 
 
 def normalize_for_match(value):
