@@ -112,6 +112,34 @@
     .synergy-dialog-group { display: grid; gap: 6px; }
     .synergy-dialog-group-title { font-size: 0.82rem; color: var(--ink-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .synergy-dialog-option { width: 100%; text-align: left; }
+    .synergy-dialog-option-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .synergy-dialog-option-main {
+      flex: 1 1 auto;
+    }
+    .synergy-dialog-option-icon {
+      border: none;
+      border-radius: 999px;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--synergy-amethyst-deep);
+      background: rgba(var(--amethyst-rgb), 0.16);
+      cursor: pointer;
+      transition: background 0.14s ease;
+    }
+    .synergy-dialog-option-icon:hover {
+      background: rgba(var(--amethyst-rgb), 0.24);
+      transform: none;
+    }
     .synergy-dialog-custom-create {
       display: grid;
       gap: 8px;
@@ -127,6 +155,11 @@
       padding: 8px 10px;
       color: var(--ink);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
+    }
+    .synergy-dialog-custom-note {
+      color: var(--ink-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
     }
     @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
   </style>
@@ -158,14 +191,14 @@
         <div class="synergy-inline">
           <input id="termInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
           <button id="addTermBtn" type="button">Add term</button>
+          <button id="generateTermsBtn" type="button">Generate terms</button>
           <button id="clearTermsBtn" type="button">Clear terms</button>
         </div>
       </div>
 
       <div class="synergy-inline">
-        <button id="saveSleeveBtn" type="button">Save sleeve</button>
-        <button id="deleteSleeveBtn" type="button">Delete saved sleeve</button>
-        <button id="scrapeBtn" type="button">Scrape now</button>
+        <button id="saveSleeveBtn" type="button">Save changes to sleeve</button>
+        <button id="scrapeBtn" type="button">Scrape vacancies now</button>
       </div>
 
       <div id="statusBox" class="synergy-status">Ready.</div>
@@ -201,16 +234,15 @@
         terms: [],
         progressTimer: null,
         loadFilter: "",
-        pendingCustomLetter: "E",
         pendingCustomTitle: "",
       };
       const els = {
         termChipList: document.getElementById("termChipList"),
         termInput: document.getElementById("termInput"),
         addTermBtn: document.getElementById("addTermBtn"),
+        generateTermsBtn: document.getElementById("generateTermsBtn"),
         clearTermsBtn: document.getElementById("clearTermsBtn"),
         saveSleeveBtn: document.getElementById("saveSleeveBtn"),
-        deleteSleeveBtn: document.getElementById("deleteSleeveBtn"),
         scrapeBtn: document.getElementById("scrapeBtn"),
         statusBox: document.getElementById("statusBox"),
         metricBadges: document.getElementById("metricBadges"),
@@ -280,18 +312,8 @@
         });
       }
 
-      function customLetterOptionsMarkup() {
-        const letters = [];
-        for (let code = 69; code <= 90; code += 1) {
-          const letter = String.fromCharCode(code);
-          letters.push(`<option value="${letter}">${letter}</option>`);
-        }
-        return letters.join("");
-      }
-
       function openHeaderEditor() {
         state.loadFilter = "";
-        state.pendingCustomLetter = "E";
         state.pendingCustomTitle = "";
         if (els.loadDialogSearch) {
           els.loadDialogSearch.value = "";
@@ -325,9 +347,7 @@
 
       function updateActionState() {
         const letter = normalizeLetter(state.currentLetter);
-        const customExists = Boolean(letter && findCustom(letter));
         els.saveSleeveBtn.disabled = !letter || isFixedLetter(letter);
-        els.deleteSleeveBtn.disabled = !letter || isFixedLetter(letter) || !customExists;
       }
 
       function applySleeveToEditor(sleeve, options = {}) {
@@ -342,6 +362,124 @@
           const suffix = sleeve.locked ? "(fixed)" : "(custom)";
           setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
         }
+      }
+
+      function guessTermsFromTitle(title, letter) {
+        const fixedByLetter = (state.catalog.fixed || []).find((entry) => entry.letter === letter);
+        if (fixedByLetter && Array.isArray(fixedByLetter.terms) && fixedByLetter.terms.length) {
+          return fixedByLetter.terms.slice(0, 8);
+        }
+
+        const lowerTitle = String(title || "").toLowerCase();
+        const presets = [
+          {
+            keywords: ["music", "festival", "concert", "tour", "venue", "artist", "event"],
+            terms: [
+              "music event operations",
+              "festival producer",
+              "tour operations",
+              "concert production",
+              "live production",
+              "artist liaison",
+              "show operations",
+              "event operations",
+            ],
+          },
+          {
+            keywords: ["theme", "park", "attraction", "guest", "destination", "resort"],
+            terms: [
+              "theme park operations",
+              "attractions operations",
+              "guest experience",
+              "show operations",
+              "ride operations",
+              "destination operations",
+              "resort operations",
+              "immersive destination operations",
+            ],
+          },
+          {
+            keywords: ["data", "center", "facility", "critical", "infrastructure", "commissioning"],
+            terms: [
+              "data center operations",
+              "critical facilities technician",
+              "facility operations",
+              "commissioning engineer data center",
+              "mission critical operations",
+              "compute infrastructure operations",
+              "ai infrastructure operations",
+              "capacity expansion data center",
+            ],
+          },
+          {
+            keywords: ["supply", "chain", "logistics", "vendor", "distribution", "ecosystem", "partner"],
+            terms: [
+              "supply chain operations",
+              "logistics operations",
+              "vendor operations",
+              "partner operations",
+              "ecosystem operations",
+              "rollout",
+              "implementation supply chain",
+              "distribution operations",
+            ],
+          },
+        ];
+
+        let bestPreset = null;
+        let bestScore = 0;
+        for (const preset of presets) {
+          const score = preset.keywords.reduce((acc, keyword) => acc + (lowerTitle.includes(keyword) ? 1 : 0), 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestPreset = preset;
+          }
+        }
+        if (bestPreset && bestScore > 0) {
+          return bestPreset.terms.slice(0, 8);
+        }
+
+        const stopwords = new Set([
+          "and", "the", "for", "with", "from", "into", "across", "career", "sleeve", "operations",
+        ]);
+        const tokens = Array.from(
+          new Set(
+            lowerTitle
+              .split(/[^a-z0-9]+/g)
+              .map((token) => token.trim())
+              .filter((token) => token.length >= 3 && !stopwords.has(token))
+          )
+        );
+
+        const fallback = [];
+        if (lowerTitle.trim()) {
+          fallback.push(lowerTitle.trim());
+        }
+        for (const token of tokens.slice(0, 3)) {
+          fallback.push(`${token} operations`);
+          fallback.push(`${token} coordinator`);
+          fallback.push(`${token} specialist`);
+        }
+        fallback.push("cross-functional operations");
+        fallback.push("delivery operations");
+        fallback.push("workflow operations");
+        return dedupeTerms(fallback).slice(0, 8);
+      }
+
+      function generateTermsFromCurrentTitle() {
+        const editor = collectEditor();
+        if (!editor.title) {
+          setStatus("Set a sleeve title first, then generate terms.", "error");
+          return;
+        }
+        const generated = guessTermsFromTitle(editor.title, editor.letter);
+        if (!generated.length) {
+          setStatus("Could not generate terms from this title.", "error");
+          return;
+        }
+        state.terms = dedupeTerms([...(state.terms || []), ...generated]);
+        renderTerms();
+        setStatus(`Generated ${generated.length} terms locally (free, no paid API).`, "success");
       }
 
       function renderMetrics(summary) {
@@ -480,15 +618,56 @@
             wrap.appendChild(empty);
           } else {
             filteredItems.forEach((sleeve) => {
-              const btn = document.createElement("button");
-              btn.type = "button";
-              btn.className = "synergy-dialog-option";
-              btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
-              btn.addEventListener("click", () => {
-                applySleeveToEditor(sleeve);
-                closeHeaderEditor();
-              });
-              wrap.appendChild(btn);
+              if (group.scope === "custom") {
+                const row = document.createElement("div");
+                row.className = "synergy-dialog-option-row";
+
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "synergy-dialog-option synergy-dialog-option-main";
+                btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
+                btn.addEventListener("click", () => {
+                  applySleeveToEditor(sleeve);
+                  closeHeaderEditor();
+                });
+                row.appendChild(btn);
+
+                const editBtn = document.createElement("button");
+                editBtn.type = "button";
+                editBtn.className = "synergy-dialog-option-icon";
+                editBtn.textContent = "✎";
+                editBtn.setAttribute("aria-label", `Edit title for Career Sleeve ${sleeve.letter}`);
+                editBtn.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  editCustomSleeveTitle(sleeve).catch(() => setStatus("Could not edit custom sleeve title.", "error"));
+                });
+                row.appendChild(editBtn);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "synergy-dialog-option-icon";
+                deleteBtn.textContent = "\u00D7";
+                deleteBtn.setAttribute("aria-label", `Delete Career Sleeve ${sleeve.letter}`);
+                deleteBtn.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  deleteCustomSleeveFromDialog(sleeve).catch(() => setStatus("Could not delete custom sleeve.", "error"));
+                });
+                row.appendChild(deleteBtn);
+
+                wrap.appendChild(row);
+              } else {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "synergy-dialog-option";
+                btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
+                btn.addEventListener("click", () => {
+                  applySleeveToEditor(sleeve);
+                  closeHeaderEditor();
+                });
+                wrap.appendChild(btn);
+              }
             });
           }
           if (group.scope === "custom") {
@@ -497,9 +676,9 @@
             createWrap.innerHTML = `
               <div class="synergy-dialog-group-title">Add Custom Career Sleeve</div>
               <div class="synergy-editor-grid">
-                <select id="dialogCustomLetterSelect" aria-label="Custom sleeve letter">${customLetterOptionsMarkup()}</select>
                 <input id="dialogCustomTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type custom sleeve title...">
               </div>
+              <div class="synergy-dialog-custom-note">The next available letter (E-Z) will be assigned automatically.</div>
               <button id="dialogAddCustomBtn" type="button">Add custom sleeve</button>
             `;
             wrap.appendChild(createWrap);
@@ -507,12 +686,8 @@
           els.loadDialogList.appendChild(wrap);
         });
 
-        const letterSelect = document.getElementById("dialogCustomLetterSelect");
         const titleInput = document.getElementById("dialogCustomTitleInput");
         const addBtn = document.getElementById("dialogAddCustomBtn");
-        if (letterSelect) {
-          letterSelect.value = normalizeLetter(state.pendingCustomLetter) || "E";
-        }
         if (titleInput) {
           titleInput.value = String(state.pendingCustomTitle || "");
         }
@@ -532,26 +707,18 @@
       }
 
       async function createCustomSleeveFromDialog() {
-        const letterSelect = document.getElementById("dialogCustomLetterSelect");
         const titleInput = document.getElementById("dialogCustomTitleInput");
-        const letter = normalizeLetter(letterSelect ? letterSelect.value : "");
         const title = String(titleInput ? titleInput.value : "").trim();
-        if (!letter || !isCustomLetter(letter)) {
-          setStatus("Choose a custom letter (E-Z).", "error");
-          return;
-        }
         if (!title) {
           setStatus("Type a custom sleeve title.", "error");
           return;
         }
-        state.pendingCustomLetter = letter;
         state.pendingCustomTitle = title;
 
         const res = await fetch("/synergy-sleeves", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
-            letter,
             title,
             terms: dedupeTerms(state.terms || []),
           }),
@@ -561,14 +728,95 @@
           setStatus(payload.error || "Could not save custom sleeve.", "error");
           return;
         }
+        const saved = payload.saved || {};
+        const assignedLetter = normalizeLetter(saved.letter);
+        const assignedTitle = String(saved.title || title).trim();
         state.catalog = payload.catalog || state.catalog;
-        state.currentLetter = letter;
-        state.currentTitle = title;
+        state.currentLetter = assignedLetter;
+        state.currentTitle = assignedTitle;
         state.pendingCustomTitle = "";
+        state.loadFilter = "";
+        if (els.loadDialogSearch) {
+          els.loadDialogSearch.value = "";
+        }
         updateHeaderPreview();
         updateActionState();
         renderLoadDialogList();
-        setStatus(`Added custom sleeve ${letter}.`, "success");
+        setStatus(`Added custom sleeve ${assignedLetter || "?"}.`, "success");
+      }
+
+      async function editCustomSleeveTitle(sleeve) {
+        const letter = normalizeLetter(sleeve ? sleeve.letter : "");
+        if (!letter || !isCustomLetter(letter)) {
+          setStatus("Only custom sleeves (E-Z) can be edited.", "error");
+          return;
+        }
+        const originalTitle = String((sleeve && sleeve.title) || "").trim();
+        const nextTitle = window.prompt(`Edit title for Career Sleeve ${letter}:`, originalTitle);
+        if (nextTitle === null) {
+          return;
+        }
+        const title = String(nextTitle).trim().slice(0, 120);
+        if (!title) {
+          setStatus("Title cannot be empty.", "error");
+          return;
+        }
+
+        const res = await fetch("/synergy-sleeves", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            letter,
+            title,
+            terms: dedupeTerms((sleeve && sleeve.terms) || []),
+            allow_overwrite: true,
+          }),
+        });
+        const payload = await res.json();
+        if (!res.ok) {
+          setStatus(payload.error || "Could not update sleeve title.", "error");
+          return;
+        }
+
+        state.catalog = payload.catalog || state.catalog;
+        if (normalizeLetter(state.currentLetter) === letter) {
+          state.currentTitle = title;
+          updateHeaderPreview();
+        }
+        renderLoadDialogList();
+        setStatus(`Updated title for Career Sleeve ${letter}.`, "success");
+      }
+
+      async function deleteCustomSleeveFromDialog(sleeve) {
+        const letter = normalizeLetter(sleeve ? sleeve.letter : "");
+        if (!letter || !isCustomLetter(letter)) {
+          setStatus("Only custom sleeves (E-Z) can be deleted.", "error");
+          return;
+        }
+        const confirmed = window.confirm(`Delete Career Sleeve ${letter}?`);
+        if (!confirmed) {
+          return;
+        }
+
+        const res = await fetch(`/synergy-sleeves/${encodeURIComponent(letter)}`, {
+          method: "DELETE",
+          headers: { Accept: "application/json" },
+        });
+        const payload = await res.json();
+        if (!res.ok) {
+          setStatus(payload.error || "Could not delete custom sleeve.", "error");
+          return;
+        }
+
+        state.catalog = payload.catalog || state.catalog;
+        if (normalizeLetter(state.currentLetter) === letter) {
+          state.currentLetter = "";
+          state.currentTitle = "";
+          updateHeaderPreview();
+          updateActionState();
+        }
+        renderLoadDialogList();
+        setStatus(`Deleted Career Sleeve ${letter}.`, "success");
       }
 
       async function loadCatalog() {
@@ -600,7 +848,6 @@
         if (!editor.letter) return setStatus("Set a sleeve letter first (E-Z for custom).", "error");
         if (isFixedLetter(editor.letter)) return setStatus("Career Sleeves A-D are fixed and cannot be overwritten.", "error");
         if (!editor.title) return setStatus("Add a sleeve title before saving.", "error");
-        if (!editor.terms.length) return setStatus("Add at least one search term before saving.", "error");
         const res = await fetch("/synergy-sleeves", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -694,6 +941,9 @@
           els.termInput.value = "";
           renderTerms();
         });
+        els.generateTermsBtn.addEventListener("click", () => {
+          generateTermsFromCurrentTitle();
+        });
         els.termInput.addEventListener("keydown", (event) => {
           if (event.key === "Enter") { event.preventDefault(); els.addTermBtn.click(); }
         });
@@ -722,7 +972,6 @@
           closeHeaderEditor();
         });
         els.saveSleeveBtn.addEventListener("click", () => saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error")));
-        els.deleteSleeveBtn.addEventListener("click", () => deleteCurrentSleeve().catch(() => setStatus("Could not delete sleeve.", "error")));
         els.scrapeBtn.addEventListener("click", () => runScrape());
       }
 

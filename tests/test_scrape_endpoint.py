@@ -465,6 +465,43 @@ class TestScrapeEndpoint(unittest.TestCase):
         finally:
             main.CUSTOM_SLEEVES_STATE_PATH = original_custom_state_path
 
+    def test_synergy_sleeves_auto_assigns_next_custom_letter(self):
+        original_custom_state_path = main.CUSTOM_SLEEVES_STATE_PATH
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                main.CUSTOM_SLEEVES_STATE_PATH = Path(temp_dir) / "custom_sleeves_state.json"
+
+                first_response = self.client.post(
+                    "/synergy-sleeves",
+                    json={
+                        "title": "Auto Custom One",
+                    },
+                )
+                self.assertEqual(first_response.status_code, 200)
+                first_payload = first_response.get_json()
+                self.assertEqual((first_payload.get("saved") or {}).get("letter"), "E")
+
+                second_response = self.client.post(
+                    "/synergy-sleeves",
+                    json={
+                        "title": "Auto Custom Two",
+                    },
+                )
+                self.assertEqual(second_response.status_code, 200)
+                second_payload = second_response.get_json()
+                self.assertEqual((second_payload.get("saved") or {}).get("letter"), "F")
+
+                duplicate_response = self.client.post(
+                    "/synergy-sleeves",
+                    json={
+                        "letter": "E",
+                        "title": "Should Not Overwrite",
+                    },
+                )
+                self.assertEqual(duplicate_response.status_code, 409)
+        finally:
+            main.CUSTOM_SLEEVES_STATE_PATH = original_custom_state_path
+
 
 if __name__ == "__main__":
     unittest.main()

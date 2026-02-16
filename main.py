@@ -493,6 +493,22 @@ def _parse_terms_for_storage(raw_terms):
     return _dedupe_terms(normalized_terms)[:80]
 
 
+def _next_available_custom_synergy_letter(records):
+    used_letters = set()
+    for entry in records or []:
+        if not isinstance(entry, dict):
+            continue
+        letter = _normalize_sleeve_letter(entry.get("letter"))
+        if _is_custom_synergy_letter(letter):
+            used_letters.add(letter)
+
+    for code in range(ord(CUSTOM_SYNERGY_MIN_LETTER), ord(CUSTOM_SYNERGY_MAX_LETTER) + 1):
+        candidate = chr(code)
+        if candidate not in used_letters:
+            return candidate
+    return ""
+
+
 def _fixed_synergy_sleeves():
     records = []
     for letter in FIXED_SYNERGY_SLEEVE_LETTERS:
@@ -525,7 +541,7 @@ def _load_custom_synergy_sleeves():
             continue
         title = _clean_value(entry.get("title"), "")[:120]
         terms = _parse_terms_for_storage(entry.get("terms"))
-        if not title or not terms:
+        if not title:
             continue
         by_letter[letter] = {
             "letter": letter,
@@ -549,7 +565,7 @@ def _save_custom_synergy_sleeves(records):
             continue
         title = _clean_value(entry.get("title"), "")[:120]
         terms = _parse_terms_for_storage(entry.get("terms"))
-        if not title or not terms:
+        if not title:
             continue
         serializable.append(
             {
@@ -3921,12 +3937,10 @@ def synergy_sleeves():
 @app.route('/synergy-sleeves', methods=['POST'])
 def save_synergy_sleeve():
     payload = request.get_json(silent=True) or {}
-    letter = _normalize_sleeve_letter(payload.get("letter"))
-    if not letter:
-        return jsonify({"error": "Invalid sleeve letter. Use a single letter A-Z."}), 400
-    if _is_fixed_synergy_letter(letter):
+    requested_letter = _normalize_sleeve_letter(payload.get("letter"))
+    if requested_letter and _is_fixed_synergy_letter(requested_letter):
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be overwritten."}), 409
-    if not _is_custom_synergy_letter(letter):
+    if requested_letter and not _is_custom_synergy_letter(requested_letter):
         return jsonify({"error": "Only letters E-Z can be saved as custom sleeves."}), 400
 
     title = _clean_value(payload.get("title"), "")[:120]
@@ -3934,18 +3948,33 @@ def save_synergy_sleeve():
         return jsonify({"error": "Title is required."}), 400
 
     terms = _parse_terms_for_storage(payload.get("terms"))
-
-    record = {
-        "letter": letter,
-        "title": title,
-        "terms": terms,
-        "locked": False,
-        "scope": "custom",
-        "updated_at": _now_utc_stamp(),
-    }
+    allow_overwrite = bool(payload.get("allow_overwrite"))
 
     with custom_sleeves_lock:
         existing = _load_custom_synergy_sleeves()
+        existing_map = {
+            _normalize_sleeve_letter(entry.get("letter")): entry
+            for entry in existing
+            if isinstance(entry, dict)
+        }
+        if requested_letter:
+            letter = requested_letter
+        else:
+            letter = _next_available_custom_synergy_letter(existing)
+            if not letter:
+                return jsonify({"error": "No custom sleeve letters available (E-Z are all in use)."}), 409
+
+        if letter in existing_map and not allow_overwrite:
+            return jsonify({"error": f"Custom sleeve {letter} already exists. Use another letter."}), 409
+
+        record = {
+            "letter": letter,
+            "title": title,
+            "terms": terms,
+            "locked": False,
+            "scope": "custom",
+            "updated_at": _now_utc_stamp(),
+        }
         filtered = [entry for entry in existing if _normalize_sleeve_letter(entry.get("letter")) != letter]
         filtered.append(record)
         filtered.sort(key=lambda entry: entry.get("letter", ""))
