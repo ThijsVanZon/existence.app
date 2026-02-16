@@ -376,8 +376,8 @@ select,
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
-  height: min(82vh, 980px);
-  min-height: 720px;
+  height: min(140vh, 1560px);
+  min-height: 1240px;
   overflow: hidden;
 }
 
@@ -487,8 +487,26 @@ select,
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
+  padding: 8px;
   margin-top: 6px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(var(--white-rgb), 0.52), rgba(var(--white-rgb), 0.34));
+  box-shadow: inset 0 0 0 1px rgba(var(--white-rgb), 0.48);
+  scrollbar-gutter: stable;
+}
+
+[id^="results-"]::-webkit-scrollbar {
+  width: 8px;
+}
+
+[id^="results-"]::-webkit-scrollbar-track {
+  background: rgba(var(--black-rgb), 0.06);
+  border-radius: 999px;
+}
+
+[id^="results-"]::-webkit-scrollbar-thumb {
+  background: rgba(var(--amethyst-rgb), 0.34);
+  border-radius: 999px;
 }
 
 .job-card {
@@ -607,8 +625,8 @@ select,
   border-radius: 10px;
   background: rgba(var(--white-rgb), 0.62);
   color: var(--ink);
-  max-height: 150px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   backdrop-filter: blur(6px) saturate(120%);
   flex: 0 0 auto;
 }
