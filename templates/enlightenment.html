@@ -77,6 +77,7 @@
       <input id="extra-terms-A" class="extra-terms-input" type="text" placeholder="bijv. touring, artist liaison, festival operations">
       <button type="button" onclick="startScraping('A')">Scrape Career Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
+      <div id="progress-A" class="progress-field" hidden></div>
       <div id="summary-A" class="sleeve-summary"></div>
       <div id="error-A" class="error" style="display: none;"></div>
       <div id="results-A"></div>
@@ -92,6 +93,7 @@
       <input id="extra-terms-B" class="extra-terms-input" type="text" placeholder="bijv. attractions ops, guest flow, show quality">
       <button type="button" onclick="startScraping('B')">Scrape Career Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
+      <div id="progress-B" class="progress-field" hidden></div>
       <div id="summary-B" class="sleeve-summary"></div>
       <div id="error-B" class="error" style="display: none;"></div>
       <div id="results-B"></div>
@@ -107,6 +109,7 @@
       <input id="extra-terms-C" class="extra-terms-input" type="text" placeholder="bijv. data center, commissioning, uptime, ai infrastructure">
       <button type="button" onclick="startScraping('C')">Scrape Career Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
+      <div id="progress-C" class="progress-field" hidden></div>
       <div id="summary-C" class="sleeve-summary"></div>
       <div id="error-C" class="error" style="display: none;"></div>
       <div id="results-C"></div>
@@ -122,6 +125,7 @@
       <input id="extra-terms-D" class="extra-terms-input" type="text" placeholder="bijv. vendor operations, rollout, logistics flow">
       <button type="button" onclick="startScraping('D')">Scrape Career Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
+      <div id="progress-D" class="progress-field" hidden></div>
       <div id="summary-D" class="sleeve-summary"></div>
       <div id="error-D" class="error" style="display: none;"></div>
       <div id="results-D"></div>
@@ -137,6 +141,7 @@
       <input id="extra-terms-E" class="extra-terms-input" type="text" placeholder="bijv. role archetypes, must-haves, exclusions, locations">
       <button type="button" onclick="startScraping('E')">Scrape Career Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
+      <div id="progress-E" class="progress-field" hidden></div>
       <div id="summary-E" class="sleeve-summary"></div>
       <div id="error-E" class="error" style="display: none;"></div>
       <div id="results-E"></div>
@@ -149,6 +154,7 @@
     const RESULTS_PER_PAGE = 10;
     const DEFAULT_FETCH_LIMIT = 200;
     const sleeveControllers = {};
+    const sleeveProgressPollers = {};
     const fallbackConfig = {
       profile: 'mvp',
       sources: [
@@ -347,6 +353,82 @@
       }
       pagerDiv.innerHTML = '';
       pagerDiv.hidden = true;
+    }
+
+    function stopProgressPolling(sleeveKey) {
+      const active = sleeveProgressPollers[sleeveKey];
+      if (active) {
+        clearInterval(active);
+        delete sleeveProgressPollers[sleeveKey];
+      }
+    }
+
+    function formatProgressTime(value) {
+      const ts = Number(value || 0);
+      if (!Number.isFinite(ts) || ts <= 0) {
+        return '';
+      }
+      const date = new Date(ts * 1000);
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+      return date.toLocaleTimeString([], { hour12: false });
+    }
+
+    function renderProgress(sleeveKey, payload) {
+      const progressDiv = document.getElementById(`progress-${sleeveKey}`);
+      if (!progressDiv) {
+        return;
+      }
+      const status = String(payload?.status || 'running').toUpperCase();
+      const updated = formatProgressTime(payload?.updated_at);
+      const events = Array.isArray(payload?.events) ? payload.events : [];
+      const latest = events[events.length - 1];
+      const recent = events.slice(-8);
+      const listItems = recent
+        .map(event => `<li>${event?.message || ''}</li>`)
+        .join('');
+      progressDiv.innerHTML = `
+        <div class="progress-status">
+          ${status}${updated ? ` • ${updated}` : ''}
+        </div>
+        ${latest?.message ? `<div class="progress-latest">${latest.message}</div>` : ''}
+        ${recent.length ? `<ul class="progress-list">${listItems}</ul>` : ''}
+      `;
+      progressDiv.hidden = false;
+    }
+
+    function startProgressPolling(sleeveKey, runId) {
+      stopProgressPolling(sleeveKey);
+      const progressDiv = document.getElementById(`progress-${sleeveKey}`);
+      if (progressDiv) {
+        progressDiv.hidden = false;
+        progressDiv.innerHTML = '<div class="progress-status">STARTING</div><div class="progress-latest">Initializing scrape...</div>';
+      }
+
+      const fetchProgress = () => {
+        fetch(`/scrape-progress/${encodeURIComponent(runId)}?tail=30`, { cache: 'no-store' })
+          .then(response => {
+            if (!response.ok) {
+              return null;
+            }
+            return response.json();
+          })
+          .then(payload => {
+            if (!payload) {
+              return;
+            }
+            renderProgress(sleeveKey, payload);
+            const state = String(payload.status || '').toLowerCase();
+            if (state === 'done' || state === 'error') {
+              stopProgressPolling(sleeveKey);
+            }
+          })
+          .catch(() => {});
+      };
+
+      fetchProgress();
+      sleeveProgressPollers[sleeveKey] = setInterval(fetchProgress, 1000);
     }
 
     function renderSleevePage(sleeveKey, requestedPage = 1) {
@@ -623,7 +705,7 @@
         .filter(Boolean);
     }
 
-    function buildScrapeUrl(sleeveKey) {
+    function buildScrapeUrl(sleeveKey, runId) {
       const sources = ['indeed_web'];
       const maxResults = Math.max(
         DEFAULT_FETCH_LIMIT,
@@ -644,9 +726,10 @@
       params.set('max_pages', String(tunedMaxPages));
       params.set('target_raw', String(tunedTargetRaw));
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
-      params.set('refresh', '1');
+      params.set('refresh', '0');
       params.set('failover', '0');
       params.set('sources', sources.join(','));
+      params.set('run_id', String(runId || ''));
       if (extraTerms) {
         params.set('extra_terms', extraTerms);
       }
@@ -659,6 +742,7 @@
       const status = document.getElementById(`status-${sleeveKey}`);
       const summaryDiv = document.getElementById(`summary-${sleeveKey}`);
       const panel = document.getElementById(`panel-${sleeveKey}`);
+      const runId = `${sleeveKey}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 
       if (sleeveControllers[sleeveKey]) {
         sleeveControllers[sleeveKey].abort();
@@ -671,10 +755,12 @@
       resultsDiv.innerHTML = '';
       summaryDiv.innerHTML = '';
       clearSleevePager(sleeveKey);
+      stopProgressPolling(sleeveKey);
+      startProgressPolling(sleeveKey, runId);
       errorDiv.style.display = 'none';
       status.textContent = `Scraping Career Sleeve ${sleeveKey} with selected filters...`;
 
-      fetch(buildScrapeUrl(sleeveKey), { signal: controller.signal })
+      fetch(buildScrapeUrl(sleeveKey, runId), { signal: controller.signal })
         .then(async response => {
           const contentType = (response.headers.get('content-type') || '').toLowerCase();
           const isJson = contentType.includes('application/json');
@@ -682,7 +768,9 @@
           if (!response.ok) {
             if (isJson) {
               const payload = await response.json();
-              throw new Error(payload.error || `HTTP ${response.status}`);
+              const details = Array.isArray(payload.details) ? payload.details.filter(Boolean) : [];
+              const detailsText = details.length ? ` (${details.slice(0, 2).join(' | ')})` : '';
+              throw new Error((payload.error || `HTTP ${response.status}`) + detailsText);
             }
 
             const bodyText = await response.text();
@@ -742,6 +830,7 @@
         })
         .catch(error => {
           status.textContent = '';
+          stopProgressPolling(sleeveKey);
           const isTimeout = error.name === 'AbortError';
           errorDiv.textContent = isTimeout
             ? `Scrape for Career Sleeve ${sleeveKey} timed out after 120 seconds.`

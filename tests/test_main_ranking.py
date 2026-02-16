@@ -270,19 +270,13 @@ class TestMainRanking(unittest.TestCase):
         with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
             self.assertEqual(main._active_scrape_profile(), "mvp")
 
-    def test_full_profile_requires_explicit_opt_in(self):
-        with patch.dict(
-            main.os.environ,
-            {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "0"},
-            clear=False,
-        ):
-            self.assertEqual(main._active_scrape_profile(), "mvp")
+    def test_full_profile_env_no_longer_enables_full_mode(self):
         with patch.dict(
             main.os.environ,
             {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
             clear=False,
         ):
-            self.assertEqual(main._active_scrape_profile(), "full")
+            self.assertEqual(main._active_scrape_profile(), "mvp")
 
     def test_canonicalize_relative_url_returns_empty(self):
         self.assertEqual(main._canonicalize_url("/rc/clk?jk=abc123"), "")

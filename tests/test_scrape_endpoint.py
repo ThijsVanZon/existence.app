@@ -126,12 +126,15 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
-    def test_auto_failover_activates_on_low_yield(self):
+    def test_fetch_jobs_enforces_indeed_only_source(self):
         original_fetch_source = main._fetch_source_with_cache
         try:
+            seen_sources = []
+
             def fake_fetch_source(source_key, *args, **kwargs):
+                seen_sources.append(source_key)
                 diagnostics = main._new_diagnostics()
-                if source_key in {"indeed_web", "linkedin_web"}:
+                if source_key == "indeed_web":
                     return (
                         [
                             {
@@ -139,29 +142,8 @@ class TestScrapeEndpoint(unittest.TestCase):
                                 "company": "Same",
                                 "location": "Amsterdam",
                                 "link": "https://example.com/dup",
-                                "source": "Indeed" if source_key == "indeed_web" else "LinkedIn",
+                                "source": "Indeed",
                             }
-                        ],
-                        None,
-                        diagnostics,
-                    )
-                if source_key == "jobicy":
-                    return (
-                        [
-                            {
-                                "title": "Unique One",
-                                "company": "U1",
-                                "location": "NL",
-                                "link": "https://example.com/u1",
-                                "source": "Jobicy",
-                            },
-                            {
-                                "title": "Unique Two",
-                                "company": "U2",
-                                "location": "NL",
-                                "link": "https://example.com/u2",
-                                "source": "Jobicy",
-                            },
                         ],
                         None,
                         diagnostics,
@@ -170,29 +152,29 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            with patch.dict(
-                main.os.environ,
-                {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
-                clear=False,
-            ):
-                items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
-                    ["indeed_web", "linkedin_web"],
-                    sleeve_key="A",
-                    target_raw=10,
-                )
+            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                ["indeed_web", "linkedin_web", "serpapi"],
+                sleeve_key="A",
+                target_raw=10,
+                allow_failover=True,
+            )
             self.assertEqual(errors, [])
-            self.assertIn("jobicy", used_sources)
-            self.assertGreaterEqual(len(items), 3)
-            self.assertTrue(diagnostics["auto_failover"])
+            self.assertEqual(used_sources, ["indeed_web"])
+            self.assertEqual(seen_sources, ["indeed_web"])
+            self.assertEqual(len(items), 1)
+            self.assertEqual(diagnostics["auto_failover"], [])
         finally:
             main._fetch_source_with_cache = original_fetch_source
 
-    def test_failover_can_be_disabled(self):
+    def test_failover_flag_does_not_enable_non_mvp_sources(self):
         original_fetch_source = main._fetch_source_with_cache
         try:
+            seen_sources = []
+
             def fake_fetch_source(source_key, *args, **kwargs):
+                seen_sources.append(source_key)
                 diagnostics = main._new_diagnostics()
-                if source_key in {"indeed_web", "linkedin_web"}:
+                if source_key == "indeed_web":
                     return (
                         [
                             {
@@ -200,21 +182,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                                 "company": "Same",
                                 "location": "Amsterdam",
                                 "link": "https://example.com/dup",
-                                "source": "Indeed" if source_key == "indeed_web" else "LinkedIn",
-                            }
-                        ],
-                        None,
-                        diagnostics,
-                    )
-                if source_key == "jobicy":
-                    return (
-                        [
-                            {
-                                "title": "Unique One",
-                                "company": "U1",
-                                "location": "NL",
-                                "link": "https://example.com/u1",
-                                "source": "Jobicy",
+                                "source": "Indeed",
                             }
                         ],
                         None,
@@ -224,20 +192,16 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            with patch.dict(
-                main.os.environ,
-                {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
-                clear=False,
-            ):
-                items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
-                    ["indeed_web", "linkedin_web"],
-                    sleeve_key="A",
-                    target_raw=10,
-                    allow_failover=False,
-                )
+            items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
+                ["linkedin_web"],
+                sleeve_key="A",
+                target_raw=10,
+                allow_failover=True,
+            )
             self.assertEqual(errors, [])
-            self.assertNotIn("jobicy", used_sources)
-            self.assertEqual(len(items), 2)
+            self.assertEqual(used_sources, ["indeed_web"])
+            self.assertEqual(seen_sources, ["indeed_web"])
+            self.assertEqual(len(items), 1)
             self.assertEqual(diagnostics["auto_failover"], [])
         finally:
             main._fetch_source_with_cache = original_fetch_source

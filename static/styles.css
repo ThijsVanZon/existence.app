@@ -496,6 +496,43 @@ select,
   flex-wrap: wrap;
 }
 
+.progress-field {
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(var(--white-rgb), 0.62);
+  color: var(--ink);
+  max-height: 150px;
+  overflow: auto;
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+.progress-status {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--amethyst);
+  letter-spacing: 0.04em;
+}
+
+.progress-latest {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.progress-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.progress-list li {
+  margin: 2px 0;
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+  line-height: 1.28;
+}
+
 .pager-info {
   color: var(--ink-muted);
   font-size: 0.86rem;

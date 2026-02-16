@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template, url_for, jsonify
+﻿from flask import Flask, request, redirect, render_template, url_for, jsonify
 from collections import Counter
 from datetime import datetime, timezone
 import json
@@ -8,11 +8,12 @@ import random
 import requests
 import time
 import re
+import threading
 import uuid
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
-from scrapy import Selector
-import career_sleeves_v2 as sleeves_v2
+from parsel import Selector
+import career_sleeves as sleeves
 
 # Create an instance of the Flask class
 app = Flask(__name__)
@@ -247,6 +248,12 @@ TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 PRIMARY_DIRECT_SOURCES = {"indeed_web": "Indeed", "linkedin_web": "LinkedIn"}
 AUTO_FAILOVER_SOURCES = ["jobicy", "himalayas", "remotive", "remoteok", "serpapi"]
 VALID_SCRAPE_PROFILES = {"full", "mvp"}
+MVP_ONLY_SOURCE = "indeed_web"
+MVP_ONLY_LOCATION_MODE = "nl_only"
+SCRAPE_PROGRESS_TTL_SECONDS = 1800
+SCRAPE_PROGRESS_MAX_EVENTS = 220
+scrape_progress_state = {}
+scrape_progress_lock = threading.Lock()
 
 
 def _normalize_text(*parts):
@@ -329,6 +336,94 @@ def _slugify(value):
     return cleaned or "na"
 
 
+def _progress_cleanup_locked(now=None):
+    now = now or time.time()
+    stale_ids = []
+    for run_id, payload in scrape_progress_state.items():
+        updated_at = float(payload.get("updated_at", 0) or 0)
+        if updated_at and now - updated_at > SCRAPE_PROGRESS_TTL_SECONDS:
+            stale_ids.append(run_id)
+    for run_id in stale_ids:
+        scrape_progress_state.pop(run_id, None)
+
+
+def _progress_start(run_id, **meta):
+    if not run_id:
+        return
+    now = time.time()
+    payload = {
+        "run_id": run_id,
+        "status": "running",
+        "started_at": now,
+        "updated_at": now,
+        "meta": meta or {},
+        "events": [],
+        "summary": {},
+        "error": "",
+    }
+    with scrape_progress_lock:
+        _progress_cleanup_locked(now)
+        scrape_progress_state[run_id] = payload
+
+
+def _progress_update(run_id, stage, message, **data):
+    if not run_id:
+        return
+    now = time.time()
+    event = {
+        "ts": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+        "stage": _clean_value(stage, "info"),
+        "message": _clean_value(message, ""),
+        "data": data or {},
+    }
+    with scrape_progress_lock:
+        payload = scrape_progress_state.get(run_id)
+        if not payload:
+            return
+        payload["updated_at"] = now
+        payload.setdefault("events", []).append(event)
+        if len(payload["events"]) > SCRAPE_PROGRESS_MAX_EVENTS:
+            payload["events"] = payload["events"][-SCRAPE_PROGRESS_MAX_EVENTS:]
+
+
+def _progress_finish(run_id, status="done", summary=None, error=""):
+    if not run_id:
+        return
+    now = time.time()
+    with scrape_progress_lock:
+        payload = scrape_progress_state.get(run_id)
+        if not payload:
+            return
+        payload["status"] = "error" if str(status).lower() == "error" else "done"
+        payload["updated_at"] = now
+        payload["summary"] = summary or {}
+        payload["error"] = _clean_value(error, "") if error else ""
+        _progress_cleanup_locked(now)
+
+
+def _progress_snapshot(run_id, tail=30):
+    if not run_id:
+        return None
+    with scrape_progress_lock:
+        payload = scrape_progress_state.get(run_id)
+        if not payload:
+            return None
+        safe_tail = max(5, min(int(tail), 120))
+        events = list(payload.get("events") or [])
+        snapshot = {
+            "run_id": payload.get("run_id"),
+            "status": payload.get("status", "running"),
+            "started_at": payload.get("started_at"),
+            "updated_at": payload.get("updated_at"),
+            "meta": dict(payload.get("meta") or {}),
+            "events": events[-safe_tail:],
+            "event_count": len(events),
+            "summary": dict(payload.get("summary") or {}),
+            "error": payload.get("error", ""),
+        }
+        return snapshot
+
+
 def _is_absolute_http_url(url):
     parsed = urlparse(_clean_value(url, ""))
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
@@ -370,10 +465,10 @@ def _load_runtime_config():
         "config_version": "1.0",
         "query_overrides": {},
         "threshold_overrides": {
-            "min_primary_score": sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
-            "min_total_hits": sleeves_v2.MIN_TOTAL_HITS_TO_SHOW,
-            "min_maybe_primary_score": sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE,
-            "min_maybe_total_hits": sleeves_v2.MIN_TOTAL_HITS_TO_MAYBE,
+            "min_primary_score": sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
+            "min_total_hits": sleeves.MIN_TOTAL_HITS_TO_SHOW,
+            "min_maybe_primary_score": sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE,
+            "min_maybe_total_hits": sleeves.MIN_TOTAL_HITS_TO_MAYBE,
         },
         "detail_fetch": {
             "base_budget_per_page": DEFAULT_DETAIL_FETCH_BASE_BUDGET,
@@ -513,15 +608,15 @@ def _extract_job_id_from_url(url):
 
 
 def _build_dedupe_key(item):
-    title_key = sleeves_v2.normalize_for_match(item.get("title"))
-    company_key = sleeves_v2.normalize_for_match(item.get("company"))
+    title_key = sleeves.normalize_for_match(item.get("title"))
+    company_key = sleeves.normalize_for_match(item.get("company"))
     raw_url = _clean_value(item.get("link") or item.get("url"), "")
     canonical_url = _canonicalize_url(raw_url)
     job_id = _clean_value(item.get("job_id"), "") or _extract_job_id_from_url(canonical_url or raw_url)
     anchor = job_id or canonical_url
     if not anchor:
-        location_key = sleeves_v2.normalize_for_match(item.get("location"))
-        date_key = sleeves_v2.normalize_for_match(item.get("date") or item.get("date_posted"))
+        location_key = sleeves.normalize_for_match(item.get("location"))
+        date_key = sleeves.normalize_for_match(item.get("date") or item.get("date_posted"))
         anchor = f"{location_key}|{date_key}"
     return (title_key, company_key, anchor), canonical_url, job_id
 
@@ -690,6 +785,36 @@ def _log_page_metrics(diagnostics, **kwargs):
     summary["full_description_count"] += int(kwargs.get("full_description_count", 0))
     summary["error_count"] += int(kwargs.get("error_count", 0))
     summary["blocked_detected"] = bool(summary["blocked_detected"] or kwargs.get("blocked_detected"))
+    run_id = _clean_value(diagnostics.get("run_id"), "")
+    if run_id:
+        source = kwargs.get("source", "source")
+        page = kwargs.get("page", "?")
+        status = kwargs.get("status", 0)
+        cards = int(kwargs.get("cards_found", 0))
+        parsed = int(kwargs.get("parsed_count", 0))
+        new_unique = int(kwargs.get("new_unique_count", 0))
+        detailpages = int(kwargs.get("detailpages_fetched", 0))
+        errors = int(kwargs.get("error_count", 0))
+        message = (
+            f"{source} p{page}: status {status}, cards {cards}, parsed {parsed}, "
+            f"new {new_unique}, detail {detailpages}, errors {errors}"
+        )
+        _progress_update(
+            run_id,
+            "page",
+            message,
+            source=source,
+            query=kwargs.get("query", ""),
+            location=kwargs.get("location", ""),
+            page=page,
+            status=status,
+            cards_found=cards,
+            parsed_count=parsed,
+            new_unique_count=new_unique,
+            detailpages_fetched=detailpages,
+            error_count=errors,
+            blocked_detected=bool(kwargs.get("blocked_detected")),
+        )
 
 
 def _record_blocked(diagnostics, source):
@@ -851,7 +976,7 @@ def _legacy_extract_abroad_percentage(raw_text):
 
     candidates = []
     range_spans = []
-    for match in re.finditer(r"(\d{1,3})\s*(?:-|to|–|—)\s*(\d{1,3})\s*%", text, flags=re.IGNORECASE):
+    for match in re.finditer(r"(\d{1,3})\s*(?:-|to|â€“|â€”)\s*(\d{1,3})\s*%", text, flags=re.IGNORECASE):
         start, end = match.span()
         if not _context_has_abroad_keywords(text, start, end):
             continue
@@ -878,11 +1003,11 @@ def _legacy_extract_abroad_percentage(raw_text):
 
 
 def _legacy_extract_abroad_geo_mentions(raw_text):
-    prepared_text = sleeves_v2.prepare_text(raw_text)
+    prepared_text = sleeves.prepare_text(raw_text)
     geo = {"countries": [], "regions": [], "continents": []}
     for category in ("countries", "regions", "continents"):
         for label, aliases in ABROAD_GEO_TERMS.get(category, []):
-            hits = sleeves_v2.find_hits(prepared_text, aliases)
+            hits = sleeves.find_hits(prepared_text, aliases)
             if hits and label not in geo[category]:
                 geo[category].append(label)
     locations = geo["countries"] + geo["regions"] + geo["continents"]
@@ -981,12 +1106,12 @@ def _alias_has_abroad_context(raw_text, alias):
 
 
 def _extract_abroad_geo_mentions(raw_text):
-    prepared_text = sleeves_v2.prepare_text(raw_text)
+    prepared_text = sleeves.prepare_text(raw_text)
     has_context = _has_abroad_context(raw_text)
     geo = {"countries": [], "regions": [], "continents": []}
     for category in ("countries", "regions", "continents"):
         for label, aliases in ABROAD_GEO_TERMS.get(category, []):
-            hits = sleeves_v2.find_hits(prepared_text, aliases)
+            hits = sleeves.find_hits(prepared_text, aliases)
             if not hits:
                 continue
             if label == "Netherlands":
@@ -1052,7 +1177,7 @@ def _enhance_abroad_score(base_score, base_badges, abroad_meta, raw_text):
             badges.append("geo_scope")
             seen.add("geo_scope")
 
-    score = max(0.0, min(float(sleeves_v2.ABROAD_SCORE_CAP), round(score, 2)))
+    score = max(0.0, min(float(sleeves.ABROAD_SCORE_CAP), round(score, 2)))
     return score, badges
 
 
@@ -1135,10 +1260,10 @@ def _is_netherlands_job(*parts):
 
 
 def _location_passes_for_mode(location_mode):
-    pass_ids = sleeves_v2.LOCATION_MODE_PASSES.get(location_mode, ["nl"])
+    pass_ids = sleeves.LOCATION_MODE_PASSES.get(location_mode, ["nl"])
     locations = []
     for pass_id in pass_ids:
-        locations.extend(sleeves_v2.SEARCH_LOCATIONS.get(pass_id, []))
+        locations.extend(sleeves.SEARCH_LOCATIONS.get(pass_id, []))
     return locations or ["Netherlands"]
 
 
@@ -1153,7 +1278,7 @@ def _parse_extra_terms(raw_value):
         cleaned = _clean_value(part, "")
         if len(cleaned) < 2:
             continue
-        normalized = sleeves_v2.normalize_for_match(cleaned)
+        normalized = sleeves.normalize_for_match(cleaned)
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
@@ -1164,12 +1289,12 @@ def _parse_extra_terms(raw_value):
 def _query_bundle_for_sleeve(sleeve_key, extra_terms=None):
     sleeve = (sleeve_key or "").upper()
     overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(sleeve, [])
-    terms = overrides if isinstance(overrides, list) and overrides else sleeves_v2.SLEEVE_SEARCH_TERMS.get(sleeve, [])
+    terms = overrides if isinstance(overrides, list) and overrides else sleeves.SLEEVE_SEARCH_TERMS.get(sleeve, [])
     ordered_terms = [term for term in terms if term]
     if extra_terms:
-        seen = {sleeves_v2.normalize_for_match(term) for term in ordered_terms if term}
+        seen = {sleeves.normalize_for_match(term) for term in ordered_terms if term}
         for term in extra_terms:
-            normalized = sleeves_v2.normalize_for_match(term)
+            normalized = sleeves.normalize_for_match(term)
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
@@ -1209,7 +1334,7 @@ def _looks_like_salary_text(value):
     if not text:
         return False
     pattern = (
-        r"(€|\$|£|¥|\beur\b|\busd\b|\bgbp\b|"
+        r"(â‚¬|\$|Â£|Â¥|\beur\b|\busd\b|\bgbp\b|"
         r"\bper\s*(uur|hour|maand|month|jaar|year)\b|"
         r"/\s*(uur|h|maand|month|jaar|yr)|"
         r"\d+\s*-\s*\d+|\d+[.,]?\d*\s*[kK])"
@@ -1608,7 +1733,7 @@ def _fetch_detail_page_text(
         if not detail_links.get("indeed_url") and _is_absolute_http_url(link):
             detail_links["indeed_url"] = link
 
-    blocked = response.status_code in {401, 403, 429} or sleeves_v2.detect_blocked_html(response.text)
+    blocked = response.status_code in {401, 403, 429} or sleeves.detect_blocked_html(response.text)
     if blocked:
         _record_blocked(diagnostics, source_name)
         _save_html_snapshot(
@@ -1688,7 +1813,7 @@ def _fetch_indeed_jobs_direct(
                     last_response_body = body
                 blocked = bool(
                     status in {401, 403, 429}
-                    or sleeves_v2.detect_blocked_html(body)
+                    or sleeves.detect_blocked_html(body)
                 )
                 if blocked:
                     _record_blocked(diagnostics, "Indeed")
@@ -1882,7 +2007,7 @@ def _fetch_linkedin_jobs_direct(
                     last_response_body = body
                 blocked = bool(
                     status in {401, 403, 429}
-                    or sleeves_v2.detect_blocked_html(body)
+                    or sleeves.detect_blocked_html(body)
                 )
                 if blocked:
                     _record_blocked(diagnostics, "LinkedIn")
@@ -2095,7 +2220,7 @@ def rank_and_filter_jobs(
             ),
             "",
         )
-        prepared_text = sleeves_v2.prepare_text(raw_text)
+        prepared_text = sleeves.prepare_text(raw_text)
         title_text = _normalize_text(title)
         work_mode = _infer_work_mode(
             _normalize_text(
@@ -2106,20 +2231,20 @@ def rank_and_filter_jobs(
             )
         )
 
-        language_flags, language_notes = sleeves_v2.detect_language_flags(raw_text)
-        sleeve_scores, sleeve_details = sleeves_v2.score_all_sleeves(raw_text, title_text)
+        language_flags, language_notes = sleeves.detect_language_flags(raw_text)
+        sleeve_scores, sleeve_details = sleeves.score_all_sleeves(raw_text, title_text)
         primary_sleeve, natural_primary_score = max(
             sleeve_scores.items(),
             key=lambda pair: pair[1],
         )
 
-        scoring_sleeve = target_sleeve if target_sleeve in sleeves_v2.VALID_SLEEVES else primary_sleeve
+        scoring_sleeve = target_sleeve if target_sleeve in sleeves.VALID_SLEEVES else primary_sleeve
         primary_score = sleeve_scores.get(scoring_sleeve, natural_primary_score)
         primary_sleeve_details = sleeve_details.get(scoring_sleeve, {})
         total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
 
-        hard_reject_reason = sleeves_v2.detect_hard_reject(title, raw_text)
-        abroad_base_score, abroad_badges, _ = sleeves_v2.score_abroad(raw_text)
+        hard_reject_reason = sleeves.detect_hard_reject(title, raw_text)
+        abroad_base_score, abroad_badges, _ = sleeves.score_abroad(raw_text)
         abroad_meta = _extract_abroad_metadata(raw_text)
         abroad_score, abroad_badges = _enhance_abroad_score(
             abroad_base_score,
@@ -2129,10 +2254,10 @@ def rank_and_filter_jobs(
         )
         location_profile = _score_location_proximity(location, raw_text, work_mode)
         location_proximity_score = float(location_profile.get("score", 0))
-        synergy_score, synergy_hits = sleeves_v2.score_synergy(raw_text)
-        penalty_points, penalty_reasons = sleeves_v2.evaluate_soft_penalties(raw_text)
+        synergy_score, synergy_hits = sleeves.score_synergy(raw_text)
+        penalty_points, penalty_reasons = sleeves.evaluate_soft_penalties(raw_text)
 
-        weights = sleeves_v2.RANKING_WEIGHTS
+        weights = sleeves.RANKING_WEIGHTS
         weighted_score = (
             (abroad_score * weights.get("abroad_score", 0.30))
             + (primary_score * weights.get("primary_sleeve_score", 0.50))
@@ -2149,7 +2274,7 @@ def rank_and_filter_jobs(
         location_penalty = 0 if location_gate_match else 4
         rank_score = (weighted_score * 20) - penalty_points - location_penalty
 
-        primary_sleeve_config = sleeves_v2.SLEEVE_CONFIG[scoring_sleeve]
+        primary_sleeve_config = sleeves.SLEEVE_CONFIG[scoring_sleeve]
         distance_km = location_profile.get("distance_km")
         if distance_km is None:
             proximity_reason = (
@@ -2259,10 +2384,10 @@ def rank_and_filter_jobs(
         )
 
     threshold_cfg = RUNTIME_CONFIG.get("threshold_overrides", {})
-    base_min_total_hits = int(threshold_cfg.get("min_total_hits", sleeves_v2.MIN_TOTAL_HITS_TO_SHOW))
+    base_min_total_hits = int(threshold_cfg.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW))
     base_min_primary = int(threshold_cfg.get("min_primary_score", min_target_score))
-    base_min_maybe_total = int(threshold_cfg.get("min_maybe_total_hits", sleeves_v2.MIN_TOTAL_HITS_TO_MAYBE))
-    base_min_maybe_primary = int(threshold_cfg.get("min_maybe_primary_score", sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE))
+    base_min_maybe_total = int(threshold_cfg.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE))
+    base_min_maybe_primary = int(threshold_cfg.get("min_maybe_primary_score", sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE))
 
     threshold_profiles = [
         {
@@ -2460,7 +2585,7 @@ def fetch_comic(comic_id):
 
 
 def _sleeve_query_string(sleeve_key):
-    terms = sleeves_v2.SLEEVE_SEARCH_TERMS.get((sleeve_key or "").upper(), [])
+    terms = sleeves.SLEEVE_SEARCH_TERMS.get((sleeve_key or "").upper(), [])
     quoted_terms = [f"\"{term}\"" for term in terms[:6]]
     return " OR ".join(quoted_terms) if quoted_terms else ""
 
@@ -2974,39 +3099,19 @@ SOURCE_REGISTRY = {
 
 
 def _active_scrape_profile():
-    profile = _clean_value(os.getenv("SCRAPE_PROFILE"), "mvp").lower()
-    if profile not in VALID_SCRAPE_PROFILES:
-        return "mvp"
-    # Keep MVP as safe default unless FULL is explicitly enabled.
-    if profile == "full":
-        allow_full = _clean_value(os.getenv("SCRAPE_FULL_PROFILE_ENABLED"), "0").lower()
-        if allow_full not in {"1", "true", "yes", "on"}:
-            return "mvp"
-    return profile
+    return "mvp"
 
 
 def _configured_source_allowlist():
-    # Optional runtime override to gradually re-enable upgraded sources.
-    raw = _clean_value(os.getenv("SCRAPE_SOURCE_ALLOWLIST"), "").lower()
-    if not raw:
-        return set()
-    selected = {item.strip() for item in raw.split(",") if item.strip()}
-    return {source for source in selected if source in SOURCE_REGISTRY}
+    return {MVP_ONLY_SOURCE}
 
 
 def _profile_source_allowlist():
-    explicit_allowlist = _configured_source_allowlist()
-    if explicit_allowlist:
-        return explicit_allowlist
-
-    profile = _active_scrape_profile()
-    if profile == "mvp":
-        return {"indeed_web"}
-    return set(SOURCE_REGISTRY.keys())
+    return {MVP_ONLY_SOURCE}
 
 
 def _source_allowed_by_profile(source_key):
-    return source_key in _profile_source_allowlist()
+    return source_key == MVP_ONLY_SOURCE
 
 
 def _source_env_missing(source_key):
@@ -3034,19 +3139,20 @@ def _source_available(source_key):
         return False
     if _source_env_missing(source_key):
         return False
-    if _source_health_block_reason(source_key):
+    # Never hard-disable the only MVP source via circuit-breaker.
+    if source_key != MVP_ONLY_SOURCE and _source_health_block_reason(source_key):
         return False
     return True
 
 
 def _source_availability_reason(source_key):
     if not _source_allowed_by_profile(source_key):
-        return f"Disabled in scrape profile `{_active_scrape_profile()}`"
+        return "Disabled in MVP (Indeed-only mode)"
     missing_env = _source_env_missing(source_key)
     if missing_env:
         return f"Missing env: {', '.join(missing_env)}"
     health_reason = _source_health_block_reason(source_key)
-    if health_reason:
+    if source_key != MVP_ONLY_SOURCE and health_reason:
         return f"Temporarily disabled after repeated failures: {health_reason}"
     return ""
 
@@ -3064,11 +3170,7 @@ def _record_source_health(source_key, error):
 
 
 def _default_sources():
-    return [
-        source_key
-        for source_key, config in SOURCE_REGISTRY.items()
-        if config["default_enabled"] and _source_available(source_key)
-    ]
+    return [MVP_ONLY_SOURCE] if _source_available(MVP_ONLY_SOURCE) else []
 
 
 def _cache_key_for(
@@ -3083,7 +3185,7 @@ def _cache_key_for(
     config = SOURCE_REGISTRY[source_key]
     extra_key = ""
     if extra_terms:
-        normalized_terms = [sleeves_v2.normalize_for_match(term) for term in extra_terms if term]
+        normalized_terms = [sleeves.normalize_for_match(term) for term in extra_terms if term]
         normalized_terms = [term for term in normalized_terms if term]
         if normalized_terms:
             extra_key = f":x{','.join(sorted(set(normalized_terms)))}"
@@ -3119,6 +3221,7 @@ def _fetch_source_with_cache(
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
     extra_terms=None,
+    run_id="",
 ):
     cache_key = _cache_key_for(
         source_key,
@@ -3136,6 +3239,17 @@ def _fetch_source_with_cache(
         has_error = bool(cache_entry.get("error"))
         ttl = JOBS_CACHE_EMPTY_TTL_SECONDS if (has_no_data or has_error) else JOBS_CACHE_TTL_SECONDS
         if now - cache_entry["fetched_at"] < ttl:
+            _progress_update(
+                run_id,
+                "source-cache",
+                (
+                    f"{source_key}: using cached snapshot "
+                    f"({len(cache_entry.get('items') or [])} items, ttl {int(ttl)}s)"
+                ),
+                source=source_key,
+                cache_hit=True,
+                item_count=len(cache_entry.get("items") or []),
+            )
             return (
                 cache_entry["items"],
                 cache_entry["error"],
@@ -3185,6 +3299,28 @@ def _fetch_source_with_cache(
                 "blocked_detected": False,
             }
         )
+    # If a live refresh/source call fails but we still have previous usable cache,
+    # prefer stale data over a full hard-fail in the UI.
+    if error and not items and cache_entry and cache_entry.get("items"):
+        fallback_diag = cache_entry.get("diagnostics") or _new_diagnostics()
+        fallback_diag.setdefault("auto_failover", []).append(
+            {
+                "source_activated": source_key,
+                "reason": "stale_cache_fallback_after_error",
+                "new_items": len(cache_entry.get("items") or []),
+            }
+        )
+        _progress_update(
+            run_id,
+            "source-fallback",
+            f"{source_key}: live fetch failed, reused stale cached items ({len(cache_entry.get('items') or [])})",
+            source=source_key,
+            fallback="stale_cache",
+            item_count=len(cache_entry.get("items") or []),
+            error=_clean_value(error, ""),
+        )
+        return cache_entry["items"], None, fallback_diag
+
     _record_source_health(source_key, error)
 
     source_cache[cache_key] = {
@@ -3210,11 +3346,21 @@ def fetch_jobs_from_sources(
     allow_failover=True,
     run_id="",
 ):
-    profile = _active_scrape_profile()
+    profile = "mvp"
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    if not requested:
-        requested = _default_sources()
-    usable_sources = [source for source in requested if _source_available(source)]
+    usable_sources = [source for source in [MVP_ONLY_SOURCE] if _source_available(source)]
+    _progress_update(
+        run_id,
+        "source-plan",
+        (
+            f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
+            + (" (MVP lock: forced Indeed-only)" if requested and requested != [MVP_ONLY_SOURCE] else "")
+        ),
+        requested_sources=requested,
+        usable_sources=usable_sources,
+        profile=profile,
+        location_mode=location_mode,
+    )
     if not usable_sources:
         return [], ["No available sources for the selected options."], [], _new_diagnostics()
 
@@ -3223,6 +3369,14 @@ def fetch_jobs_from_sources(
     diagnostics = _new_diagnostics()
     diagnostics["run_id"] = run_id
     for source_key in usable_sources:
+        source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
+        _progress_update(
+            run_id,
+            "source-start",
+            f"Starting {source_label}",
+            source=source_key,
+            label=source_label,
+        )
         source_items, source_error, source_diag = _fetch_source_with_cache(
             source_key,
             sleeve_key,
@@ -3234,10 +3388,22 @@ def fetch_jobs_from_sources(
             detail_rps=detail_rps,
             no_new_unique_pages=no_new_unique_pages,
             extra_terms=extra_terms,
+            run_id=run_id,
         )
         items.extend(source_items)
         if source_error:
             errors.append(f"{source_key}: {source_error}")
+        _progress_update(
+            run_id,
+            "source-finish",
+            (
+                f"Finished {source_label}: {len(source_items)} items"
+                + (f", error: {source_error}" if source_error else "")
+            ),
+            source=source_key,
+            item_count=len(source_items),
+            error=source_error or "",
+        )
         diagnostics["source_query_pages"].extend(source_diag.get("source_query_pages", []))
         diagnostics["snapshots"].extend(source_diag.get("snapshots", []))
         for source, blocked in (source_diag.get("blocked_detected") or {}).items():
@@ -3255,11 +3421,7 @@ def fetch_jobs_from_sources(
         if diagnostics["blocked_detected"].get(source_name):
             blocked_primary.append(source_key)
     low_yield = unique_count < max(20, int(target_raw * 0.35))
-    should_failover = bool(
-        allow_failover
-        and profile != "mvp"
-        and (blocked_primary or low_yield)
-    )
+    should_failover = False
 
     if should_failover:
         reason = "blocked_primary" if blocked_primary else "low_yield"
@@ -3278,6 +3440,14 @@ def fetch_jobs_from_sources(
             if not _source_available(source_key):
                 continue
 
+            source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
+            _progress_update(
+                run_id,
+                "failover-source-start",
+                f"Failover source activated: {source_label}",
+                source=source_key,
+                reason=reason,
+            )
             source_items, source_error, source_diag = _fetch_source_with_cache(
                 source_key,
                 sleeve_key,
@@ -3289,11 +3459,23 @@ def fetch_jobs_from_sources(
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
                 extra_terms=extra_terms,
+                run_id=run_id,
             )
             usable_sources.append(source_key)
             items.extend(source_items)
             if source_error:
                 errors.append(f"{source_key}: {source_error}")
+            _progress_update(
+                run_id,
+                "failover-source-finish",
+                (
+                    f"Finished failover source {source_label}: {len(source_items)} items"
+                    + (f", error: {source_error}" if source_error else "")
+                ),
+                source=source_key,
+                item_count=len(source_items),
+                error=source_error or "",
+            )
             diagnostics["source_query_pages"].extend(source_diag.get("source_query_pages", []))
             diagnostics["snapshots"].extend(source_diag.get("snapshots", []))
             for source, blocked in (source_diag.get("blocked_detected") or {}).items():
@@ -3318,41 +3500,32 @@ def fetch_jobs_from_sources(
 
 
 def _public_scrape_config():
-    profile = _active_scrape_profile()
-    allowlist = _profile_source_allowlist()
-    sources = []
-    for source_key, config in SOURCE_REGISTRY.items():
-        available = _source_available(source_key)
-        reason = _source_availability_reason(source_key)
-        sources.append(
-            {
-                "id": source_key,
-                "label": config["label"],
-                "available": available,
-                "default_enabled": bool(config["default_enabled"] and available),
-                "enabled_in_profile": source_key in allowlist,
-                "reason": reason,
-            }
-        )
-
-    if profile == "mvp":
-        location_modes = [
-            {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
-        ]
-    else:
-        location_modes = [
-            {"id": "nl_only", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_only"]},
-            {"id": "nl_eu", "label": sleeves_v2.LOCATION_MODE_LABELS["nl_eu"]},
-            {"id": "global", "label": sleeves_v2.LOCATION_MODE_LABELS["global"]},
-        ]
+    profile = "mvp"
+    source_key = MVP_ONLY_SOURCE
+    config = SOURCE_REGISTRY[source_key]
+    available = _source_available(source_key)
+    reason = _source_availability_reason(source_key)
+    sources = [
+        {
+            "id": source_key,
+            "label": config["label"],
+            "available": available,
+            "default_enabled": bool(config["default_enabled"] and available),
+            "enabled_in_profile": True,
+            "reason": reason,
+        }
+    ]
+    location_modes = [
+        {"id": MVP_ONLY_LOCATION_MODE, "label": sleeves.LOCATION_MODE_LABELS[MVP_ONLY_LOCATION_MODE]},
+    ]
 
     return {
         "profile": profile,
         "sources": sources,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "defaults": {
-            "sources": _default_sources(),
-            "location_mode": "nl_only",
+            "sources": [source_key],
+            "location_mode": MVP_ONLY_LOCATION_MODE,
             "strict": False,
             "max_results": 200,
             "max_pages": DEFAULT_MAX_PAGES,
@@ -3383,33 +3556,33 @@ def redirect_to_index():
 
 # Routes for different decades
 @app.route('/genesis')
-def decade_2000():
-    return render_template('2000.html')
+def show_genesis():
+    return render_template('genesis.html')
 
 
 @app.route('/aspiration')
-def decade_2010():
-    return render_template('2010.html')
+def show_aspiration():
+    return render_template('aspiration.html')
 
 
 @app.route('/enlightenment')
-def decade_2020():
-    return render_template('2020.html')
+def show_enlightenment():
+    return render_template('enlightenment.html')
 
 
 @app.route('/synergy')
-def decade_2030():
-    return render_template('2030.html')
+def show_synergy():
+    return render_template('synergy.html')
 
 
 @app.route('/immersion')
-def decade_2040():
-    return render_template('2040.html')
+def show_immersion():
+    return render_template('immersion.html')
 
 
 @app.route('/transcendence')
-def decade_2050():
-    return render_template('2050.html')
+def show_transcendence():
+    return render_template('transcendence.html')
 
 
 @app.route('/toadstools')
@@ -3460,6 +3633,19 @@ def show_comic(comic_id):
 @app.route('/scrape-config')
 def scrape_config():
     return jsonify(_public_scrape_config())
+
+
+@app.route('/scrape-progress/<run_id>')
+def scrape_progress(run_id):
+    tail_raw = request.args.get("tail", "30")
+    try:
+        tail = int(tail_raw)
+    except ValueError:
+        tail = 30
+    snapshot = _progress_snapshot(run_id, tail=tail)
+    if not snapshot:
+        return jsonify({"error": "run_not_found", "run_id": run_id}), 404
+    return jsonify(snapshot)
 
 
 @app.route('/company-posting')
@@ -3567,18 +3753,14 @@ def company_posting():
 # Route to trigger scraping
 @app.route('/scrape')
 def scrape():
-    run_id = uuid.uuid4().hex[:12]
-    profile = _active_scrape_profile()
+    run_id = _clean_value(request.args.get("run_id"), "") or uuid.uuid4().hex[:12]
+    profile = "mvp"
     sleeve_key = request.args.get("sleeve", "").upper().strip()
-    if sleeve_key not in sleeves_v2.VALID_SLEEVES:
-        allowed = ", ".join(sorted(sleeves_v2.VALID_SLEEVES))
+    if sleeve_key not in sleeves.VALID_SLEEVES:
+        allowed = ", ".join(sorted(sleeves.VALID_SLEEVES))
         return jsonify({"error": f"Invalid sleeve. Use one of: {allowed}."}), 400
 
-    location_mode = request.args.get("location_mode", "nl_only").strip()
-    if location_mode not in {"nl_only", "nl_eu", "global"}:
-        location_mode = "nl_only"
-    if profile == "mvp":
-        location_mode = "nl_only"
+    location_mode = MVP_ONLY_LOCATION_MODE
 
     strict_sleeve = request.args.get("strict", "0") == "1"
     force_refresh = request.args.get("refresh", "0") == "1"
@@ -3637,16 +3819,34 @@ def scrape():
     state_window_days = max(1, min(state_window_days, 90))
 
     sources_param = request.args.get("sources", "")
-    selected_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
+    requested_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
+    selected_sources = [MVP_ONLY_SOURCE]
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
-    failover_raw = request.args.get("failover", "").strip()
-    if failover_raw in {"0", "1"}:
-        allow_failover = failover_raw == "1"
-    else:
-        allow_failover = not bool(selected_sources)
-    if profile == "mvp":
-        allow_failover = False
+    allow_failover = False
+
+    _progress_start(
+        run_id,
+        profile=profile,
+        sleeve=sleeve_key,
+        location_mode=location_mode,
+    )
+    _progress_update(
+        run_id,
+        "start",
+        (
+            f"Scrape started for Career Sleeve {sleeve_key} "
+            f"({location_mode}, profile {profile})"
+        ),
+        sleeve=sleeve_key,
+        location_mode=location_mode,
+        selected_sources=selected_sources,
+        requested_sources=requested_sources,
+        strict_sleeve=strict_sleeve,
+        force_refresh=force_refresh,
+        max_pages=max_pages,
+        max_results=max_results,
+    )
 
     items, fetch_errors, used_sources, fetch_diagnostics = fetch_jobs_from_sources(
         selected_sources,
@@ -3662,7 +3862,28 @@ def scrape():
         allow_failover=allow_failover,
         run_id=run_id,
     )
+    _progress_update(
+        run_id,
+        "fetch-finished",
+        f"Fetch finished: {len(items)} raw items from {', '.join(used_sources) if used_sources else 'no sources'}",
+        raw_items=len(items),
+        used_sources=used_sources,
+        errors=fetch_errors,
+    )
     if not items and fetch_errors:
+        _progress_finish(
+            run_id,
+            status="error",
+            error="All selected sources failed.",
+            summary={
+                "raw_count": 0,
+                "deduped_count": 0,
+                "pass_count": 0,
+                "maybe_count": 0,
+                "fail_count": 0,
+                "errors": fetch_errors,
+            },
+        )
         return jsonify(
             {
                 "error": "All selected sources failed.",
@@ -3671,10 +3892,11 @@ def scrape():
             }
         ), 502
 
+    _progress_update(run_id, "ranking-start", "Ranking and filtering started")
     ranking_result = rank_and_filter_jobs(
         items,
         target_sleeve=sleeve_key,
-        min_target_score=sleeves_v2.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
+        min_target_score=sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
         location_mode=location_mode,
         strict_sleeve=strict_sleeve,
         include_fail=include_fail,
@@ -3693,7 +3915,8 @@ def scrape():
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "sleeve": sleeve_key,
         "location_mode": location_mode,
-        "requested_sources": selected_sources,
+        "requested_sources": requested_sources,
+        "enforced_sources": selected_sources,
         "extra_terms": extra_terms,
         "sources_used": used_sources,
         "sources_used_labels": [
@@ -3765,10 +3988,20 @@ def scrape():
         )
 
     if use_legacy_response:
+        _progress_finish(
+            run_id,
+            status="done",
+            summary=summary,
+        )
         response = jsonify(response_items)
         response.headers["X-Sources-Used"] = ",".join(used_sources)
         return response
 
+    _progress_finish(
+        run_id,
+        status="done",
+        summary=summary,
+    )
     response_payload = {
         "jobs": response_items,
         "summary": summary,
@@ -3783,3 +4016,4 @@ def scrape():
 # Main driver function
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, threaded=True)
+

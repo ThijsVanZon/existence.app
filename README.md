@@ -14,6 +14,12 @@ Run tests:
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Scraper endpoint
 
 `GET /scrape`
