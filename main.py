@@ -1,4 +1,6 @@
-﻿from flask import Flask, request, redirect, render_template, url_for, jsonify
+"""Main Flask application for existence.app."""
+
+from flask import Flask, request, redirect, render_template, url_for, jsonify
 from collections import Counter
 from datetime import datetime, timezone
 import json
@@ -17,6 +19,8 @@ import career_sleeves as sleeves
 
 # Create an instance of the Flask class
 app = Flask(__name__)
+# cPanel/Passenger compatibility: some setups expect "application".
+application = app
 
 # Cache the latest XKCD id to avoid hardcoded limits and repeated API calls
 latest_comic_cache = {"id": None, "fetched_at": 0}
@@ -3548,6 +3552,11 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/healthz')
+def healthz():
+    return jsonify({"status": "ok"})
+
+
 # Redirect '/index.html' to '/'
 @app.route('/index.html')
 def redirect_to_index():
@@ -4015,5 +4024,6 @@ def scrape():
 
 # Main driver function
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, threaded=True)
+    port = int(os.getenv("PORT", "8080"))
+    app.run(host='0.0.0.0', port=port, threaded=True)
 

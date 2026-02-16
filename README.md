@@ -20,6 +20,15 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+## cPanel deployment (main.py + app)
+
+For cPanel Python App, use:
+
+- `Application startup file`: `main.py`
+- `Application Entry point`: `app`
+
+Do not track `passenger_wsgi.py` in this repository. cPanel can manage that file server-side, and tracking it in Git can cause pull conflicts on the server.
+
 ## Scraper endpoint
 
 `GET /scrape`

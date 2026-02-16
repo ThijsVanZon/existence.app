@@ -1,7 +1,31 @@
-node_modules/
+# Python
 __pycache__/
 *.py[cod]
+*.pyd
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Logs and runtime artifacts
 *.log
+stderr.log
 tmp/
 debug_state/
 debug_snapshots/
+
+# JS
+node_modules/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# cPanel/Passenger-managed runtime shim (server-local)
+passenger_wsgi.py
