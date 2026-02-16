@@ -91,6 +91,12 @@
       opacity: 0.9; display: inline-flex; align-items: center; justify-content: center;
     }
     .synergy-link-btn:hover { filter: brightness(0.98); transform: translateY(-1px); opacity: 1; }
+    .synergy-column-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-start;
+    }
     .synergy-dialog {
       border: none; border-radius: 14px; padding: 14px; width: min(680px, calc(100vw - 28px));
       background: linear-gradient(145deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.82));
@@ -148,6 +154,9 @@
       border-radius: var(--synergy-inner-radius);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.88), rgba(var(--white-rgb), 0.7));
     }
+    .synergy-dialog-custom-create.is-hidden {
+      display: none;
+    }
     .synergy-dialog-custom-create .synergy-editor-grid select,
     .synergy-dialog-custom-create .synergy-editor-grid input {
       border: none;
@@ -176,6 +185,26 @@
     .synergy-dialog-editor-actions button {
       flex: 1 1 180px;
     }
+    .synergy-dialog-add-trigger {
+      width: 100%;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 10px;
+      color: var(--white);
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.90), rgba(var(--amethyst-rgb), 0.72));
+      font-family: "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 1.05rem;
+      line-height: 1;
+      text-align: center;
+      cursor: pointer;
+      opacity: 0.92;
+    }
+    .synergy-dialog-add-trigger:hover {
+      filter: brightness(0.98);
+      opacity: 1;
+      transform: translateY(-1px);
+    }
     @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
   </style>
 </head>
@@ -201,6 +230,9 @@
       </header>
 
       <div id="statusBox" class="synergy-status">Ready.</div>
+      <div class="synergy-column-actions">
+        <button id="scrapeNowBtn" type="button">Scrape vacancies now</button>
+      </div>
 
       <section class="synergy-progress">
         <h3>Live Progress</h3>
@@ -222,7 +254,7 @@
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
-    <section class="synergy-dialog-custom-create">
+    <section id="dialogEditorSection" class="synergy-dialog-custom-create is-hidden">
       <div id="dialogEditorTitle" class="synergy-dialog-group-title">ADD CUSTOM CAREER SLEEVE</div>
       <div class="synergy-editor-grid">
         <input id="dialogCustomTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type custom sleeve title...">
@@ -238,7 +270,6 @@
           <button id="dialogGenerateTermsBtn" type="button">Generate terms</button>
           <button id="dialogClearTermsBtn" type="button">Clear terms</button>
           <button id="dialogSaveSleeveBtn" type="button">Save changes to sleeve</button>
-          <button id="dialogScrapeNowBtn" type="button">Scrape vacancies now</button>
         </div>
       </div>
       <div class="synergy-dialog-custom-note">Custom sleeves auto-assign the next available letter (E-Z). Minimum 1 term required to save.</div>
@@ -251,11 +282,13 @@
         catalog: { fixed: [], custom: [], all: [] },
         current: { letter: "", title: "", terms: [] },
         editor: { mode: "add", letter: "", title: "", terms: [] },
+        editorVisible: false,
         progressTimer: null,
         loadFilter: "",
       };
       const els = {
         statusBox: document.getElementById("statusBox"),
+        scrapeNowBtn: document.getElementById("scrapeNowBtn"),
         metricBadges: document.getElementById("metricBadges"),
         progressEvents: document.getElementById("progressEvents"),
         resultList: document.getElementById("resultList"),
@@ -265,6 +298,7 @@
         loadDialog: document.getElementById("loadDialog"),
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
+        dialogEditorSection: document.getElementById("dialogEditorSection"),
         closeLoadDialogBtn: document.getElementById("closeLoadDialogBtn"),
         dialogEditorTitle: document.getElementById("dialogEditorTitle"),
         dialogCustomTitleInput: document.getElementById("dialogCustomTitleInput"),
@@ -274,7 +308,6 @@
         dialogGenerateTermsBtn: document.getElementById("dialogGenerateTermsBtn"),
         dialogClearTermsBtn: document.getElementById("dialogClearTermsBtn"),
         dialogSaveSleeveBtn: document.getElementById("dialogSaveSleeveBtn"),
-        dialogScrapeNowBtn: document.getElementById("dialogScrapeNowBtn"),
       };
 
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
@@ -295,7 +328,7 @@
       };
       const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
       const ICON_EDIT = "\u270E";
-      const ICON_REMOVE = "\u232B";
+      const ICON_REMOVE = "\u00D7";
       const collectCurrent = () => ({
         letter: normalizeLetter(state.current.letter),
         title: String(state.current.title || "").trim(),
@@ -351,7 +384,7 @@
           els.loadDialogSearch.value = "";
         }
         renderLoadDialogList();
-        resetDialogEditor("add");
+        resetDialogEditor("add", null, false);
         if (typeof els.loadDialog.showModal === "function") {
           els.loadDialog.showModal();
         } else {
@@ -363,11 +396,18 @@
       }
 
       function closeHeaderEditor() {
+        setDialogEditorVisible(false);
         if (typeof els.loadDialog.close === "function") {
           els.loadDialog.close();
         } else {
           els.loadDialog.removeAttribute("open");
         }
+      }
+
+      function setDialogEditorVisible(visible) {
+        state.editorVisible = Boolean(visible);
+        if (!els.dialogEditorSection) return;
+        els.dialogEditorSection.classList.toggle("is-hidden", !state.editorVisible);
       }
 
       function updateHeaderPreview() {
@@ -553,6 +593,14 @@
         return q ? `/company-posting?${q}` : "";
       }
 
+      function formatDistanceFromHome(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "";
+        const rounded = numeric >= 100 ? Math.round(numeric) : Math.round(numeric * 10) / 10;
+        const display = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+        return `${display}km from home`;
+      }
+
       function renderResults(jobs) {
         els.resultList.innerHTML = "";
         if (!Array.isArray(jobs) || !jobs.length) {
@@ -569,13 +617,18 @@
           title.className = "synergy-job-title";
           title.textContent = job.title || "Unknown role";
           card.appendChild(title);
+          const distanceLabel = formatDistanceFromHome(job.distance_from_home_km);
           const company = document.createElement("p");
           company.className = "synergy-job-meta";
-          company.textContent = `${job.company || "Unknown company"} | ${job.location || "Unknown location"}`;
+          company.textContent = [
+            job.company || "Unknown company",
+            job.location || job.main_location || "Unknown location",
+            distanceLabel,
+          ].filter(Boolean).join(" · ");
           card.appendChild(company);
           const status = document.createElement("p");
           status.className = "synergy-job-meta";
-          status.textContent = `${job.decision || "UNKNOWN"} | Sleeve ${job.primary_sleeve_id || "?"} ${job.primary_sleeve_score || 0}/5`;
+          status.textContent = `${job.decision || "UNKNOWN"} · Sleeve ${job.primary_sleeve_id || "?"} ${job.primary_sleeve_score || 0}/5`;
           card.appendChild(status);
           const links = document.createElement("div");
           links.className = "synergy-job-links";
@@ -696,11 +749,27 @@
               }
             });
           }
+          if (group.scope === "custom") {
+            const addBtn = document.createElement("button");
+            addBtn.type = "button";
+            addBtn.className = "synergy-dialog-add-trigger";
+            addBtn.textContent = "+";
+            addBtn.setAttribute("aria-label", "Add custom sleeve");
+            addBtn.addEventListener("click", () => {
+              resetDialogEditor("add", null, true);
+              setTimeout(() => {
+                if (els.dialogCustomTitleInput) {
+                  els.dialogCustomTitleInput.focus();
+                }
+              }, 10);
+            });
+            wrap.appendChild(addBtn);
+          }
           els.loadDialogList.appendChild(wrap);
         });
       }
 
-      function resetDialogEditor(mode = "add", sleeve = null) {
+      function resetDialogEditor(mode = "add", sleeve = null, visible = false) {
         if (mode === "edit" && sleeve) {
           state.editor.mode = "edit";
           state.editor.letter = normalizeLetter(sleeve.letter || "");
@@ -713,6 +782,7 @@
           state.editor.terms = [];
         }
         renderDialogEditor();
+        setDialogEditorVisible(visible);
       }
 
       function startEditCustomSleeve(sleeve) {
@@ -722,15 +792,22 @@
           return;
         }
         applySleeveToEditor(sleeve, { silent: true });
-        resetDialogEditor("edit", sleeve);
+        resetDialogEditor("edit", sleeve, true);
+        setTimeout(() => {
+          if (els.dialogCustomTitleInput) {
+            els.dialogCustomTitleInput.focus();
+          }
+        }, 10);
       }
 
       function renderDialogEditor() {
         const editor = collectEditor();
         if (editor.mode === "edit" && editor.letter) {
           els.dialogEditorTitle.textContent = `EDIT CAREER SLEEVE ${editor.letter}`;
+          els.dialogSaveSleeveBtn.textContent = `Save edits to sleeve ${editor.letter}`;
         } else {
           els.dialogEditorTitle.textContent = "ADD CUSTOM CAREER SLEEVE";
+          els.dialogSaveSleeveBtn.textContent = "Add custom sleeve";
         }
         els.dialogCustomTitleInput.value = editor.title;
         renderDialogTerms();
@@ -770,11 +847,17 @@
 
         state.catalog = payload.catalog || state.catalog;
         const saved = payload.saved || {};
+        const wasEdit = editor.mode === "edit";
         applySleeveToEditor(saved, { silent: true });
-        resetDialogEditor("edit", saved);
+        resetDialogEditor("edit", saved, true);
         renderLoadDialogList();
         if (!silent) {
-          setStatus(`Saved Career Sleeve ${saved.letter || "?"}.`, "success");
+          setStatus(
+            wasEdit
+              ? `Saved edits to Career Sleeve ${saved.letter || "?"}.`
+              : `Added custom Career Sleeve ${saved.letter || "?"}.`,
+            "success"
+          );
         }
         return saved;
       }
@@ -808,7 +891,7 @@
           updateHeaderPreview();
         }
         if (state.editor.mode === "edit" && normalizeLetter(state.editor.letter) === letter) {
-          resetDialogEditor("add");
+          resetDialogEditor("add", null, false);
         }
         renderLoadDialogList();
         setStatus(`Deleted Career Sleeve ${letter}.`, "success");
@@ -915,19 +998,7 @@
         els.dialogSaveSleeveBtn.addEventListener("click", () => {
           saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
         });
-        els.dialogScrapeNowBtn.addEventListener("click", async () => {
-          try {
-            const editor = collectEditor();
-            if (editor.title || editor.terms.length || editor.mode === "edit") {
-              const saved = await saveDialogEditor({ silent: false });
-              if (!saved) return;
-            }
-            closeHeaderEditor();
-            runScrape();
-          } catch (_error) {
-            setStatus("Could not start scrape.", "error");
-          }
-        });
+        els.scrapeNowBtn.addEventListener("click", () => runScrape());
         els.headerEditorTrigger.addEventListener("click", async () => {
           try {
             await loadCatalog();
@@ -955,7 +1026,7 @@
 
       async function init() {
         bindEvents();
-        resetDialogEditor("add");
+        resetDialogEditor("add", null, false);
         renderEvents([]);
         renderResults([]);
         renderMetrics(null);
