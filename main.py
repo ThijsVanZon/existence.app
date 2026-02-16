@@ -208,9 +208,13 @@ SNAPSHOT_DIR = Path(os.getenv("SCRAPE_SNAPSHOT_DIR", "debug_snapshots"))
 STATE_DIR = Path(os.getenv("SCRAPE_STATE_DIR", "debug_state"))
 QUERY_PERFORMANCE_STATE_PATH = STATE_DIR / "query_performance_state.json"
 SEEN_JOBS_STATE_PATH = STATE_DIR / "seen_jobs_state.json"
+CUSTOM_SLEEVES_STATE_PATH = STATE_DIR / "custom_sleeves_state.json"
 RUNTIME_CONFIG_PATH = Path(os.getenv("SCRAPE_RUNTIME_CONFIG", "scrape_runtime_config.json"))
 DEFAULT_INCREMENTAL_WINDOW_DAYS = 14
 MAX_REASON_COUNT = 3
+FIXED_SYNERGY_SLEEVE_LETTERS = ("A", "B", "C", "D")
+CUSTOM_SYNERGY_MIN_LETTER = "E"
+CUSTOM_SYNERGY_MAX_LETTER = "Z"
 TRACKING_QUERY_PARAMS = {
     "utm_source",
     "utm_medium",
@@ -248,6 +252,7 @@ REQUEST_USER_AGENTS = [
 ]
 scrape_progress_state = {}
 scrape_progress_lock = threading.Lock()
+custom_sleeves_lock = threading.Lock()
 
 
 def _normalize_text(*parts):
@@ -448,6 +453,134 @@ def _save_json_file(path, payload):
         return True
     except OSError:
         return False
+
+
+def _normalize_sleeve_letter(value):
+    cleaned = _clean_value(value, "").strip().upper()
+    if len(cleaned) != 1 or not cleaned.isalpha():
+        return ""
+    return cleaned
+
+
+def _is_fixed_synergy_letter(letter):
+    return letter in FIXED_SYNERGY_SLEEVE_LETTERS
+
+
+def _is_custom_synergy_letter(letter):
+    if not letter or len(letter) != 1:
+        return False
+    if not letter.isalpha():
+        return False
+    if _is_fixed_synergy_letter(letter):
+        return False
+    return ord(CUSTOM_SYNERGY_MIN_LETTER) <= ord(letter) <= ord(CUSTOM_SYNERGY_MAX_LETTER)
+
+
+def _parse_terms_for_storage(raw_terms):
+    if isinstance(raw_terms, str):
+        parsed = _parse_query_terms(raw_terms)
+    elif isinstance(raw_terms, list):
+        parsed = _dedupe_terms(raw_terms)
+    else:
+        parsed = []
+
+    normalized_terms = []
+    for term in parsed:
+        cleaned = _clean_value(term, "")
+        if len(cleaned) < 2:
+            continue
+        normalized_terms.append(cleaned[:96])
+    return _dedupe_terms(normalized_terms)[:80]
+
+
+def _fixed_synergy_sleeves():
+    records = []
+    for letter in FIXED_SYNERGY_SLEEVE_LETTERS:
+        config = sleeves.SLEEVE_CONFIG.get(letter, {})
+        records.append(
+            {
+                "letter": letter,
+                "title": _clean_value(config.get("name"), f"Career Sleeve {letter}"),
+                "terms": _dedupe_terms(sleeves.SLEEVE_SEARCH_TERMS.get(letter, [])),
+                "locked": True,
+                "scope": "fixed",
+                "updated_at": _now_utc_stamp(),
+            }
+        )
+    return records
+
+
+def _load_custom_synergy_sleeves():
+    payload = _load_json_file(CUSTOM_SLEEVES_STATE_PATH, {"version": "1.0", "custom_sleeves": []})
+    raw_entries = payload.get("custom_sleeves") if isinstance(payload, dict) else []
+    if not isinstance(raw_entries, list):
+        return []
+
+    by_letter = {}
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        letter = _normalize_sleeve_letter(entry.get("letter"))
+        if not _is_custom_synergy_letter(letter):
+            continue
+        title = _clean_value(entry.get("title"), "")[:120]
+        terms = _parse_terms_for_storage(entry.get("terms"))
+        if not title or not terms:
+            continue
+        by_letter[letter] = {
+            "letter": letter,
+            "title": title,
+            "terms": terms,
+            "locked": False,
+            "scope": "custom",
+            "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
+        }
+
+    return [by_letter[key] for key in sorted(by_letter)]
+
+
+def _save_custom_synergy_sleeves(records):
+    serializable = []
+    for entry in records or []:
+        if not isinstance(entry, dict):
+            continue
+        letter = _normalize_sleeve_letter(entry.get("letter"))
+        if not _is_custom_synergy_letter(letter):
+            continue
+        title = _clean_value(entry.get("title"), "")[:120]
+        terms = _parse_terms_for_storage(entry.get("terms"))
+        if not title or not terms:
+            continue
+        serializable.append(
+            {
+                "letter": letter,
+                "title": title,
+                "terms": terms,
+                "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
+            }
+        )
+
+    serializable.sort(key=lambda item: item.get("letter", ""))
+    payload = {
+        "version": "1.0",
+        "updated_at": _now_utc_stamp(),
+        "custom_sleeves": serializable,
+    }
+    return _save_json_file(CUSTOM_SLEEVES_STATE_PATH, payload)
+
+
+def _synergy_sleeve_catalog():
+    fixed = _fixed_synergy_sleeves()
+    custom = _load_custom_synergy_sleeves()
+    all_entries = list(fixed) + list(custom)
+    return {
+        "fixed": fixed,
+        "custom": custom,
+        "all": all_entries,
+        "locked_letters": list(FIXED_SYNERGY_SLEEVE_LETTERS),
+        "custom_letter_min": CUSTOM_SYNERGY_MIN_LETTER,
+        "custom_letter_max": CUSTOM_SYNERGY_MAX_LETTER,
+    }
 
 
 def _load_runtime_config():
@@ -3776,6 +3909,78 @@ def show_enlightenment():
 @app.route('/synergy')
 def show_synergy():
     return render_template('synergy.html')
+
+
+@app.route('/synergy-sleeves', methods=['GET'])
+def synergy_sleeves():
+    with custom_sleeves_lock:
+        payload = _synergy_sleeve_catalog()
+    return jsonify(payload)
+
+
+@app.route('/synergy-sleeves', methods=['POST'])
+def save_synergy_sleeve():
+    payload = request.get_json(silent=True) or {}
+    letter = _normalize_sleeve_letter(payload.get("letter"))
+    if not letter:
+        return jsonify({"error": "Invalid sleeve letter. Use a single letter A-Z."}), 400
+    if _is_fixed_synergy_letter(letter):
+        return jsonify({"error": "Career Sleeves A-D are fixed and cannot be overwritten."}), 409
+    if not _is_custom_synergy_letter(letter):
+        return jsonify({"error": "Only letters E-Z can be saved as custom sleeves."}), 400
+
+    title = _clean_value(payload.get("title"), "")[:120]
+    if not title:
+        return jsonify({"error": "Title is required."}), 400
+
+    terms = _parse_terms_for_storage(payload.get("terms"))
+    if not terms:
+        return jsonify({"error": "Add at least one search term before saving."}), 400
+
+    record = {
+        "letter": letter,
+        "title": title,
+        "terms": terms,
+        "locked": False,
+        "scope": "custom",
+        "updated_at": _now_utc_stamp(),
+    }
+
+    with custom_sleeves_lock:
+        existing = _load_custom_synergy_sleeves()
+        filtered = [entry for entry in existing if _normalize_sleeve_letter(entry.get("letter")) != letter]
+        filtered.append(record)
+        filtered.sort(key=lambda entry: entry.get("letter", ""))
+        if not _save_custom_synergy_sleeves(filtered):
+            return jsonify({"error": "Could not persist custom sleeve state."}), 500
+        catalog = _synergy_sleeve_catalog()
+
+    return jsonify({"ok": True, "saved": record, "catalog": catalog})
+
+
+@app.route('/synergy-sleeves/<letter>', methods=['DELETE'])
+def delete_synergy_sleeve(letter):
+    normalized_letter = _normalize_sleeve_letter(letter)
+    if not normalized_letter:
+        return jsonify({"error": "Invalid sleeve letter."}), 400
+    if _is_fixed_synergy_letter(normalized_letter):
+        return jsonify({"error": "Career Sleeves A-D are fixed and cannot be deleted."}), 409
+    if not _is_custom_synergy_letter(normalized_letter):
+        return jsonify({"error": "Only letters E-Z can be deleted as custom sleeves."}), 400
+
+    with custom_sleeves_lock:
+        existing = _load_custom_synergy_sleeves()
+        filtered = [
+            entry for entry in existing
+            if _normalize_sleeve_letter(entry.get("letter")) != normalized_letter
+        ]
+        if len(filtered) == len(existing):
+            return jsonify({"error": f"Custom sleeve {normalized_letter} was not found."}), 404
+        if not _save_custom_synergy_sleeves(filtered):
+            return jsonify({"error": "Could not persist custom sleeve state."}), 500
+        catalog = _synergy_sleeve_catalog()
+
+    return jsonify({"ok": True, "deleted": normalized_letter, "catalog": catalog})
 
 
 @app.route('/immersion')

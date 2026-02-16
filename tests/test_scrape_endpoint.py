@@ -403,6 +403,68 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
+    def test_synergy_sleeves_exposes_fixed_a_to_d(self):
+        response = self.client.get("/synergy-sleeves")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        fixed_letters = [entry.get("letter") for entry in payload.get("fixed", [])]
+        self.assertEqual(fixed_letters, ["A", "B", "C", "D"])
+
+    def test_synergy_sleeves_rejects_overwriting_fixed_letters(self):
+        response = self.client.post(
+            "/synergy-sleeves",
+            json={
+                "letter": "A",
+                "title": "Attempt overwrite",
+                "terms": ["festival producer"],
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+        payload = response.get_json()
+        self.assertIn("cannot be overwritten", payload.get("error", ""))
+
+    def test_synergy_sleeves_saves_and_deletes_custom_records(self):
+        original_custom_state_path = main.CUSTOM_SLEEVES_STATE_PATH
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                main.CUSTOM_SLEEVES_STATE_PATH = Path(temp_dir) / "custom_sleeves_state.json"
+
+                create_response = self.client.post(
+                    "/synergy-sleeves",
+                    json={
+                        "letter": "E",
+                        "title": "Custom Pipeline Sleeve",
+                        "terms": ["workflow operations", "delivery operations"],
+                    },
+                )
+                self.assertEqual(create_response.status_code, 200)
+                created_payload = create_response.get_json()
+                self.assertTrue(created_payload.get("ok"))
+
+                fetch_response = self.client.get("/synergy-sleeves")
+                self.assertEqual(fetch_response.status_code, 200)
+                fetch_payload = fetch_response.get_json()
+                custom_entries = fetch_payload.get("custom") or []
+                self.assertEqual(len(custom_entries), 1)
+                self.assertEqual(custom_entries[0].get("letter"), "E")
+                self.assertEqual(custom_entries[0].get("title"), "Custom Pipeline Sleeve")
+                self.assertEqual(
+                    custom_entries[0].get("terms"),
+                    ["workflow operations", "delivery operations"],
+                )
+
+                delete_response = self.client.delete("/synergy-sleeves/E")
+                self.assertEqual(delete_response.status_code, 200)
+                delete_payload = delete_response.get_json()
+                self.assertTrue(delete_payload.get("ok"))
+
+                fetch_after_delete = self.client.get("/synergy-sleeves")
+                self.assertEqual(fetch_after_delete.status_code, 200)
+                after_payload = fetch_after_delete.get_json()
+                self.assertEqual(after_payload.get("custom"), [])
+        finally:
+            main.CUSTOM_SLEEVES_STATE_PATH = original_custom_state_path
+
 
 if __name__ == "__main__":
     unittest.main()
