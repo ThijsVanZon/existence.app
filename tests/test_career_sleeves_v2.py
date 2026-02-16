@@ -34,14 +34,15 @@ class TestCareerSleevesV2(unittest.TestCase):
 
     def test_plural_matching_improves_keyword_detection(self):
         score, details = sleeves_v2.score_sleeve(
-            "E",
+            "A",
             (
-                "Partnerships manager in events and community programming "
-                "with festival culture and brand activations."
+                "Event producer role across festivals and concerts with "
+                "crew coordination and on-site delivery."
             ),
-            "Partnerships Manager",
+            "Event Producer",
         )
         self.assertGreaterEqual(score, 3)
+        self.assertIn("festival", details["context_hits"])
         self.assertEqual(details["reason"], "ok")
 
     def test_abroad_score_caps_at_schema_limit(self):
@@ -65,9 +66,9 @@ class TestCareerSleevesV2(unittest.TestCase):
 
     def test_workflow_role_scores_without_hard_must_have_gate(self):
         score, details = sleeves_v2.score_sleeve(
-            "B",
-            "Implementation consultant for process improvement and systems analysis.",
-            "Implementation Consultant",
+            "D",
+            "Implementation manager for supply chain workflow and vendor coordination.",
+            "Implementation Manager",
         )
         self.assertGreaterEqual(score, 3)
         self.assertEqual(details["reason"], "ok")

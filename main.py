@@ -22,6 +22,7 @@ latest_comic_cache = {"id": None, "fetched_at": 0}
 CACHE_TTL_SECONDS = 3600
 DEFAULT_COMIC_ID = 3000
 JOBS_CACHE_TTL_SECONDS = 600
+JOBS_CACHE_EMPTY_TTL_SECONDS = 45
 source_cache = {}
 source_health = {}
 SOURCE_FAILURE_THRESHOLD = 3
@@ -1069,20 +1070,23 @@ def _extract_abroad_metadata(raw_text):
 
 
 def _passes_location_gate(text, location_mode):
+    normalized_text = _normalize_text(text).strip()
     if location_mode == "global":
         return True
+    if not normalized_text:
+        return True
 
-    has_non_eu_hint = any(keyword in text for keyword in NON_EU_COUNTRY_KEYWORDS)
-    is_netherlands = _is_netherlands_job(text)
+    has_non_eu_hint = any(keyword in normalized_text for keyword in NON_EU_COUNTRY_KEYWORDS)
+    is_netherlands = _is_netherlands_job(normalized_text)
     if location_mode == "nl_only":
         return is_netherlands and not has_non_eu_hint
 
     if is_netherlands:
         return True
 
-    is_remote_or_hybrid = "remote" in text or "hybrid" in text
-    has_eu_hint = any(keyword in text for keyword in EU_REMOTE_HINTS)
-    has_global_remote_hint = any(keyword in text for keyword in GLOBAL_REMOTE_HINTS)
+    is_remote_or_hybrid = "remote" in normalized_text or "hybrid" in normalized_text
+    has_eu_hint = any(keyword in normalized_text for keyword in EU_REMOTE_HINTS)
+    has_global_remote_hint = any(keyword in normalized_text for keyword in GLOBAL_REMOTE_HINTS)
 
     if not is_remote_or_hybrid:
         return False
@@ -1091,6 +1095,30 @@ def _passes_location_gate(text, location_mode):
         return (has_eu_hint or has_global_remote_hint) and not has_non_eu_hint
 
     return False
+
+
+def _build_location_gate_text(location, query_location="", work_mode_hint="", raw_text=""):
+    parts = []
+    location_cleaned = _clean_value(location, "")
+    location_known = bool(location_cleaned) and location_cleaned.lower() not in {
+        "unknown",
+        "not listed",
+        "n/a",
+        "na",
+    }
+    if location_known:
+        parts.append(location_cleaned)
+    else:
+        query_cleaned = _clean_value(query_location, "")
+        if query_cleaned and query_cleaned.lower() not in {"unknown", "not listed", "n/a", "na"}:
+            parts.append(query_cleaned)
+    hint_cleaned = _clean_value(work_mode_hint, "")
+    if hint_cleaned and hint_cleaned.lower() not in {"unknown", "not listed", "n/a", "na"}:
+        parts.append(hint_cleaned)
+    narrowed = _normalize_text(*parts).strip()
+    if narrowed:
+        return narrowed
+    return _normalize_text(raw_text)
 
 
 def _is_netherlands_job(*parts):
@@ -1670,7 +1698,13 @@ def _fetch_indeed_jobs_direct(
                 new_unique_count = 0
                 detailpages_fetched = 0
                 full_description_count = 0
-                error_count = 1 if error else 0
+                error_count = 0
+                if error:
+                    error_count += 1
+                if response is None or status >= 400:
+                    error_count += 1
+                if blocked:
+                    error_count += 1
                 parsed_items = []
                 request_url = response.url if response is not None else search_url
 
@@ -1681,6 +1715,7 @@ def _fetch_indeed_jobs_direct(
                     parsed_count = len(parsed_items)
 
                     if cards_found == 0 or parsed_count == 0:
+                        error_count += 1
                         _save_html_snapshot(
                             "Indeed",
                             query,
@@ -1857,7 +1892,13 @@ def _fetch_linkedin_jobs_direct(
                 new_unique_count = 0
                 detailpages_fetched = 0
                 full_description_count = 0
-                error_count = 1 if error else 0
+                error_count = 0
+                if error:
+                    error_count += 1
+                if response is None or status >= 400:
+                    error_count += 1
+                if blocked:
+                    error_count += 1
                 parsed_items = []
                 request_url = response.url if response is not None else LINKEDIN_SEARCH_URL
 
@@ -1867,6 +1908,7 @@ def _fetch_linkedin_jobs_direct(
                     cards_found = len(cards)
                     parsed_count = len(parsed_items)
                     if cards_found == 0 or parsed_count == 0:
+                        error_count += 1
                         _save_html_snapshot(
                             "LinkedIn",
                             query,
@@ -2097,7 +2139,13 @@ def rank_and_filter_jobs(
             + (synergy_score * weights.get("synergy_score", 0.20))
             + (location_proximity_score * weights.get("location_proximity_score", 0.0))
         )
-        location_gate_match = _passes_location_gate(raw_text, location_mode)
+        location_gate_text = _build_location_gate_text(
+            location,
+            job.get("query_location"),
+            job.get("work_mode_hint"),
+            raw_text,
+        )
+        location_gate_match = _passes_location_gate(location_gate_text, location_mode)
         location_penalty = 0 if location_gate_match else 4
         rank_score = (weighted_score * 20) - penalty_points - location_penalty
 
@@ -3046,6 +3094,20 @@ def _cache_key_for(
     return source_key
 
 
+def _derive_source_fetch_error(items, diagnostics):
+    summaries = list((diagnostics.get("source_query_summary") or {}).values())
+    if not summaries:
+        return "no_pages_attempted"
+    total_parsed = sum(int(entry.get("parsed_count", 0)) for entry in summaries)
+    total_errors = sum(int(entry.get("error_count", 0)) for entry in summaries)
+    blocked_any = any(bool(entry.get("blocked_detected")) for entry in summaries)
+    if blocked_any:
+        return "blocked_detected"
+    if not items and total_parsed == 0 and total_errors > 0:
+        return f"zero_parsed_with_errors:{total_errors}"
+    return ""
+
+
 def _fetch_source_with_cache(
     source_key,
     sleeve_key,
@@ -3069,12 +3131,16 @@ def _fetch_source_with_cache(
     )
     now = time.time()
     cache_entry = source_cache.get(cache_key)
-    if (
-        cache_entry
-        and not force_refresh
-        and now - cache_entry["fetched_at"] < JOBS_CACHE_TTL_SECONDS
-    ):
-        return cache_entry["items"], cache_entry["error"], cache_entry.get("diagnostics") or _new_diagnostics()
+    if cache_entry and not force_refresh:
+        has_no_data = not cache_entry.get("items")
+        has_error = bool(cache_entry.get("error"))
+        ttl = JOBS_CACHE_EMPTY_TTL_SECONDS if (has_no_data or has_error) else JOBS_CACHE_TTL_SECONDS
+        if now - cache_entry["fetched_at"] < ttl:
+            return (
+                cache_entry["items"],
+                cache_entry["error"],
+                cache_entry.get("diagnostics") or _new_diagnostics(),
+            )
 
     fetcher = SOURCE_REGISTRY[source_key]["fetcher"]
     query_based = SOURCE_REGISTRY[source_key]["query_based"]
@@ -3098,7 +3164,9 @@ def _fetch_source_with_cache(
             items, source_diag = result
         else:
             items = result
-        error = None
+        error = _derive_source_fetch_error(items, source_diag)
+        if not error:
+            error = None
     except Exception as exc:  # pragma: no cover
         items = []
         error = str(exc)

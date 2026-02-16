@@ -73,7 +73,6 @@
         <span class="sleeve-header-name">Music Events & Festivals</span>
         <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
-      <p class="sleeve-tagline">International live music productions where creative intent and on-site operations align across crews, artists, and stakeholders.</p>
       <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-A" class="extra-terms-input" type="text" placeholder="bijv. touring, artist liaison, festival operations">
       <button type="button" onclick="startScraping('A')">Scrape Career Sleeve A</button>
@@ -89,7 +88,6 @@
         <span class="sleeve-header-name">Theme Parks & Destinations</span>
         <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
-      <p class="sleeve-tagline">Theme parks and immersive destinations: experience delivery plus operations discipline for safe, repeatable show quality.</p>
       <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-B" class="extra-terms-input" type="text" placeholder="bijv. attractions ops, guest flow, show quality">
       <button type="button" onclick="startScraping('B')">Scrape Career Sleeve B</button>
@@ -105,7 +103,6 @@
         <span class="sleeve-header-name">Data Centers & Facilities</span>
         <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
-      <p class="sleeve-tagline">AI/compute datacenter and facilities ops focused on uptime, safety, scaling, and execution across sites.</p>
       <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-C" class="extra-terms-input" type="text" placeholder="bijv. data center, commissioning, uptime, ai infrastructure">
       <button type="button" onclick="startScraping('C')">Scrape Career Sleeve C</button>
@@ -121,7 +118,6 @@
         <span class="sleeve-header-name">Supply Chains & Ecosystems</span>
         <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
-      <p class="sleeve-tagline">International supply chains and ecosystems: vendor/partner alignment, rollout execution, and reliable cross-site flow.</p>
       <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-D" class="extra-terms-input" type="text" placeholder="bijv. vendor operations, rollout, logistics flow">
       <button type="button" onclick="startScraping('D')">Scrape Career Sleeve D</button>
@@ -137,7 +133,6 @@
         <span class="sleeve-header-name">Custom / User-defined Sleeve</span>
         <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
-      <p class="sleeve-tagline">Custom sleeve configured by the user with role archetypes, keywords, locations, and exclusions.</p>
       <label class="extra-terms-label" for="extra-terms-E">Extra zoekwoorden (comma separated)</label>
       <input id="extra-terms-E" class="extra-terms-input" type="text" placeholder="bijv. role archetypes, must-haves, exclusions, locations">
       <button type="button" onclick="startScraping('E')">Scrape Career Sleeve E</button>
@@ -153,28 +148,6 @@
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
     const RESULTS_PER_PAGE = 10;
     const DEFAULT_FETCH_LIMIT = 200;
-    const sleeveMeta = {
-      A: {
-        name: 'Music Events & Festivals',
-        tagline: 'International live music productions where creative intent and on-site operations align across crews, artists, and stakeholders.'
-      },
-      B: {
-        name: 'Theme Parks & Destinations',
-        tagline: 'Theme parks and immersive destinations: experience delivery plus operations discipline for safe, repeatable show quality.'
-      },
-      C: {
-        name: 'Data Centers & Facilities',
-        tagline: 'AI/compute datacenter and facilities ops focused on uptime, safety, scaling, and execution across sites.'
-      },
-      D: {
-        name: 'Supply Chains & Ecosystems',
-        tagline: 'International supply chains and ecosystems: vendor/partner alignment, rollout execution, and reliable cross-site flow.'
-      },
-      E: {
-        name: 'Custom / User-defined Sleeve',
-        tagline: 'Custom sleeve configured by the user with role archetypes, keywords, locations, and exclusions.'
-      }
-    };
     const sleeveControllers = {};
     const fallbackConfig = {
       profile: 'mvp',
@@ -533,7 +506,7 @@
       actions.className = 'job-actions';
       actions.appendChild(
         createActionLink(
-          'Company Posting',
+          'Open company site',
           companyResolverUrl || '#',
           'job-link-company',
           Boolean(companyResolverUrl)
@@ -541,7 +514,7 @@
       );
       actions.appendChild(
         createActionLink(
-          'Indeed Posting',
+          'Open Indeed',
           indeedUrl || buildIndeedPostingFallbackUrl(job),
           'job-link-indeed',
           true
@@ -671,7 +644,7 @@
       params.set('max_pages', String(tunedMaxPages));
       params.set('target_raw', String(tunedTargetRaw));
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
-      params.set('refresh', '0');
+      params.set('refresh', '1');
       params.set('failover', '0');
       params.set('sources', sources.join(','));
       if (extraTerms) {

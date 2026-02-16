@@ -170,7 +170,11 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "full"}, clear=False):
+            with patch.dict(
+                main.os.environ,
+                {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
+                clear=False,
+            ):
                 items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
                     ["indeed_web", "linkedin_web"],
                     sleeve_key="A",
@@ -220,7 +224,11 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             main._fetch_source_with_cache = fake_fetch_source
 
-            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "full"}, clear=False):
+            with patch.dict(
+                main.os.environ,
+                {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
+                clear=False,
+            ):
                 items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
                     ["indeed_web", "linkedin_web"],
                     sleeve_key="A",
