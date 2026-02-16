@@ -73,8 +73,14 @@
         <span class="sleeve-header-name">Music Events & Festivals</span>
         <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
-      <label class="extra-terms-label" for="extra-terms-A">Extra zoekwoorden (comma separated)</label>
-      <input id="extra-terms-A" class="extra-terms-input" type="text" placeholder="bijv. touring, artist liaison, festival operations">
+      <div class="terms-editor" data-sleeve="A">
+        <label class="terms-label" for="terms-input-A">Zoektermen</label>
+        <div id="terms-chips-A" class="terms-chip-list" aria-live="polite"></div>
+        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <div class="terms-actions">
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('A')">Reset terms</button>
+        </div>
+      </div>
       <button type="button" onclick="startScraping('A')">Scrape Career Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="progress-A" class="progress-field" hidden></div>
@@ -89,8 +95,14 @@
         <span class="sleeve-header-name">Theme Parks & Destinations</span>
         <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
-      <label class="extra-terms-label" for="extra-terms-B">Extra zoekwoorden (comma separated)</label>
-      <input id="extra-terms-B" class="extra-terms-input" type="text" placeholder="bijv. attractions ops, guest flow, show quality">
+      <div class="terms-editor" data-sleeve="B">
+        <label class="terms-label" for="terms-input-B">Zoektermen</label>
+        <div id="terms-chips-B" class="terms-chip-list" aria-live="polite"></div>
+        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <div class="terms-actions">
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('B')">Reset terms</button>
+        </div>
+      </div>
       <button type="button" onclick="startScraping('B')">Scrape Career Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="progress-B" class="progress-field" hidden></div>
@@ -105,8 +117,14 @@
         <span class="sleeve-header-name">Data Centers & Facilities</span>
         <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
-      <label class="extra-terms-label" for="extra-terms-C">Extra zoekwoorden (comma separated)</label>
-      <input id="extra-terms-C" class="extra-terms-input" type="text" placeholder="bijv. data center, commissioning, uptime, ai infrastructure">
+      <div class="terms-editor" data-sleeve="C">
+        <label class="terms-label" for="terms-input-C">Zoektermen</label>
+        <div id="terms-chips-C" class="terms-chip-list" aria-live="polite"></div>
+        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <div class="terms-actions">
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('C')">Reset terms</button>
+        </div>
+      </div>
       <button type="button" onclick="startScraping('C')">Scrape Career Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="progress-C" class="progress-field" hidden></div>
@@ -121,8 +139,14 @@
         <span class="sleeve-header-name">Supply Chains & Ecosystems</span>
         <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
-      <label class="extra-terms-label" for="extra-terms-D">Extra zoekwoorden (comma separated)</label>
-      <input id="extra-terms-D" class="extra-terms-input" type="text" placeholder="bijv. vendor operations, rollout, logistics flow">
+      <div class="terms-editor" data-sleeve="D">
+        <label class="terms-label" for="terms-input-D">Zoektermen</label>
+        <div id="terms-chips-D" class="terms-chip-list" aria-live="polite"></div>
+        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <div class="terms-actions">
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('D')">Reset terms</button>
+        </div>
+      </div>
       <button type="button" onclick="startScraping('D')">Scrape Career Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="progress-D" class="progress-field" hidden></div>
@@ -137,8 +161,14 @@
         <span class="sleeve-header-name">Custom / User-defined Sleeve</span>
         <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
-      <label class="extra-terms-label" for="extra-terms-E">Extra zoekwoorden (comma separated)</label>
-      <input id="extra-terms-E" class="extra-terms-input" type="text" placeholder="bijv. role archetypes, must-haves, exclusions, locations">
+      <div class="terms-editor" data-sleeve="E">
+        <label class="terms-label" for="terms-input-E">Zoektermen</label>
+        <div id="terms-chips-E" class="terms-chip-list" aria-live="polite"></div>
+        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type term en druk Enter">
+        <div class="terms-actions">
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('E')">Reset terms</button>
+        </div>
+      </div>
       <button type="button" onclick="startScraping('E')">Scrape Career Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="progress-E" class="progress-field" hidden></div>
@@ -153,13 +183,67 @@
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
     const RESULTS_PER_PAGE = 10;
     const DEFAULT_FETCH_LIMIT = 200;
+    const TERMS_STORAGE_PREFIX = 'existence.sleeve_terms.v1.';
     const sleeveControllers = {};
     const sleeveProgressPollers = {};
+    const sleeveTermState = {};
     const fallbackConfig = {
       profile: 'mvp',
       sources: [
         { id: 'indeed_web', label: 'Indeed (direct scraping)', available: true, default_enabled: true, reason: '' },
       ],
+      sleeve_terms_defaults: {
+        A: [
+          'music event operations manager',
+          'festival producer',
+          'tour manager',
+          'concert production manager',
+          'live production manager',
+          'artist liaison',
+          'show operations manager',
+          'event operations manager'
+        ],
+        B: [
+          'theme park operations manager',
+          'attractions operations manager',
+          'guest experience manager',
+          'show operations manager',
+          'ride operations manager',
+          'destination operations manager',
+          'resort operations manager',
+          'immersive destination operations'
+        ],
+        C: [
+          'data center operations',
+          'critical facilities technician',
+          'facility operations manager',
+          'commissioning engineer data center',
+          'mission critical operations',
+          'compute infrastructure operations',
+          'ai infrastructure operations',
+          'capacity expansion data center'
+        ],
+        D: [
+          'supply chain operations manager',
+          'logistics operations manager',
+          'vendor operations manager',
+          'partner operations manager',
+          'ecosystem operations manager',
+          'rollout manager',
+          'implementation manager supply chain',
+          'distribution operations manager'
+        ],
+        E: [
+          'operations manager',
+          'program manager',
+          'project manager',
+          'implementation manager',
+          'operations coordinator',
+          'workflow operations',
+          'delivery operations',
+          'cross-functional operations'
+        ]
+      },
       defaults: {
         sources: ['indeed_web'],
         location_mode: 'nl_only',
@@ -183,6 +267,158 @@
         mapping[source.id] = source.label;
       });
       return mapping;
+    }
+
+    function normalizeTermToken(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function dedupeTerms(terms) {
+      const ordered = [];
+      const seen = new Set();
+      (terms || []).forEach(term => {
+        const cleaned = String(term || '').trim();
+        if (cleaned.length < 2) {
+          return;
+        }
+        const normalized = normalizeTermToken(cleaned);
+        if (!normalized || seen.has(normalized)) {
+          return;
+        }
+        seen.add(normalized);
+        ordered.push(cleaned);
+      });
+      return ordered;
+    }
+
+    function termStorageKey(sleeveKey) {
+      return `${TERMS_STORAGE_PREFIX}${sleeveKey}`;
+    }
+
+    function getDefaultTermsForSleeve(sleeveKey) {
+      const defaults = scrapeConfig.sleeve_terms_defaults || {};
+      return dedupeTerms(Array.isArray(defaults[sleeveKey]) ? defaults[sleeveKey] : []);
+    }
+
+    function loadPersistedSleeveTerms(sleeveKey) {
+      const defaults = getDefaultTermsForSleeve(sleeveKey);
+      try {
+        const stored = localStorage.getItem(termStorageKey(sleeveKey));
+        if (!stored) {
+          return defaults;
+        }
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) {
+          return defaults;
+        }
+        const merged = dedupeTerms(parsed);
+        return merged.length ? merged : defaults;
+      } catch (_error) {
+        return defaults;
+      }
+    }
+
+    function persistSleeveTerms(sleeveKey) {
+      try {
+        localStorage.setItem(termStorageKey(sleeveKey), JSON.stringify(sleeveTermState[sleeveKey] || []));
+      } catch (_error) {
+      }
+    }
+
+    function removeSleeveTerm(sleeveKey, index) {
+      const current = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
+      if (index < 0 || index >= current.length) {
+        return;
+      }
+      current.splice(index, 1);
+      sleeveTermState[sleeveKey] = current;
+      persistSleeveTerms(sleeveKey);
+      renderSleeveTerms(sleeveKey);
+    }
+
+    function renderSleeveTerms(sleeveKey) {
+      const chipsWrap = document.getElementById(`terms-chips-${sleeveKey}`);
+      if (!chipsWrap) {
+        return;
+      }
+      const terms = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
+      chipsWrap.innerHTML = '';
+
+      if (!terms.length) {
+        const empty = document.createElement('span');
+        empty.className = 'term-chip-empty';
+        empty.textContent = 'Geen termen ingesteld. Voeg er minstens 1 toe.';
+        chipsWrap.appendChild(empty);
+        return;
+      }
+
+      terms.forEach((term, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'term-chip';
+
+        const label = document.createElement('span');
+        label.className = 'term-chip-label';
+        label.textContent = term;
+        chip.appendChild(label);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'term-chip-remove';
+        remove.textContent = '×';
+        remove.setAttribute('aria-label', `Remove term ${term}`);
+        remove.title = 'Remove term';
+        remove.addEventListener('click', () => removeSleeveTerm(sleeveKey, index));
+        chip.appendChild(remove);
+
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    function addSleeveTermsFromInput(sleeveKey) {
+      const input = document.getElementById(`terms-input-${sleeveKey}`);
+      if (!input) {
+        return;
+      }
+      const raw = String(input.value || '').trim();
+      if (!raw) {
+        return;
+      }
+      const chunks = raw.split(/[,;\n\r|]+/).map(part => part.trim()).filter(Boolean);
+      if (!chunks.length) {
+        input.value = '';
+        return;
+      }
+      const current = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
+      sleeveTermState[sleeveKey] = dedupeTerms(current.concat(chunks));
+      input.value = '';
+      persistSleeveTerms(sleeveKey);
+      renderSleeveTerms(sleeveKey);
+    }
+
+    function resetSleeveTerms(sleeveKey) {
+      sleeveTermState[sleeveKey] = getDefaultTermsForSleeve(sleeveKey);
+      persistSleeveTerms(sleeveKey);
+      renderSleeveTerms(sleeveKey);
+    }
+
+    function initializeTermEditors() {
+      sleeveKeys.forEach((sleeveKey) => {
+        const input = document.getElementById(`terms-input-${sleeveKey}`);
+        if (!input) {
+          return;
+        }
+        if (!input.dataset.bound) {
+          input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addSleeveTermsFromInput(sleeveKey);
+            }
+          });
+          input.dataset.bound = '1';
+        }
+        sleeveTermState[sleeveKey] = loadPersistedSleeveTerms(sleeveKey);
+        renderSleeveTerms(sleeveKey);
+      });
     }
 
     function resolveWorkMode(job) {
@@ -696,6 +932,8 @@
           .map(source => source.label)
           .join(', ') || availableSources[0].label}`;
       }
+
+      initializeTermEditors();
     }
 
     function selectedSources() {
@@ -711,13 +949,12 @@
         DEFAULT_FETCH_LIMIT,
         Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
       );
-      const hasDirectScrape = sources.includes('indeed_web') || sources.includes('linkedin_web');
+      const hasDirectScrape = sources.includes('indeed_web');
       const tunedMaxPages = hasDirectScrape ? 3 : 5;
       const tunedTargetRaw = hasDirectScrape
         ? Math.max(40, Math.min(120, maxResults * 3))
         : Math.max(60, Math.min(150, maxResults * 4));
-      const extraInput = document.getElementById(`extra-terms-${sleeveKey}`);
-      const extraTerms = String(extraInput?.value || '').trim();
+      const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
       params.set('location_mode', 'nl_only');
@@ -730,8 +967,8 @@
       params.set('failover', '0');
       params.set('sources', sources.join(','));
       params.set('run_id', String(runId || ''));
-      if (extraTerms) {
-        params.set('extra_terms', extraTerms);
+      if (queryTerms.length) {
+        params.set('query_terms', queryTerms.join(','));
       }
       return `/scrape?${params.toString()}`;
     }
@@ -743,6 +980,7 @@
       const summaryDiv = document.getElementById(`summary-${sleeveKey}`);
       const panel = document.getElementById(`panel-${sleeveKey}`);
       const runId = `${sleeveKey}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      addSleeveTermsFromInput(sleeveKey);
 
       if (sleeveControllers[sleeveKey]) {
         sleeveControllers[sleeveKey].abort();

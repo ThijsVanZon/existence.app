@@ -1,7 +1,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import main
 
@@ -274,8 +273,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.rank_and_filter_jobs = original_rank
 
     def test_mvp_profile_only_exposes_indeed_source(self):
-        with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "mvp"}, clear=False):
-            config = main._public_scrape_config()
+        config = main._public_scrape_config()
 
         available_ids = [source["id"] for source in config["sources"] if source["available"]]
         self.assertEqual(available_ids, ["indeed_web"])
@@ -313,14 +311,53 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            with patch.dict(main.os.environ, {"SCRAPE_PROFILE": "mvp"}, clear=False):
-                response = self.client.get(
-                    "/scrape?sleeve=A&sources=indeed_web&location_mode=global&failover=1"
-                )
+            response = self.client.get(
+                "/scrape?sleeve=A&sources=indeed_web&location_mode=global&failover=1"
+            )
 
             self.assertEqual(response.status_code, 200)
             self.assertFalse(captured["allow_failover"])
             self.assertEqual(captured["location_mode"], "nl_only")
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
+    def test_scrape_passes_query_terms(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            captured = {"query_terms": None}
+
+            def fake_fetch(*args, **kwargs):
+                captured["query_terms"] = kwargs.get("query_terms")
+                return [], [], ["indeed_web"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get(
+                "/scrape?sleeve=A&query_terms=festival+producer,artist+liaison,festival+producer"
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(captured["query_terms"], ["festival producer", "artist liaison"])
         finally:
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank

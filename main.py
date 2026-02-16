@@ -30,8 +30,6 @@ JOBS_CACHE_TTL_SECONDS = 600
 JOBS_CACHE_EMPTY_TTL_SECONDS = 45
 source_cache = {}
 source_health = {}
-SOURCE_FAILURE_THRESHOLD = 3
-SOURCE_FAILURE_COOLDOWN_SECONDS = 900
 
 # Location anchor: Copernicuslaan 105, 5223EC, 's-Hertogenbosch (BAG/PDOK centroid)
 HOME_LAT = 51.69531823
@@ -183,41 +181,12 @@ ABROAD_GEO_TERMS = {
     ],
 }
 
-REMOTIVE_API = "https://remotive.com/api/remote-jobs"
-REMOTEOK_API = "https://remoteok.com/api"
-THEMUSE_API = "https://www.themuse.com/api/public/jobs"
-THEMUSE_PAGES = 3
-ARBEITNOW_API = "https://www.arbeitnow.com/api/job-board-api"
-JOBICY_API = "https://jobicy.com/api/v2/remote-jobs"
-HIMALAYAS_API = "https://himalayas.app/jobs/api"
-ADZUNA_API_TEMPLATE = "https://api.adzuna.com/v1/api/jobs/nl/search/{page}"
-SERPAPI_URL = "https://serpapi.com/search.json"
 INDEED_SEARCH_URL = "https://www.indeed.com/jobs"
 INDEED_SEARCH_URL_NL = "https://nl.indeed.com/jobs"
 INDEED_SEARCH_URL_BY_MODE = {
     "nl_only": INDEED_SEARCH_URL_NL,
     "nl_eu": INDEED_SEARCH_URL_NL,
     "global": INDEED_SEARCH_URL,
-}
-LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
-LINKEDIN_GEO_ID_BY_MODE = {
-    "nl_only": "102890719",  # Netherlands
-}
-SERPAPI_MARKET_BY_MODE = {
-    "nl_only": {
-        "google_domain": "google.nl",
-        "gl": "nl",
-        "hl": "nl",
-    },
-    "nl_eu": {
-        "google_domain": "google.nl",
-        "gl": "nl",
-        "hl": "en",
-    },
-    "global": {
-        "google_domain": "google.com",
-        "hl": "en",
-    },
 }
 DEFAULT_MAX_PAGES = 8
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
@@ -249,11 +218,9 @@ TRACKING_QUERY_PARAMS = {
 }
 CANONICAL_QUERY_PARAMS = {"jk", "vjk", "jobId", "currentJobId", "id"}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
-PRIMARY_DIRECT_SOURCES = {"indeed_web": "Indeed", "linkedin_web": "LinkedIn"}
-AUTO_FAILOVER_SOURCES = ["jobicy", "himalayas", "remotive", "remoteok", "serpapi"]
-VALID_SCRAPE_PROFILES = {"full", "mvp"}
-MVP_ONLY_SOURCE = "indeed_web"
-MVP_ONLY_LOCATION_MODE = "nl_only"
+MVP_SOURCE_ID = "indeed_web"
+MVP_LOCATION_MODE = "nl_only"
+SCRAPE_MODE = "mvp"
 SCRAPE_PROGRESS_TTL_SECONDS = 1800
 SCRAPE_PROGRESS_MAX_EVENTS = 220
 scrape_progress_state = {}
@@ -312,17 +279,6 @@ def _normalized_location_mode(location_mode):
 def _indeed_search_url_for_mode(location_mode):
     mode = _normalized_location_mode(location_mode)
     return INDEED_SEARCH_URL_BY_MODE.get(mode, INDEED_SEARCH_URL)
-
-
-def _linkedin_geo_id_for_mode(location_mode):
-    mode = _normalized_location_mode(location_mode)
-    return LINKEDIN_GEO_ID_BY_MODE.get(mode, "")
-
-
-def _serpapi_market_params_for_mode(location_mode):
-    mode = _normalized_location_mode(location_mode)
-    params = SERPAPI_MARKET_BY_MODE.get(mode, {"hl": "en"})
-    return dict(params)
 
 
 def _strip_html(value):
@@ -1271,12 +1227,12 @@ def _location_passes_for_mode(location_mode):
     return locations or ["Netherlands"]
 
 
-def _parse_extra_terms(raw_value):
+def _parse_query_terms(raw_value):
     raw_text = str(raw_value or "")
     if not raw_text.strip():
         return []
     parts = re.split(r"[,;\n\r|]+", raw_text)
-    extra_terms = []
+    parsed_terms = []
     seen = set()
     for part in parts:
         cleaned = _clean_value(part, "")
@@ -1286,23 +1242,37 @@ def _parse_extra_terms(raw_value):
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
-        extra_terms.append(cleaned)
-    return extra_terms
+        parsed_terms.append(cleaned)
+    return parsed_terms
 
 
-def _query_bundle_for_sleeve(sleeve_key, extra_terms=None):
+def _parse_extra_terms(raw_value):
+    # Backward-compatible alias for older request/query handling.
+    return _parse_query_terms(raw_value)
+
+
+def _dedupe_terms(terms):
+    ordered = []
+    seen = set()
+    for term in terms or []:
+        cleaned = _clean_value(term, "")
+        if len(cleaned) < 2:
+            continue
+        normalized = sleeves.normalize_for_match(cleaned)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(cleaned)
+    return ordered
+
+
+def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
     sleeve = (sleeve_key or "").upper()
     overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(sleeve, [])
-    terms = overrides if isinstance(overrides, list) and overrides else sleeves.SLEEVE_SEARCH_TERMS.get(sleeve, [])
-    ordered_terms = [term for term in terms if term]
+    base_terms = overrides if isinstance(overrides, list) and overrides else sleeves.SLEEVE_SEARCH_TERMS.get(sleeve, [])
+    ordered_terms = _dedupe_terms(query_terms if query_terms else base_terms)
     if extra_terms:
-        seen = {sleeves.normalize_for_match(term) for term in ordered_terms if term}
-        for term in extra_terms:
-            normalized = sleeves.normalize_for_match(term)
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            ordered_terms.append(term)
+        ordered_terms = _dedupe_terms(ordered_terms + list(extra_terms))
     return _prioritize_queries(sleeve, ordered_terms)
 
 
@@ -1446,48 +1416,6 @@ def _parse_indeed_cards(selector, response_url):
             "source": "Indeed",
         }
         if parsed_item["title"] or parsed_item["link"]:
-            parsed.append(parsed_item)
-    return cards, parsed
-
-
-def _parse_linkedin_cards(selector):
-    cards = selector.css("li.base-card, div.base-card, div.result-card")
-    parsed = []
-    for card in cards:
-        metadata = card.css(
-            "div.base-search-card__metadata *::text, "
-            "ul.job-search-card__job-insight *::text, "
-            "div.result-card__meta *::text"
-        ).getall()
-        parsed_item = {
-            "title": _clean_value(
-                card.css("h3.base-search-card__title::text").get()
-                or card.css("h3.result-card__title::text").get(),
-                "",
-            ),
-            "company": _clean_value(
-                card.css("h4.base-search-card__subtitle::text").get()
-                or card.css("h4.result-card__subtitle::text").get(),
-                "",
-            ),
-            "location": _clean_value(
-                card.css("span.job-search-card__location::text").get()
-                or card.css("span.job-result-card__location::text").get(),
-                "",
-            ),
-            "link": _clean_value(
-                card.css("a.base-card__full-link::attr(href)").get()
-                or card.css("a.result-card__full-card-link::attr(href)").get(),
-                "",
-            ),
-            "snippet": _compact_whitespace(metadata),
-            "date": _clean_value(
-                card.css("time::attr(datetime)").get() or card.css("time::text").get(),
-                "Unknown",
-            ),
-            "source": "LinkedIn",
-        }
-        if parsed_item["title"] and parsed_item["link"]:
             parsed.append(parsed_item)
     return cards, parsed
 
@@ -1778,6 +1706,7 @@ def _fetch_indeed_jobs_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
     extra_terms=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
@@ -1785,7 +1714,11 @@ def _fetch_indeed_jobs_direct(
     jobs = []
     seen_unique = set()
     domain_state = {}
-    queries = _query_bundle_for_sleeve(sleeve_key, extra_terms=extra_terms)
+    queries = _query_bundle_for_sleeve(
+        sleeve_key,
+        query_terms=query_terms,
+        extra_terms=extra_terms,
+    )
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
     detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
@@ -1953,191 +1886,6 @@ def _fetch_indeed_jobs_direct(
                 if last_response_body:
                     _save_html_snapshot(
                         "Indeed",
-                        query,
-                        0,
-                        last_response_body,
-                        "no-new-items",
-                        diagnostics,
-                    )
-    return jobs, diagnostics
-
-
-def _fetch_linkedin_jobs_direct(
-    sleeve_key,
-    location_mode="nl_only",
-    max_pages=DEFAULT_MAX_PAGES,
-    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
-    diagnostics=None,
-    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
-    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
-    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    extra_terms=None,
-):
-    diagnostics = diagnostics or _new_diagnostics()
-    jobs = []
-    seen_unique = set()
-    domain_state = {}
-    geo_id = _linkedin_geo_id_for_mode(location_mode)
-    queries = _query_bundle_for_sleeve(sleeve_key, extra_terms=extra_terms)
-    locations = _location_passes_for_mode(location_mode)
-    session = requests.Session()
-    detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
-    detail_reduced_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("reduced_budget_per_page", DEFAULT_DETAIL_FETCH_REDUCED_BUDGET))
-    detail_failures = 0
-    detail_attempts = 0
-
-    for query in queries:
-        for location in locations:
-            no_new_unique_streak = 0
-            last_response_body = ""
-            for page_idx in range(max_pages):
-                start = page_idx * 25
-                params = {"keywords": query, "location": location, "start": start}
-                if geo_id:
-                    params["geoId"] = geo_id
-                response, error = _rate_limited_get(
-                    session,
-                    LINKEDIN_SEARCH_URL,
-                    params=params,
-                    headers=_source_headers("LinkedIn", location_mode),
-                    domain_state=domain_state,
-                    requests_per_second=requests_per_second,
-                    timeout_seconds=DEFAULT_HTTP_TIMEOUT,
-                    max_retries=DEFAULT_HTTP_RETRIES,
-                )
-                status = response.status_code if response is not None else 0
-                body = response.text if response is not None else ""
-                if body:
-                    last_response_body = body
-                blocked = bool(
-                    status in {401, 403, 429}
-                    or sleeves.detect_blocked_html(body)
-                )
-                if blocked:
-                    _record_blocked(diagnostics, "LinkedIn")
-
-                cards_found = 0
-                parsed_count = 0
-                new_unique_count = 0
-                detailpages_fetched = 0
-                full_description_count = 0
-                error_count = 0
-                if error:
-                    error_count += 1
-                if response is None or status >= 400:
-                    error_count += 1
-                if blocked:
-                    error_count += 1
-                parsed_items = []
-                request_url = response.url if response is not None else LINKEDIN_SEARCH_URL
-
-                if response is not None and response.ok and not blocked:
-                    selector = Selector(text=body)
-                    cards, parsed_items = _parse_linkedin_cards(selector)
-                    cards_found = len(cards)
-                    parsed_count = len(parsed_items)
-                    if cards_found == 0 or parsed_count == 0:
-                        error_count += 1
-                        _save_html_snapshot(
-                            "LinkedIn",
-                            query,
-                            page_idx + 1,
-                            body,
-                            "parse-empty",
-                            diagnostics,
-                        )
-
-                    fail_rate = (detail_failures / detail_attempts) if detail_attempts else 0.0
-                    detail_budget = min(detail_base_budget, len(parsed_items))
-                    if blocked or fail_rate > 0.5:
-                        detail_budget = min(detail_reduced_budget, len(parsed_items))
-
-                    for idx, item in enumerate(parsed_items):
-                        dedupe_key, _, _ = _build_dedupe_key(item)
-                        if dedupe_key in seen_unique:
-                            continue
-                        seen_unique.add(dedupe_key)
-                        new_unique_count += 1
-
-                        full_description = ""
-                        detail_failed = True
-                        detail_errors = 0
-                        detail_links = {"indeed_url": "", "company_url": ""}
-                        if idx < detail_budget:
-                            full_description, detail_failed, detail_errors, detail_links = _fetch_detail_page_text(
-                                session,
-                                item.get("link"),
-                                "LinkedIn",
-                                diagnostics,
-                                domain_state,
-                                detail_rps,
-                                location_mode,
-                            )
-                            detail_attempts += 1
-                            if detail_failed:
-                                detail_failures += 1
-                            detailpages_fetched += 1
-                            error_count += detail_errors
-                            if full_description:
-                                full_description_count += 1
-
-                        item["full_description"] = full_description
-                        item["detail_fetch_failed"] = bool(detail_failed)
-                        item["indeed_url"] = ""
-                        item["company_url"] = _clean_value(detail_links.get("company_url"), "")
-                        item["query"] = query
-                        item["query_location"] = location
-                        item["source"] = "LinkedIn"
-                        jobs.append(item)
-                else:
-                    if response is not None:
-                        _save_html_snapshot(
-                            "LinkedIn",
-                            query,
-                            page_idx + 1,
-                            body,
-                            f"status-{status}",
-                            diagnostics,
-                        )
-
-                _log_page_metrics(
-                    diagnostics,
-                    source="LinkedIn",
-                    query=query,
-                    location=location,
-                    page=page_idx + 1,
-                    url=request_url,
-                    status=status,
-                    cards_found=cards_found,
-                    parsed_count=parsed_count,
-                    new_unique_count=new_unique_count,
-                    detailpages_fetched=detailpages_fetched,
-                    full_description_count=full_description_count,
-                    error_count=error_count,
-                    blocked_detected=blocked,
-                )
-                if new_unique_count == 0:
-                    no_new_unique_streak += 1
-                else:
-                    no_new_unique_streak = 0
-                if cards_found == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
-                    break
-                if len(seen_unique) >= target_raw:
-                    return jobs, diagnostics
-            if no_new_unique_streak >= max(1, int(no_new_unique_pages)):
-                _save_debug_event(
-                    "LinkedIn",
-                    query,
-                    0,
-                    "no-new-items",
-                    diagnostics,
-                    location=location,
-                    pages_attempted=max_pages,
-                    unique_items=len(seen_unique),
-                )
-                if last_response_body:
-                    _save_html_snapshot(
-                        "LinkedIn",
                         query,
                         0,
                         last_response_body,
@@ -2588,381 +2336,6 @@ def fetch_comic(comic_id):
     return response.json()
 
 
-def _sleeve_query_string(sleeve_key):
-    terms = sleeves.SLEEVE_SEARCH_TERMS.get((sleeve_key or "").upper(), [])
-    quoted_terms = [f"\"{term}\"" for term in terms[:6]]
-    return " OR ".join(quoted_terms) if quoted_terms else ""
-
-
-def _fetch_remotive_jobs():
-    items = []
-    response = requests.get(REMOTIVE_API, timeout=12)
-    response.raise_for_status()
-    for job in response.json().get("jobs", []):
-        location = _clean_value(job.get("candidate_required_location"), "")
-        category = _clean_value(job.get("category"), "")
-        tags = " ".join(job.get("tags") or [])
-        items.append(
-            {
-                "title": _clean_value(job.get("title"), ""),
-                "company": _clean_value(job.get("company_name"), ""),
-                "location": location,
-                "link": _clean_value(job.get("url"), ""),
-                "snippet": _strip_html(job.get("description")),
-                "salary": _clean_value(job.get("salary"), "Not listed"),
-                "date": _clean_value(job.get("publication_date"), "Unknown"),
-                "work_mode_hint": _normalize_text(job.get("job_type"), location, category, tags),
-                "source": "Remotive",
-            }
-        )
-    return items
-
-
-def _fetch_remoteok_jobs():
-    items = []
-    response = requests.get(REMOTEOK_API, timeout=12, headers={"User-Agent": "Mozilla/5.0"})
-    response.raise_for_status()
-    for job in response.json():
-        if not isinstance(job, dict) or not job.get("position"):
-            continue
-        location = _clean_value(job.get("location"), "")
-        tags = " ".join(job.get("tags") or [])
-        salary_min = job.get("salary_min")
-        salary_max = job.get("salary_max")
-        if salary_min and salary_max:
-            salary = f"{salary_min}-{salary_max}"
-        else:
-            salary = "Not listed"
-        items.append(
-            {
-                "title": _clean_value(job.get("position"), ""),
-                "company": _clean_value(job.get("company"), ""),
-                "location": location,
-                "link": _clean_value(job.get("apply_url") or job.get("url"), ""),
-                "snippet": _strip_html(job.get("description")),
-                "salary": salary,
-                "date": _clean_value(job.get("date"), "Unknown"),
-                "work_mode_hint": _normalize_text(location, tags),
-                "source": "RemoteOK",
-            }
-        )
-    return items
-
-
-def _fetch_themuse_jobs():
-    items = []
-    for page in range(1, THEMUSE_PAGES + 1):
-        response = requests.get(THEMUSE_API, timeout=12, params={"page": page})
-        response.raise_for_status()
-        payload = response.json()
-        for job in payload.get("results", []):
-            location_names = ", ".join(
-                location.get("name", "")
-                for location in (job.get("locations") or [])
-                if isinstance(location, dict)
-            )
-            categories = ", ".join(
-                category.get("name", "")
-                for category in (job.get("categories") or [])
-                if isinstance(category, dict)
-            )
-            levels = ", ".join(
-                level.get("name", "")
-                for level in (job.get("levels") or [])
-                if isinstance(level, dict)
-            )
-            tags = ", ".join(
-                tag.get("name", "")
-                for tag in (job.get("tags") or [])
-                if isinstance(tag, dict)
-            )
-            items.append(
-                {
-                    "title": _clean_value(job.get("name"), ""),
-                    "company": _clean_value((job.get("company") or {}).get("name"), ""),
-                    "location": _clean_value(location_names, ""),
-                    "link": _clean_value((job.get("refs") or {}).get("landing_page"), ""),
-                    "snippet": _strip_html(job.get("contents")),
-                    "salary": "Not listed",
-                    "date": _clean_value(job.get("publication_date"), "Unknown"),
-                    "work_mode_hint": _normalize_text(location_names, categories, levels, tags),
-                    "source": "The Muse",
-                }
-            )
-    return items
-
-
-def _fetch_arbeitnow_jobs():
-    items = []
-    response = requests.get(ARBEITNOW_API, timeout=12)
-    response.raise_for_status()
-    for job in response.json().get("data", []):
-        created_at = job.get("created_at")
-        if isinstance(created_at, int):
-            date_value = time.strftime("%Y-%m-%d", time.gmtime(created_at))
-        else:
-            date_value = "Unknown"
-        tags = " ".join(job.get("tags") or [])
-        job_types = " ".join(job.get("job_types") or [])
-        location = _clean_value(job.get("location"), "")
-        remote_flag = "remote" if job.get("remote") else ""
-        items.append(
-            {
-                "title": _clean_value(job.get("title"), ""),
-                "company": _clean_value(job.get("company_name"), ""),
-                "location": location,
-                "link": _clean_value(job.get("url"), ""),
-                "snippet": _strip_html(job.get("description")),
-                "salary": "Not listed",
-                "date": date_value,
-                "work_mode_hint": _normalize_text(remote_flag, location, tags, job_types),
-                "source": "Arbeitnow",
-            }
-        )
-    return items
-
-
-def _format_salary_range(minimum, maximum, currency=""):
-    if minimum and maximum:
-        return f"{minimum}-{maximum} {currency}".strip()
-    return "Not listed"
-
-
-def _fetch_jobicy_jobs(_sleeve_key=None, location_mode="nl_only", **_kwargs):
-    params = {"count": 100}
-    if location_mode == "nl_only":
-        params["geo"] = "Netherlands"
-    elif location_mode == "nl_eu":
-        params["geo"] = "Europe"
-
-    response = requests.get(
-        JOBICY_API,
-        timeout=12,
-        params=params,
-        headers={"User-Agent": "Mozilla/5.0 (existence.app)"},
-    )
-    response.raise_for_status()
-    payload = response.json()
-    jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
-    items = []
-    for job in jobs:
-        tags = job.get("jobTags") or job.get("tags") or []
-        if isinstance(tags, str):
-            tags = [tags]
-        tags_text = " ".join(str(tag) for tag in tags)
-
-        industries = job.get("jobIndustry") or []
-        if isinstance(industries, str):
-            industries = [industries]
-        industry_text = " ".join(str(industry) for industry in industries)
-
-        job_types = job.get("jobType") or []
-        if isinstance(job_types, str):
-            job_types = [job_types]
-        job_type_text = " ".join(str(job_type) for job_type in job_types)
-
-        location = _clean_value(job.get("jobGeo") or job.get("location"), "")
-        items.append(
-            {
-                "title": _clean_value(job.get("jobTitle") or job.get("title"), ""),
-                "company": _clean_value(job.get("companyName"), ""),
-                "location": location,
-                "link": _clean_value(job.get("url"), ""),
-                "snippet": _clean_value(job.get("jobExcerpt") or _strip_html(job.get("jobDescription")), ""),
-                "salary": "Not listed",
-                "date": _clean_value(job.get("pubDate"), "Unknown"),
-                "work_mode_hint": _normalize_text(job_type_text, location, tags_text, industry_text),
-                "source": "Jobicy",
-            }
-        )
-    return items
-
-
-def _fetch_himalayas_jobs():
-    response = requests.get(HIMALAYAS_API, timeout=12, params={"limit": 80})
-    response.raise_for_status()
-    payload = response.json()
-    jobs = payload.get("jobs", payload if isinstance(payload, list) else [])
-    items = []
-    for job in jobs:
-        company_info = job.get("company") if isinstance(job.get("company"), dict) else {}
-        company = _clean_value(
-            company_info.get("name") or job.get("companyName"),
-            "",
-        )
-        location_restrictions = job.get("locationRestrictions") or job.get("location_restrictions") or []
-        if isinstance(location_restrictions, str):
-            location_restrictions = [location_restrictions]
-        timezone_restrictions = job.get("timezoneRestrictions") or job.get("timezone_restrictions") or []
-        if isinstance(timezone_restrictions, str):
-            timezone_restrictions = [timezone_restrictions]
-        categories = job.get("categories") or []
-        if isinstance(categories, str):
-            categories = [categories]
-        category_text = " ".join(str(category) for category in categories)
-        location = _clean_value(
-            ", ".join(str(part) for part in location_restrictions) or job.get("location"),
-            "",
-        )
-        salary = _format_salary_range(
-            job.get("salaryMin") or job.get("minSalary"),
-            job.get("salaryMax") or job.get("maxSalary"),
-            job.get("salaryCurrency") or "",
-        )
-        items.append(
-            {
-                "title": _clean_value(job.get("title"), ""),
-                "company": company,
-                "location": location,
-                "link": _clean_value(
-                    job.get("applicationLink") or job.get("applyUrl") or job.get("url"),
-                    "",
-                ),
-                "snippet": _clean_value(job.get("excerpt") or _strip_html(job.get("description")), ""),
-                "salary": salary,
-                "date": _clean_value(job.get("pubDate") or job.get("publishedAt"), "Unknown"),
-                "work_mode_hint": _normalize_text(
-                    " ".join(str(part) for part in location_restrictions),
-                    " ".join(str(part) for part in timezone_restrictions),
-                    job.get("employmentType"),
-                    job.get("type"),
-                    category_text,
-                ),
-                "source": "Himalayas",
-            }
-        )
-    return items
-
-
-def _fetch_adzuna_jobs(sleeve_key, location_mode="nl_only", **_kwargs):
-    app_id = os.getenv("ADZUNA_APP_ID", "").strip()
-    app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
-    if not app_id or not app_key:
-        raise ValueError("Adzuna credentials are missing")
-    query = _sleeve_query_string(sleeve_key)
-    if location_mode in {"nl_only", "nl_eu"}:
-        query = f"({query}) AND (remote OR hybrid OR travel OR on-site)"
-    response = requests.get(
-        ADZUNA_API_TEMPLATE.format(page=1),
-        timeout=12,
-        params={
-            "app_id": app_id,
-            "app_key": app_key,
-            "results_per_page": 40,
-            "what": query,
-            "where": "Netherlands",
-            "content-type": "application/json",
-        },
-    )
-    response.raise_for_status()
-    items = []
-    for job in response.json().get("results", []):
-        salary_min = job.get("salary_min")
-        salary_max = job.get("salary_max")
-        if salary_min and salary_max:
-            salary = f"{int(salary_min)}-{int(salary_max)}"
-        else:
-            salary = "Not listed"
-        items.append(
-            {
-                "title": _clean_value(job.get("title"), ""),
-                "company": _clean_value((job.get("company") or {}).get("display_name"), ""),
-                "location": _clean_value((job.get("location") or {}).get("display_name"), ""),
-                "link": _clean_value(job.get("redirect_url"), ""),
-                "snippet": _strip_html(job.get("description")),
-                "salary": salary,
-                "date": _clean_value(job.get("created"), "Unknown"),
-                "work_mode_hint": _normalize_text(query, job.get("contract_time"), job.get("contract_type")),
-                "source": "Adzuna",
-            }
-        )
-    return items
-
-
-def _fetch_serpapi_jobs(sleeve_key, location_mode="nl_only", provider_filter=None, **_kwargs):
-    api_key = os.getenv("SERPAPI_API_KEY", "").strip()
-    if not api_key:
-        raise ValueError("SerpApi key is missing")
-    location_mode = _normalized_location_mode(location_mode)
-    query = _sleeve_query_string(sleeve_key)
-    if location_mode in {"nl_only", "nl_eu"}:
-        query = f"({query}) (remote OR hybrid OR travel) Netherlands"
-
-    search_location = "Netherlands" if location_mode == "nl_only" else "Europe"
-    serpapi_params = {
-        "engine": "google_jobs",
-        "q": query,
-        "location": search_location,
-        "api_key": api_key,
-    }
-    serpapi_params.update(_serpapi_market_params_for_mode(location_mode))
-    response = requests.get(
-        SERPAPI_URL,
-        timeout=12,
-        params=serpapi_params,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    items = []
-    for job in payload.get("jobs_results", []):
-        via = _clean_value(job.get("via"), "")
-        if provider_filter and provider_filter.lower() not in via.lower():
-            continue
-
-        options = job.get("apply_options") or []
-        apply_link = ""
-        if options and isinstance(options[0], dict):
-            apply_link = options[0].get("link", "")
-
-        extensions = job.get("detected_extensions") or []
-        if isinstance(extensions, list):
-            extension_text = " ".join(str(item) for item in extensions)
-            date_value = extensions[0] if extensions else "Unknown"
-        else:
-            extension_text = str(extensions)
-            date_value = "Unknown"
-
-        source_label = "SerpApi Google Jobs"
-        if provider_filter:
-            provider_name = "LinkedIn" if provider_filter.lower() == "linkedin" else "Indeed"
-            source_label = f"{provider_name} via SerpApi"
-
-        items.append(
-            {
-                "title": _clean_value(job.get("title"), ""),
-                "company": _clean_value(job.get("company_name"), ""),
-                "location": _clean_value(job.get("location"), ""),
-                "link": _clean_value(apply_link, ""),
-                "snippet": _clean_value(job.get("description"), ""),
-                "salary": _clean_value(job.get("salary"), "Not listed"),
-                "date": _clean_value(date_value, "Unknown"),
-                "work_mode_hint": _normalize_text(
-                    extension_text,
-                    via,
-                    job.get("location"),
-                ),
-                "source": source_label,
-            }
-        )
-    return items
-
-
-def _fetch_serpapi_indeed_jobs(sleeve_key, location_mode="nl_only", **_kwargs):
-    return _fetch_serpapi_jobs(
-        sleeve_key,
-        location_mode=location_mode,
-        provider_filter="indeed",
-    )
-
-
-def _fetch_serpapi_linkedin_jobs(sleeve_key, location_mode="nl_only", **_kwargs):
-    return _fetch_serpapi_jobs(
-        sleeve_key,
-        location_mode=location_mode,
-        provider_filter="linkedin",
-    )
-
-
 def _fetch_indeed_web_jobs(
     sleeve_key,
     location_mode="nl_only",
@@ -2971,6 +2344,7 @@ def _fetch_indeed_web_jobs(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
     extra_terms=None,
     diagnostics=None,
     **_kwargs,
@@ -2984,31 +2358,7 @@ def _fetch_indeed_web_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        extra_terms=extra_terms,
-    )
-
-
-def _fetch_linkedin_web_jobs(
-    sleeve_key,
-    location_mode="nl_only",
-    max_pages=DEFAULT_MAX_PAGES,
-    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
-    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
-    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
-    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    extra_terms=None,
-    diagnostics=None,
-    **_kwargs,
-):
-    return _fetch_linkedin_jobs_direct(
-        sleeve_key,
-        location_mode=location_mode,
-        max_pages=max_pages,
-        target_raw=target_raw,
-        diagnostics=diagnostics,
-        requests_per_second=requests_per_second,
-        detail_rps=detail_rps,
-        no_new_unique_pages=no_new_unique_pages,
+        query_terms=query_terms,
         extra_terms=extra_terms,
     )
 
@@ -3021,101 +2371,7 @@ SOURCE_REGISTRY = {
         "query_based": True,
         "fetcher": _fetch_indeed_web_jobs,
     },
-    "linkedin_web": {
-        "label": "LinkedIn (direct scraping)",
-        "default_enabled": True,
-        "requires_env": [],
-        "query_based": True,
-        "fetcher": _fetch_linkedin_web_jobs,
-    },
-    "remotive": {
-        "label": "Remotive",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": False,
-        "fetcher": _fetch_remotive_jobs,
-    },
-    "remoteok": {
-        "label": "RemoteOK",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": False,
-        "fetcher": _fetch_remoteok_jobs,
-    },
-    "jobicy": {
-        "label": "Jobicy",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": True,
-        "cache_by_sleeve": False,
-        "fetcher": _fetch_jobicy_jobs,
-    },
-    "himalayas": {
-        "label": "Himalayas",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": False,
-        "fetcher": _fetch_himalayas_jobs,
-    },
-    "themuse": {
-        "label": "The Muse",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": False,
-        "fetcher": _fetch_themuse_jobs,
-    },
-    "arbeitnow": {
-        "label": "Arbeitnow",
-        "default_enabled": False,
-        "requires_env": [],
-        "query_based": False,
-        "fetcher": _fetch_arbeitnow_jobs,
-    },
-    "adzuna": {
-        "label": "Adzuna (API key)",
-        "default_enabled": False,
-        "requires_env": ["ADZUNA_APP_ID", "ADZUNA_APP_KEY"],
-        "query_based": True,
-        "fetcher": _fetch_adzuna_jobs,
-    },
-    "indeed_serpapi": {
-        "label": "Indeed via SerpApi (API key)",
-        "default_enabled": False,
-        "requires_env": ["SERPAPI_API_KEY"],
-        "query_based": True,
-        "fetcher": _fetch_serpapi_indeed_jobs,
-    },
-    "linkedin_serpapi": {
-        "label": "LinkedIn via SerpApi (API key)",
-        "default_enabled": False,
-        "requires_env": ["SERPAPI_API_KEY"],
-        "query_based": True,
-        "fetcher": _fetch_serpapi_linkedin_jobs,
-    },
-    "serpapi": {
-        "label": "Google Jobs via SerpApi (API key)",
-        "default_enabled": False,
-        "requires_env": ["SERPAPI_API_KEY"],
-        "query_based": True,
-        "fetcher": _fetch_serpapi_jobs,
-    },
 }
-
-
-def _active_scrape_profile():
-    return "mvp"
-
-
-def _configured_source_allowlist():
-    return {MVP_ONLY_SOURCE}
-
-
-def _profile_source_allowlist():
-    return {MVP_ONLY_SOURCE}
-
-
-def _source_allowed_by_profile(source_key):
-    return source_key == MVP_ONLY_SOURCE
 
 
 def _source_env_missing(source_key):
@@ -3127,37 +2383,20 @@ def _source_env_missing(source_key):
     return missing
 
 
-def _source_health_block_reason(source_key):
-    health = source_health.get(source_key) or {}
-    failure_streak = health.get("failure_streak", 0)
-    last_failure_at = health.get("last_failure_at", 0)
-    if failure_streak < SOURCE_FAILURE_THRESHOLD:
-        return ""
-    if time.time() - last_failure_at > SOURCE_FAILURE_COOLDOWN_SECONDS:
-        return ""
-    return _clean_value(health.get("last_error"), "Recent repeated source failures")
-
-
 def _source_available(source_key):
-    if not _source_allowed_by_profile(source_key):
+    if source_key != MVP_SOURCE_ID:
         return False
     if _source_env_missing(source_key):
-        return False
-    # Never hard-disable the only MVP source via circuit-breaker.
-    if source_key != MVP_ONLY_SOURCE and _source_health_block_reason(source_key):
         return False
     return True
 
 
 def _source_availability_reason(source_key):
-    if not _source_allowed_by_profile(source_key):
+    if source_key != MVP_SOURCE_ID:
         return "Disabled in MVP (Indeed-only mode)"
     missing_env = _source_env_missing(source_key)
     if missing_env:
         return f"Missing env: {', '.join(missing_env)}"
-    health_reason = _source_health_block_reason(source_key)
-    if source_key != MVP_ONLY_SOURCE and health_reason:
-        return f"Temporarily disabled after repeated failures: {health_reason}"
     return ""
 
 
@@ -3174,7 +2413,7 @@ def _record_source_health(source_key, error):
 
 
 def _default_sources():
-    return [MVP_ONLY_SOURCE] if _source_available(MVP_ONLY_SOURCE) else []
+    return [MVP_SOURCE_ID] if _source_available(MVP_SOURCE_ID) else []
 
 
 def _cache_key_for(
@@ -3184,9 +2423,16 @@ def _cache_key_for(
     max_pages,
     target_raw,
     no_new_unique_pages,
+    query_terms=None,
     extra_terms=None,
 ):
     config = SOURCE_REGISTRY[source_key]
+    query_key = ""
+    if query_terms:
+        normalized_query_terms = [sleeves.normalize_for_match(term) for term in query_terms if term]
+        normalized_query_terms = [term for term in normalized_query_terms if term]
+        if normalized_query_terms:
+            query_key = f":q{','.join(sorted(set(normalized_query_terms)))}"
     extra_key = ""
     if extra_terms:
         normalized_terms = [sleeves.normalize_for_match(term) for term in extra_terms if term]
@@ -3194,9 +2440,9 @@ def _cache_key_for(
         if normalized_terms:
             extra_key = f":x{','.join(sorted(set(normalized_terms)))}"
     if config["query_based"] and config.get("cache_by_sleeve", True):
-        return f"{source_key}:{sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{extra_key}"
+        return f"{source_key}:{sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{query_key}{extra_key}"
     if config["query_based"]:
-        return f"{source_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{extra_key}"
+        return f"{source_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{query_key}{extra_key}"
     return source_key
 
 
@@ -3224,6 +2470,7 @@ def _fetch_source_with_cache(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
     extra_terms=None,
     run_id="",
 ):
@@ -3234,6 +2481,7 @@ def _fetch_source_with_cache(
         max_pages,
         target_raw,
         no_new_unique_pages,
+        query_terms=query_terms,
         extra_terms=extra_terms,
     )
     now = time.time()
@@ -3273,6 +2521,7 @@ def _fetch_source_with_cache(
                 requests_per_second=requests_per_second,
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
+                query_terms=query_terms,
                 extra_terms=extra_terms,
                 diagnostics=source_diag,
             )
@@ -3346,19 +2595,20 @@ def fetch_jobs_from_sources(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
     extra_terms=None,
     allow_failover=True,
     run_id="",
 ):
-    profile = "mvp"
+    profile = SCRAPE_MODE
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    usable_sources = [source for source in [MVP_ONLY_SOURCE] if _source_available(source)]
+    usable_sources = [source for source in [MVP_SOURCE_ID] if _source_available(source)]
     _progress_update(
         run_id,
         "source-plan",
         (
             f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
-            + (" (MVP lock: forced Indeed-only)" if requested and requested != [MVP_ONLY_SOURCE] else "")
+            + (" (MVP lock: forced Indeed-only)" if requested and requested != [MVP_SOURCE_ID] else "")
         ),
         requested_sources=requested,
         usable_sources=usable_sources,
@@ -3391,6 +2641,7 @@ def fetch_jobs_from_sources(
             requests_per_second=requests_per_second,
             detail_rps=detail_rps,
             no_new_unique_pages=no_new_unique_pages,
+            query_terms=query_terms,
             extra_terms=extra_terms,
             run_id=run_id,
         )
@@ -3417,95 +2668,14 @@ def fetch_jobs_from_sources(
         for key, value in (source_diag.get("source_query_summary") or {}).items():
             diagnostics["source_query_summary"][key] = value
 
-    unique_count = _count_unique_items(items)
-    blocked_primary = []
-    for source_key, source_name in PRIMARY_DIRECT_SOURCES.items():
-        if source_key not in usable_sources:
-            continue
-        if diagnostics["blocked_detected"].get(source_name):
-            blocked_primary.append(source_key)
-    low_yield = unique_count < max(20, int(target_raw * 0.35))
-    should_failover = False
-
-    if should_failover:
-        reason = "blocked_primary" if blocked_primary else "low_yield"
-        diagnostics["auto_failover"].append(
-            {
-                "reason": reason,
-                "blocked_primary_sources": blocked_primary,
-                "unique_count_before_failover": unique_count,
-            }
-        )
-        for source_key in AUTO_FAILOVER_SOURCES:
-            if source_key in usable_sources:
-                continue
-            if source_key not in SOURCE_REGISTRY:
-                continue
-            if not _source_available(source_key):
-                continue
-
-            source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
-            _progress_update(
-                run_id,
-                "failover-source-start",
-                f"Failover source activated: {source_label}",
-                source=source_key,
-                reason=reason,
-            )
-            source_items, source_error, source_diag = _fetch_source_with_cache(
-                source_key,
-                sleeve_key,
-                location_mode,
-                force_refresh=force_refresh,
-                max_pages=max_pages,
-                target_raw=target_raw,
-                requests_per_second=requests_per_second,
-                detail_rps=detail_rps,
-                no_new_unique_pages=no_new_unique_pages,
-                extra_terms=extra_terms,
-                run_id=run_id,
-            )
-            usable_sources.append(source_key)
-            items.extend(source_items)
-            if source_error:
-                errors.append(f"{source_key}: {source_error}")
-            _progress_update(
-                run_id,
-                "failover-source-finish",
-                (
-                    f"Finished failover source {source_label}: {len(source_items)} items"
-                    + (f", error: {source_error}" if source_error else "")
-                ),
-                source=source_key,
-                item_count=len(source_items),
-                error=source_error or "",
-            )
-            diagnostics["source_query_pages"].extend(source_diag.get("source_query_pages", []))
-            diagnostics["snapshots"].extend(source_diag.get("snapshots", []))
-            for source, blocked in (source_diag.get("blocked_detected") or {}).items():
-                diagnostics["blocked_detected"][source] = bool(
-                    diagnostics["blocked_detected"].get(source, False) or blocked
-                )
-            for key, value in (source_diag.get("source_query_summary") or {}).items():
-                diagnostics["source_query_summary"][key] = value
-            diagnostics["auto_failover"].append(
-                {
-                    "source_activated": source_key,
-                    "new_items": len(source_items),
-                }
-            )
-            unique_count = _count_unique_items(items)
-            if unique_count >= target_raw:
-                break
-
     _update_query_performance_from_diagnostics(diagnostics, sleeve_key)
 
     return items, errors, usable_sources, diagnostics
 
 
 def _public_scrape_config():
-    profile = "mvp"
-    source_key = MVP_ONLY_SOURCE
+    profile = SCRAPE_MODE
+    source_key = MVP_SOURCE_ID
     config = SOURCE_REGISTRY[source_key]
     available = _source_available(source_key)
     reason = _source_availability_reason(source_key)
@@ -3520,16 +2690,21 @@ def _public_scrape_config():
         }
     ]
     location_modes = [
-        {"id": MVP_ONLY_LOCATION_MODE, "label": sleeves.LOCATION_MODE_LABELS[MVP_ONLY_LOCATION_MODE]},
+        {"id": MVP_LOCATION_MODE, "label": sleeves.LOCATION_MODE_LABELS[MVP_LOCATION_MODE]},
     ]
 
     return {
         "profile": profile,
         "sources": sources,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
+        "sleeve_terms_defaults": {
+            key: list(value)
+            for key, value in (sleeves.SLEEVE_SEARCH_TERMS or {}).items()
+            if key in sleeves.VALID_SLEEVES
+        },
         "defaults": {
             "sources": [source_key],
-            "location_mode": MVP_ONLY_LOCATION_MODE,
+            "location_mode": MVP_LOCATION_MODE,
             "strict": False,
             "max_results": 200,
             "max_pages": DEFAULT_MAX_PAGES,
@@ -3763,13 +2938,13 @@ def company_posting():
 @app.route('/scrape')
 def scrape():
     run_id = _clean_value(request.args.get("run_id"), "") or uuid.uuid4().hex[:12]
-    profile = "mvp"
+    profile = SCRAPE_MODE
     sleeve_key = request.args.get("sleeve", "").upper().strip()
     if sleeve_key not in sleeves.VALID_SLEEVES:
         allowed = ", ".join(sorted(sleeves.VALID_SLEEVES))
         return jsonify({"error": f"Invalid sleeve. Use one of: {allowed}."}), 400
 
-    location_mode = MVP_ONLY_LOCATION_MODE
+    location_mode = MVP_LOCATION_MODE
 
     strict_sleeve = request.args.get("strict", "0") == "1"
     force_refresh = request.args.get("refresh", "0") == "1"
@@ -3829,7 +3004,9 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     requested_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
-    selected_sources = [MVP_ONLY_SOURCE]
+    selected_sources = [MVP_SOURCE_ID]
+    query_terms_param = request.args.get("query_terms", "")
+    query_terms = _parse_query_terms(query_terms_param)
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
     allow_failover = False
@@ -3867,6 +3044,7 @@ def scrape():
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
+        query_terms=query_terms,
         extra_terms=extra_terms,
         allow_failover=allow_failover,
         run_id=run_id,
@@ -3926,6 +3104,7 @@ def scrape():
         "location_mode": location_mode,
         "requested_sources": requested_sources,
         "enforced_sources": selected_sources,
+        "query_terms": query_terms,
         "extra_terms": extra_terms,
         "sources_used": used_sources,
         "sources_used_labels": [

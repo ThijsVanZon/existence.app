@@ -155,13 +155,6 @@ class TestMainRanking(unittest.TestCase):
             main._indeed_search_url_for_mode("nl_only"),
             "https://nl.indeed.com/jobs",
         )
-        self.assertEqual(main._linkedin_geo_id_for_mode("nl_only"), "102890719")
-
-    def test_serpapi_nl_market_params_are_localized(self):
-        params = main._serpapi_market_params_for_mode("nl_only")
-        self.assertEqual(params.get("google_domain"), "google.nl")
-        self.assertEqual(params.get("gl"), "nl")
-        self.assertEqual(params.get("hl"), "nl")
 
     def test_extract_abroad_metadata_detects_percentage_and_geo(self):
         raw_text = (
@@ -266,17 +259,11 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(item["salary"], "€ 3.500 - € 4.200 per maand")
         self.assertIn("hybrid", item.get("work_mode_hint", "").lower())
 
-    def test_profile_defaults_to_mvp(self):
-        with patch.dict(main.os.environ, {"SCRAPE_PROFILE": ""}, clear=False):
-            self.assertEqual(main._active_scrape_profile(), "mvp")
-
-    def test_full_profile_env_no_longer_enables_full_mode(self):
-        with patch.dict(
-            main.os.environ,
-            {"SCRAPE_PROFILE": "full", "SCRAPE_FULL_PROFILE_ENABLED": "1"},
-            clear=False,
-        ):
-            self.assertEqual(main._active_scrape_profile(), "mvp")
+    def test_scrape_config_mode_is_mvp(self):
+        config = main._public_scrape_config()
+        self.assertEqual(config["profile"], "mvp")
+        self.assertEqual(config["defaults"]["sources"], ["indeed_web"])
+        self.assertEqual(config["defaults"]["location_mode"], "nl_only")
 
     def test_canonicalize_relative_url_returns_empty(self):
         self.assertEqual(main._canonicalize_url("/rc/clk?jk=abc123"), "")
