@@ -364,6 +364,12 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
+    def test_scrape_rejects_custom_mode_without_terms(self):
+        response = self.client.get("/scrape?sleeve=E&custom_mode=1")
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json() or {}
+        self.assertIn("at least one query term", payload.get("error", "").lower())
+
     def test_scrape_returns_200_with_source_errors_when_all_sources_fail(self):
         original_fetch = main.fetch_jobs_from_sources
         original_rank = main.rank_and_filter_jobs
@@ -423,6 +429,18 @@ class TestScrapeEndpoint(unittest.TestCase):
         payload = response.get_json()
         self.assertIn("cannot be overwritten", payload.get("error", ""))
 
+    def test_synergy_sleeves_requires_minimum_one_term(self):
+        response = self.client.post(
+            "/synergy-sleeves",
+            json={
+                "title": "Custom Without Terms",
+                "terms": [],
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertIn("At least one search term", payload.get("error", ""))
+
     def test_synergy_sleeves_saves_and_deletes_custom_records(self):
         original_custom_state_path = main.CUSTOM_SLEEVES_STATE_PATH
         try:
@@ -475,6 +493,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     "/synergy-sleeves",
                     json={
                         "title": "Auto Custom One",
+                        "terms": ["custom one term"],
                     },
                 )
                 self.assertEqual(first_response.status_code, 200)
@@ -485,6 +504,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     "/synergy-sleeves",
                     json={
                         "title": "Auto Custom Two",
+                        "terms": ["custom two term"],
                     },
                 )
                 self.assertEqual(second_response.status_code, 200)
@@ -496,6 +516,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     json={
                         "letter": "E",
                         "title": "Should Not Overwrite",
+                        "terms": ["duplicate custom term"],
                     },
                 )
                 self.assertEqual(duplicate_response.status_code, 409)

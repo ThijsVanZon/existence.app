@@ -2879,8 +2879,19 @@ def rank_and_filter_jobs(
     include_fail=False,
     return_diagnostics=False,
     diagnostics=None,
+    custom_mode=False,
+    custom_query_terms=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
+    normalized_custom_terms = []
+    if custom_mode:
+        normalized_custom_terms = [
+            sleeves.normalize_for_match(term)
+            for term in (custom_query_terms or [])
+            if term
+        ]
+        normalized_custom_terms = [term for term in normalized_custom_terms if term]
+        normalized_custom_terms = sorted(set(normalized_custom_terms))
     scored_jobs = []
     dedupe_seen = set()
     raw_by_source = Counter()
@@ -3004,6 +3015,24 @@ def rank_and_filter_jobs(
         primary_score = sleeve_scores.get(scoring_sleeve, natural_primary_score)
         primary_sleeve_details = sleeve_details.get(scoring_sleeve, {})
         total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
+        custom_title_hits = []
+        custom_text_hits = []
+        if custom_mode and normalized_custom_terms:
+            prepared_title = sleeves.prepare_text(title_text)
+            for term in normalized_custom_terms:
+                token = f" {term} "
+                in_text = token in prepared_text
+                in_title = token in prepared_title
+                if in_text:
+                    custom_text_hits.append(term)
+                if in_title:
+                    custom_title_hits.append(term)
+            custom_title_hits = sorted(set(custom_title_hits))
+            custom_text_hits = sorted(set(custom_text_hits))
+            custom_hit_count = len(set(custom_text_hits).union(custom_title_hits))
+            custom_score = min(5, custom_hit_count + (1 if custom_title_hits else 0))
+            primary_score = custom_score
+            total_positive_hits = custom_hit_count
 
         hard_reject_reason = sleeves.detect_hard_reject(title, raw_text)
         abroad_base_score, abroad_badges, _ = sleeves.score_abroad(raw_text)
@@ -3065,6 +3094,19 @@ def rank_and_filter_jobs(
             ),
             f"Keyword coverage {total_positive_hits} hits for sleeve {scoring_sleeve}",
         ]
+        if custom_mode:
+            reasons[0] = (
+                f"Custom sleeve relevance {primary_score}/5 "
+                f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms)"
+            )
+            if custom_title_hits:
+                reasons.append(
+                    f"Custom title hits: {', '.join(custom_title_hits[:4])}"
+                )
+            elif custom_text_hits:
+                reasons.append(
+                    f"Custom text hits: {', '.join(custom_text_hits[:4])}"
+                )
         if language_notes:
             reasons.append(language_notes[0])
         if penalty_reasons:
@@ -3130,6 +3172,10 @@ def rank_and_filter_jobs(
                     "total_positive_hits": total_positive_hits,
                     "location_gate_match": location_gate_match,
                     "location_proximity_score": location_proximity_score,
+                    "custom_mode": bool(custom_mode),
+                    "custom_term_count": len(normalized_custom_terms),
+                    "custom_text_hits": custom_text_hits,
+                    "custom_title_hits": custom_title_hits,
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
@@ -3205,6 +3251,17 @@ def rank_and_filter_jobs(
             elif mismatch:
                 decision = "FAIL"
                 fail_reason = "target_sleeve_mismatch"
+            elif custom_mode and not normalized_custom_terms:
+                decision = "FAIL"
+                fail_reason = "custom_terms_missing"
+            elif custom_mode:
+                if total_hits >= 1 and primary_score >= 2:
+                    decision = "PASS"
+                elif total_hits >= 1 and primary_score >= 1:
+                    decision = "MAYBE"
+                else:
+                    decision = "FAIL"
+                    fail_reason = "custom_terms_no_match"
             elif primary_score >= profile["min_primary_score"] and total_hits >= profile["min_total_hits"]:
                 decision = "PASS"
             elif (
@@ -3948,6 +4005,8 @@ def save_synergy_sleeve():
         return jsonify({"error": "Title is required."}), 400
 
     terms = _parse_terms_for_storage(payload.get("terms"))
+    if not terms:
+        return jsonify({"error": "At least one search term is required."}), 400
     allow_overwrite = bool(payload.get("allow_overwrite"))
 
     with custom_sleeves_lock:
@@ -4294,6 +4353,10 @@ def scrape():
     query_terms = _parse_query_terms(query_terms_param)
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
+    custom_mode = request.args.get("custom_mode", "0") == "1"
+    custom_letter = _normalize_sleeve_letter(request.args.get("custom_letter", ""))
+    if custom_mode and not query_terms:
+        return jsonify({"error": "Custom sleeve scraping requires at least one query term."}), 400
     allow_failover = False
     force_source_retry = request.args.get("retry_source", "0") == "1"
 
@@ -4362,6 +4425,8 @@ def scrape():
         include_fail=include_fail,
         return_diagnostics=True,
         diagnostics=fetch_diagnostics,
+        custom_mode=custom_mode,
+        custom_query_terms=query_terms,
     )
     candidate_items = ranking_result.get("jobs") or []
     incremental_skipped = 0
@@ -4378,6 +4443,8 @@ def scrape():
         "requested_sources": requested_sources,
         "enforced_sources": selected_sources,
         "query_terms": query_terms,
+        "custom_mode": bool(custom_mode),
+        "custom_letter": custom_letter,
         "extra_terms": extra_terms,
         "sources_used": used_sources,
         "sources_used_labels": [

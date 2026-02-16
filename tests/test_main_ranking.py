@@ -375,6 +375,31 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "https://company.example/careers/42")
 
+    def test_custom_mode_uses_query_terms_for_generic_ranking(self):
+        jobs = [
+            self._job(
+                "CustomFit",
+                "Cross-functional workflow for vendor rollout and ecosystem operations.",
+                title="Custom Ecosystem Operations Specialist",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="E",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+            custom_mode=True,
+            custom_query_terms=[
+                "ecosystem operations",
+                "vendor rollout",
+                "workflow",
+            ],
+        )
+        self.assertEqual(len(ranked), 1)
+        self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
+        self.assertGreaterEqual(ranked[0]["primary_sleeve_score"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

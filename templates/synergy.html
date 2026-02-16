@@ -161,6 +161,21 @@
       font-size: 0.8rem;
       font-weight: 600;
     }
+    .synergy-term-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .synergy-dialog-editor-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .synergy-dialog-editor-actions button {
+      flex: 1 1 180px;
+    }
     @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
   </style>
 </head>
@@ -185,22 +200,6 @@
         <span id="headerCode" class="sleeve-header-code">Career Sleeve ?</span>
       </header>
 
-      <div class="synergy-term-box">
-        <label for="termInput">Search terms</label>
-        <div id="termChipList" class="terms-chip-list"></div>
-        <div class="synergy-inline">
-          <input id="termInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
-          <button id="addTermBtn" type="button">Add term</button>
-          <button id="generateTermsBtn" type="button">Generate terms</button>
-          <button id="clearTermsBtn" type="button">Clear terms</button>
-        </div>
-      </div>
-
-      <div class="synergy-inline">
-        <button id="saveSleeveBtn" type="button">Save changes to sleeve</button>
-        <button id="scrapeBtn" type="button">Scrape vacancies now</button>
-      </div>
-
       <div id="statusBox" class="synergy-status">Ready.</div>
 
       <section class="synergy-progress">
@@ -223,27 +222,39 @@
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
+    <section class="synergy-dialog-custom-create">
+      <div id="dialogEditorTitle" class="synergy-dialog-group-title">ADD CUSTOM CAREER SLEEVE</div>
+      <div class="synergy-editor-grid">
+        <input id="dialogCustomTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type custom sleeve title...">
+      </div>
+      <div class="synergy-term-box">
+        <label for="dialogTermInput">Search terms</label>
+        <div id="dialogTermChipList" class="synergy-term-chip-list"></div>
+        <div class="synergy-inline">
+          <input id="dialogTermInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
+        </div>
+        <div class="synergy-dialog-editor-actions">
+          <button id="dialogAddTermBtn" type="button">Add term</button>
+          <button id="dialogGenerateTermsBtn" type="button">Generate terms</button>
+          <button id="dialogClearTermsBtn" type="button">Clear terms</button>
+          <button id="dialogSaveSleeveBtn" type="button">Save changes to sleeve</button>
+          <button id="dialogScrapeNowBtn" type="button">Scrape vacancies now</button>
+        </div>
+      </div>
+      <div class="synergy-dialog-custom-note">Custom sleeves auto-assign the next available letter (E-Z). Minimum 1 term required to save.</div>
+    </section>
   </dialog>
 
   <script>
     (() => {
       const state = {
         catalog: { fixed: [], custom: [], all: [] },
-        currentLetter: "",
-        currentTitle: "",
-        terms: [],
+        current: { letter: "", title: "", terms: [] },
+        editor: { mode: "add", letter: "", title: "", terms: [] },
         progressTimer: null,
         loadFilter: "",
-        pendingCustomTitle: "",
       };
       const els = {
-        termChipList: document.getElementById("termChipList"),
-        termInput: document.getElementById("termInput"),
-        addTermBtn: document.getElementById("addTermBtn"),
-        generateTermsBtn: document.getElementById("generateTermsBtn"),
-        clearTermsBtn: document.getElementById("clearTermsBtn"),
-        saveSleeveBtn: document.getElementById("saveSleeveBtn"),
-        scrapeBtn: document.getElementById("scrapeBtn"),
         statusBox: document.getElementById("statusBox"),
         metricBadges: document.getElementById("metricBadges"),
         progressEvents: document.getElementById("progressEvents"),
@@ -255,6 +266,15 @@
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
         closeLoadDialogBtn: document.getElementById("closeLoadDialogBtn"),
+        dialogEditorTitle: document.getElementById("dialogEditorTitle"),
+        dialogCustomTitleInput: document.getElementById("dialogCustomTitleInput"),
+        dialogTermChipList: document.getElementById("dialogTermChipList"),
+        dialogTermInput: document.getElementById("dialogTermInput"),
+        dialogAddTermBtn: document.getElementById("dialogAddTermBtn"),
+        dialogGenerateTermsBtn: document.getElementById("dialogGenerateTermsBtn"),
+        dialogClearTermsBtn: document.getElementById("dialogClearTermsBtn"),
+        dialogSaveSleeveBtn: document.getElementById("dialogSaveSleeveBtn"),
+        dialogScrapeNowBtn: document.getElementById("dialogScrapeNowBtn"),
       };
 
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
@@ -274,7 +294,19 @@
         return out;
       };
       const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
-      const collectEditor = () => ({ letter: normalizeLetter(state.currentLetter), title: String(state.currentTitle || "").trim(), terms: dedupeTerms(state.terms) });
+      const ICON_EDIT = "\u270E";
+      const ICON_REMOVE = "\u232B";
+      const collectCurrent = () => ({
+        letter: normalizeLetter(state.current.letter),
+        title: String(state.current.title || "").trim(),
+        terms: dedupeTerms(state.current.terms),
+      });
+      const collectEditor = () => ({
+        mode: state.editor.mode === "edit" ? "edit" : "add",
+        letter: normalizeLetter(state.editor.letter),
+        title: String(state.editor.title || "").trim(),
+        terms: dedupeTerms(state.editor.terms),
+      });
 
       function setStatus(msg, type = "info") {
         els.statusBox.textContent = msg;
@@ -283,16 +315,17 @@
         if (type === "error") els.statusBox.classList.add("is-error");
       }
 
-      function renderTerms() {
-        els.termChipList.innerHTML = "";
-        if (!state.terms.length) {
+      function renderDialogTerms() {
+        els.dialogTermChipList.innerHTML = "";
+        const editor = collectEditor();
+        if (!editor.terms.length) {
           const empty = document.createElement("div");
           empty.className = "synergy-empty";
           empty.textContent = "No terms configured.";
-          els.termChipList.appendChild(empty);
+          els.dialogTermChipList.appendChild(empty);
           return;
         }
-        state.terms.forEach((term) => {
+        editor.terms.forEach((term) => {
           const chip = document.createElement("span");
           chip.className = "synergy-term-chip";
           const label = document.createElement("span");
@@ -301,24 +334,24 @@
           chip.appendChild(label);
           const remove = document.createElement("button");
           remove.type = "button";
-          remove.textContent = "\u00D7";
+          remove.textContent = ICON_REMOVE;
           remove.setAttribute("aria-label", `Remove ${term}`);
           remove.addEventListener("click", () => {
-            state.terms = state.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
-            renderTerms();
+            state.editor.terms = state.editor.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
+            renderDialogTerms();
           });
           chip.appendChild(remove);
-          els.termChipList.appendChild(chip);
+          els.dialogTermChipList.appendChild(chip);
         });
       }
 
       function openHeaderEditor() {
         state.loadFilter = "";
-        state.pendingCustomTitle = "";
         if (els.loadDialogSearch) {
           els.loadDialogSearch.value = "";
         }
         renderLoadDialogList();
+        resetDialogEditor("add");
         if (typeof els.loadDialog.showModal === "function") {
           els.loadDialog.showModal();
         } else {
@@ -338,26 +371,19 @@
       }
 
       function updateHeaderPreview() {
-        const letter = normalizeLetter(state.currentLetter);
-        const inputTitle = String(state.currentTitle || "").trim();
+        const letter = normalizeLetter(state.current.letter);
+        const inputTitle = String(state.current.title || "").trim();
         const title = inputTitle || "Click here to start";
         els.headerName.textContent = title;
         els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve ?";
       }
 
-      function updateActionState() {
-        const letter = normalizeLetter(state.currentLetter);
-        els.saveSleeveBtn.disabled = !letter || isFixedLetter(letter);
-      }
-
       function applySleeveToEditor(sleeve, options = {}) {
         if (!sleeve) return;
-        state.currentLetter = normalizeLetter(sleeve.letter || "");
-        state.currentTitle = String(sleeve.title || "");
-        state.terms = dedupeTerms(sleeve.terms || []);
-        renderTerms();
+        state.current.letter = normalizeLetter(sleeve.letter || "");
+        state.current.title = String(sleeve.title || "");
+        state.current.terms = dedupeTerms(sleeve.terms || []);
         updateHeaderPreview();
-        updateActionState();
         if (!options.silent) {
           const suffix = sleeve.locked ? "(fixed)" : "(custom)";
           setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
@@ -466,7 +492,7 @@
         return dedupeTerms(fallback).slice(0, 8);
       }
 
-      function generateTermsFromCurrentTitle() {
+      function generateTermsFromEditorTitle() {
         const editor = collectEditor();
         if (!editor.title) {
           setStatus("Set a sleeve title first, then generate terms.", "error");
@@ -477,8 +503,8 @@
           setStatus("Could not generate terms from this title.", "error");
           return;
         }
-        state.terms = dedupeTerms([...(state.terms || []), ...generated]);
-        renderTerms();
+        state.editor.terms = dedupeTerms([...(state.editor.terms || []), ...generated]);
+        renderDialogTerms();
         setStatus(`Generated ${generated.length} terms locally (free, no paid API).`, "success");
       }
 
@@ -635,19 +661,19 @@
                 const editBtn = document.createElement("button");
                 editBtn.type = "button";
                 editBtn.className = "synergy-dialog-option-icon";
-                editBtn.textContent = "✎";
+                editBtn.textContent = ICON_EDIT;
                 editBtn.setAttribute("aria-label", `Edit title for Career Sleeve ${sleeve.letter}`);
                 editBtn.addEventListener("click", (event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  editCustomSleeveTitle(sleeve).catch(() => setStatus("Could not edit custom sleeve title.", "error"));
+                  startEditCustomSleeve(sleeve);
                 });
                 row.appendChild(editBtn);
 
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "synergy-dialog-option-icon";
-                deleteBtn.textContent = "\u00D7";
+                deleteBtn.textContent = ICON_REMOVE;
                 deleteBtn.setAttribute("aria-label", `Delete Career Sleeve ${sleeve.letter}`);
                 deleteBtn.addEventListener("click", (event) => {
                   event.preventDefault();
@@ -670,121 +696,87 @@
               }
             });
           }
-          if (group.scope === "custom") {
-            const createWrap = document.createElement("div");
-            createWrap.className = "synergy-dialog-custom-create";
-            createWrap.innerHTML = `
-              <div class="synergy-dialog-group-title">Add Custom Career Sleeve</div>
-              <div class="synergy-editor-grid">
-                <input id="dialogCustomTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type custom sleeve title...">
-              </div>
-              <div class="synergy-dialog-custom-note">The next available letter (E-Z) will be assigned automatically.</div>
-              <button id="dialogAddCustomBtn" type="button">Add custom sleeve</button>
-            `;
-            wrap.appendChild(createWrap);
-          }
           els.loadDialogList.appendChild(wrap);
         });
-
-        const titleInput = document.getElementById("dialogCustomTitleInput");
-        const addBtn = document.getElementById("dialogAddCustomBtn");
-        if (titleInput) {
-          titleInput.value = String(state.pendingCustomTitle || "");
-        }
-        if (addBtn) {
-          addBtn.addEventListener("click", () => {
-            createCustomSleeveFromDialog().catch(() => setStatus("Could not add custom sleeve.", "error"));
-          });
-        }
-        if (titleInput) {
-          titleInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              createCustomSleeveFromDialog().catch(() => setStatus("Could not add custom sleeve.", "error"));
-            }
-          });
-        }
       }
 
-      async function createCustomSleeveFromDialog() {
-        const titleInput = document.getElementById("dialogCustomTitleInput");
-        const title = String(titleInput ? titleInput.value : "").trim();
-        if (!title) {
-          setStatus("Type a custom sleeve title.", "error");
-          return;
+      function resetDialogEditor(mode = "add", sleeve = null) {
+        if (mode === "edit" && sleeve) {
+          state.editor.mode = "edit";
+          state.editor.letter = normalizeLetter(sleeve.letter || "");
+          state.editor.title = String(sleeve.title || "");
+          state.editor.terms = dedupeTerms(sleeve.terms || []);
+        } else {
+          state.editor.mode = "add";
+          state.editor.letter = "";
+          state.editor.title = "";
+          state.editor.terms = [];
         }
-        state.pendingCustomTitle = title;
-
-        const res = await fetch("/synergy-sleeves", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            title,
-            terms: dedupeTerms(state.terms || []),
-          }),
-        });
-        const payload = await res.json();
-        if (!res.ok) {
-          setStatus(payload.error || "Could not save custom sleeve.", "error");
-          return;
-        }
-        const saved = payload.saved || {};
-        const assignedLetter = normalizeLetter(saved.letter);
-        const assignedTitle = String(saved.title || title).trim();
-        state.catalog = payload.catalog || state.catalog;
-        state.currentLetter = assignedLetter;
-        state.currentTitle = assignedTitle;
-        state.pendingCustomTitle = "";
-        state.loadFilter = "";
-        if (els.loadDialogSearch) {
-          els.loadDialogSearch.value = "";
-        }
-        updateHeaderPreview();
-        updateActionState();
-        renderLoadDialogList();
-        setStatus(`Added custom sleeve ${assignedLetter || "?"}.`, "success");
+        renderDialogEditor();
       }
 
-      async function editCustomSleeveTitle(sleeve) {
+      function startEditCustomSleeve(sleeve) {
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
           setStatus("Only custom sleeves (E-Z) can be edited.", "error");
           return;
         }
-        const originalTitle = String((sleeve && sleeve.title) || "").trim();
-        const nextTitle = window.prompt(`Edit title for Career Sleeve ${letter}:`, originalTitle);
-        if (nextTitle === null) {
-          return;
+        applySleeveToEditor(sleeve, { silent: true });
+        resetDialogEditor("edit", sleeve);
+      }
+
+      function renderDialogEditor() {
+        const editor = collectEditor();
+        if (editor.mode === "edit" && editor.letter) {
+          els.dialogEditorTitle.textContent = `EDIT CAREER SLEEVE ${editor.letter}`;
+        } else {
+          els.dialogEditorTitle.textContent = "ADD CUSTOM CAREER SLEEVE";
         }
-        const title = String(nextTitle).trim().slice(0, 120);
-        if (!title) {
-          setStatus("Title cannot be empty.", "error");
-          return;
+        els.dialogCustomTitleInput.value = editor.title;
+        renderDialogTerms();
+      }
+
+      async function saveDialogEditor(options = {}) {
+        const silent = Boolean(options.silent);
+        const editor = collectEditor();
+        if (!editor.title) {
+          if (!silent) setStatus("Type a sleeve title before saving.", "error");
+          return null;
+        }
+        if (!editor.terms.length) {
+          if (!silent) setStatus("Add at least one search term before saving.", "error");
+          return null;
+        }
+
+        const payloadBody = {
+          title: editor.title,
+          terms: editor.terms,
+        };
+        if (editor.mode === "edit" && isCustomLetter(editor.letter)) {
+          payloadBody.letter = editor.letter;
+          payloadBody.allow_overwrite = true;
         }
 
         const res = await fetch("/synergy-sleeves", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            letter,
-            title,
-            terms: dedupeTerms((sleeve && sleeve.terms) || []),
-            allow_overwrite: true,
-          }),
+          body: JSON.stringify(payloadBody),
         });
         const payload = await res.json();
         if (!res.ok) {
-          setStatus(payload.error || "Could not update sleeve title.", "error");
-          return;
+          if (!silent) setStatus(payload.error || "Could not save sleeve.", "error");
+          return null;
         }
 
         state.catalog = payload.catalog || state.catalog;
-        if (normalizeLetter(state.currentLetter) === letter) {
-          state.currentTitle = title;
-          updateHeaderPreview();
-        }
+        const saved = payload.saved || {};
+        applySleeveToEditor(saved, { silent: true });
+        resetDialogEditor("edit", saved);
         renderLoadDialogList();
-        setStatus(`Updated title for Career Sleeve ${letter}.`, "success");
+        if (!silent) {
+          setStatus(`Saved Career Sleeve ${saved.letter || "?"}.`, "success");
+        }
+        return saved;
       }
 
       async function deleteCustomSleeveFromDialog(sleeve) {
@@ -809,11 +801,14 @@
         }
 
         state.catalog = payload.catalog || state.catalog;
-        if (normalizeLetter(state.currentLetter) === letter) {
-          state.currentLetter = "";
-          state.currentTitle = "";
+        if (normalizeLetter(state.current.letter) === letter) {
+          state.current.letter = "";
+          state.current.title = "";
+          state.current.terms = [];
           updateHeaderPreview();
-          updateActionState();
+        }
+        if (state.editor.mode === "edit" && normalizeLetter(state.editor.letter) === letter) {
+          resetDialogEditor("add");
         }
         renderLoadDialogList();
         setStatus(`Deleted Career Sleeve ${letter}.`, "success");
@@ -825,7 +820,6 @@
         if (!res.ok) throw new Error(payload.error || "Could not load sleeves.");
         state.catalog = payload;
         renderLoadDialogList();
-        updateActionState();
       }
 
       async function pollProgress(runId) {
@@ -843,56 +837,16 @@
         } catch (_error) {}
       }
 
-      async function saveCurrentSleeve() {
-        const editor = collectEditor();
-        if (!editor.letter) return setStatus("Set a sleeve letter first (E-Z for custom).", "error");
-        if (isFixedLetter(editor.letter)) return setStatus("Career Sleeves A-D are fixed and cannot be overwritten.", "error");
-        if (!editor.title) return setStatus("Add a sleeve title before saving.", "error");
-        const res = await fetch("/synergy-sleeves", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(editor),
-        });
-        const payload = await res.json();
-        if (!res.ok) return setStatus(payload.error || "Save failed.", "error");
-        state.catalog = payload.catalog || state.catalog;
-        renderLoadDialogList();
-        updateActionState();
-        setStatus(`Saved custom sleeve ${editor.letter}.`, "success");
-      }
-
-      async function deleteCurrentSleeve() {
-        const editor = collectEditor();
-        if (!editor.letter) return setStatus("Set a sleeve letter first.", "error");
-        if (isFixedLetter(editor.letter)) return setStatus("Career Sleeves A-D are fixed and cannot be deleted.", "error");
-        if (!isCustomLetter(editor.letter)) return setStatus("Only letters E-Z can be deleted as custom sleeves.", "error");
-        const res = await fetch(`/synergy-sleeves/${encodeURIComponent(editor.letter)}`, {
-          method: "DELETE",
-          headers: { Accept: "application/json" },
-        });
-        const payload = await res.json();
-        if (!res.ok) return setStatus(payload.error || "Delete failed.", "error");
-        state.catalog = payload.catalog || state.catalog;
-        renderLoadDialogList();
-        state.currentLetter = "";
-        state.currentTitle = "";
-        state.terms = [];
-        renderTerms();
-        updateHeaderPreview();
-        updateActionState();
-        setStatus(`Deleted custom sleeve ${editor.letter}.`, "success");
-      }
-
       async function runScrape() {
-        const editor = collectEditor();
-        if (!editor.letter) return setStatus("Set a sleeve letter before scraping.", "error");
-        if (!editor.terms.length) return setStatus("Add at least one search term before scraping.", "error");
-        const effectiveSleeve = isFixedLetter(editor.letter) ? editor.letter : "E";
+        const current = collectCurrent();
+        if (!current.letter) return setStatus("Select or save a sleeve before scraping.", "error");
+        if (!current.terms.length) return setStatus("Add at least one search term before scraping.", "error");
+        const effectiveSleeve = isFixedLetter(current.letter) ? current.letter : "E";
         const runId = `synergy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         renderResults([]);
         renderMetrics(null);
         renderEvents([]);
-        setStatus(`Running scrape with sleeve ${editor.letter} (mapped to ${effectiveSleeve}).`, "info");
+        setStatus(`Running scrape with sleeve ${current.letter} (mapped to ${effectiveSleeve}).`, "info");
         if (state.progressTimer) clearInterval(state.progressTimer);
         state.progressTimer = setInterval(() => pollProgress(runId), 1000);
         pollProgress(runId);
@@ -900,10 +854,14 @@
         const params = new URLSearchParams({
           run_id: runId,
           sleeve: effectiveSleeve,
-          query_terms: editor.terms.join(","),
+          query_terms: current.terms.join(","),
           strict: "0",
           max_results: "200",
         });
+        if (!isFixedLetter(current.letter)) {
+          params.set("custom_mode", "1");
+          params.set("custom_letter", current.letter);
+        }
 
         try {
           const res = await fetch(`/scrape?${params.toString()}`, { headers: { Accept: "application/json" } });
@@ -934,20 +892,42 @@
             renderLoadDialogList();
           });
         }
-        els.addTermBtn.addEventListener("click", () => {
-          const term = String(els.termInput.value || "").trim();
+        els.dialogCustomTitleInput.addEventListener("input", () => {
+          state.editor.title = String(els.dialogCustomTitleInput.value || "").slice(0, 120);
+        });
+        els.dialogAddTermBtn.addEventListener("click", () => {
+          const term = String(els.dialogTermInput.value || "").trim();
           if (!term) return;
-          state.terms = dedupeTerms([...(state.terms || []), term]);
-          els.termInput.value = "";
-          renderTerms();
+          state.editor.terms = dedupeTerms([...(state.editor.terms || []), term]);
+          els.dialogTermInput.value = "";
+          renderDialogTerms();
         });
-        els.generateTermsBtn.addEventListener("click", () => {
-          generateTermsFromCurrentTitle();
+        els.dialogGenerateTermsBtn.addEventListener("click", () => {
+          generateTermsFromEditorTitle();
         });
-        els.termInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") { event.preventDefault(); els.addTermBtn.click(); }
+        els.dialogTermInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); els.dialogAddTermBtn.click(); }
         });
-        els.clearTermsBtn.addEventListener("click", () => { state.terms = []; renderTerms(); });
+        els.dialogClearTermsBtn.addEventListener("click", () => {
+          state.editor.terms = [];
+          renderDialogTerms();
+        });
+        els.dialogSaveSleeveBtn.addEventListener("click", () => {
+          saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
+        });
+        els.dialogScrapeNowBtn.addEventListener("click", async () => {
+          try {
+            const editor = collectEditor();
+            if (editor.title || editor.terms.length || editor.mode === "edit") {
+              const saved = await saveDialogEditor({ silent: false });
+              if (!saved) return;
+            }
+            closeHeaderEditor();
+            runScrape();
+          } catch (_error) {
+            setStatus("Could not start scrape.", "error");
+          }
+        });
         els.headerEditorTrigger.addEventListener("click", async () => {
           try {
             await loadCatalog();
@@ -971,18 +951,15 @@
           event.preventDefault();
           closeHeaderEditor();
         });
-        els.saveSleeveBtn.addEventListener("click", () => saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error")));
-        els.scrapeBtn.addEventListener("click", () => runScrape());
       }
 
       async function init() {
         bindEvents();
-        renderTerms();
+        resetDialogEditor("add");
         renderEvents([]);
         renderResults([]);
         renderMetrics(null);
         updateHeaderPreview();
-        updateActionState();
         try {
           await loadCatalog();
           setStatus("Catalog loaded. Click the header to set or load a sleeve.", "success");
@@ -996,4 +973,5 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+
 
