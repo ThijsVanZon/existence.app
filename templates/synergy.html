@@ -165,6 +165,15 @@
       color: var(--ink);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
     }
+    .synergy-dialog-custom-create .synergy-editor-grid {
+      grid-template-columns: 1fr;
+    }
+    .synergy-dialog-custom-create #dialogCustomTitleInput,
+    .synergy-dialog-custom-create #dialogTermInput {
+      width: 100%;
+      min-width: 100%;
+      flex: 1 1 100%;
+    }
     .synergy-dialog-custom-note {
       color: var(--ink-muted);
       font-size: 0.8rem;
@@ -274,8 +283,9 @@
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
+    <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom sleeve.</div>
     <section id="dialogEditorSection" class="synergy-dialog-custom-create is-hidden">
-      <div id="dialogEditorTitle" class="synergy-dialog-group-title">ADD CUSTOM CAREER SLEEVE</div>
+      <div id="dialogEditorTitle" class="synergy-dialog-group-title">TITLE</div>
       <div class="synergy-editor-grid">
         <input id="dialogCustomTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type custom sleeve title...">
       </div>
@@ -292,7 +302,6 @@
           <button id="dialogSaveSleeveBtn" type="button">Save changes to sleeve</button>
         </div>
       </div>
-      <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Add or edit a sleeve to see live feedback here.</div>
     </section>
   </dialog>
 
@@ -445,6 +454,9 @@
         state.editorVisible = Boolean(visible);
         if (!els.dialogEditorSection) return;
         els.dialogEditorSection.classList.toggle("is-hidden", !state.editorVisible);
+        if (!state.editorVisible) {
+          setDialogNote("Click + to add a custom sleeve.", "info");
+        }
       }
 
       function updateHeaderPreview() {
@@ -822,8 +834,8 @@
           state.editor.title = "";
           state.editor.terms = [];
         }
-        renderDialogEditor();
         setDialogEditorVisible(visible);
+        renderDialogEditor();
       }
 
       function startEditCustomSleeve(sleeve) {
@@ -856,7 +868,7 @@
             "info"
           );
         } else {
-          els.dialogEditorTitle.textContent = "ADD CUSTOM CAREER SLEEVE";
+          els.dialogEditorTitle.textContent = "TITLE";
           const usedCustomLetters = new Set(
             (state.catalog.custom || [])
               .map((entry) => normalizeLetter(entry && entry.letter))
@@ -871,10 +883,14 @@
             }
           }
           els.dialogSaveSleeveBtn.textContent = `Save Career Sleeve ${nextLetter} as new addition`;
-          setDialogNote(
-            `Adding a new custom sleeve. Next available letter: ${nextLetter}. Add at least 1 search term, then save.`,
-            "info"
-          );
+          if (state.editorVisible) {
+            setDialogNote(
+              `Adding a new custom sleeve. Next available letter: ${nextLetter}. Add at least 1 search term, then save.`,
+              "info"
+            );
+          } else {
+            setDialogNote("Click + to add a custom sleeve.", "info");
+          }
         }
         els.dialogCustomTitleInput.value = editor.title;
         renderDialogTerms();
@@ -926,7 +942,7 @@
         const saved = payload.saved || {};
         const wasEdit = editor.mode === "edit";
         applySleeveToEditor(saved, { silent: true });
-        resetDialogEditor("edit", saved, true);
+        resetDialogEditor("add", null, false);
         renderLoadDialogList();
         if (!silent) {
           const successMessage = wasEdit
