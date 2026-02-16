@@ -56,7 +56,7 @@
       background: rgba(var(--amethyst-rgb), 0.2); color: var(--synergy-amethyst-deep); opacity: 1;
       transform: none; transition: background 0.14s ease;
       margin-left: auto;
-      margin-right: 2px;
+      margin-right: 1px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -169,6 +169,21 @@
       color: var(--ink-muted);
       font-size: 0.8rem;
       font-weight: 600;
+      border-radius: 8px;
+      padding: 6px 8px;
+      background: rgba(var(--black-rgb), 0.04);
+    }
+    .synergy-dialog-custom-note.is-info {
+      color: var(--ink-muted);
+      background: rgba(var(--black-rgb), 0.04);
+    }
+    .synergy-dialog-custom-note.is-success {
+      color: var(--synergy-zircon-deep);
+      background: rgba(var(--zircon-rgb), 0.14);
+    }
+    .synergy-dialog-custom-note.is-error {
+      color: var(--synergy-rubellite-deep);
+      background: rgba(var(--rubellite-rgb), 0.14);
     }
     .synergy-term-chip-list {
       display: flex;
@@ -186,7 +201,8 @@
       flex: 1 1 180px;
     }
     .synergy-dialog-add-trigger {
-      width: 100%;
+      width: 56px;
+      min-width: 56px;
       border: none;
       border-radius: 999px;
       padding: 8px 10px;
@@ -197,6 +213,10 @@
       font-size: 1.05rem;
       line-height: 1;
       text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: flex-start;
       cursor: pointer;
       opacity: 0.92;
     }
@@ -272,7 +292,7 @@
           <button id="dialogSaveSleeveBtn" type="button">Save changes to sleeve</button>
         </div>
       </div>
-      <div class="synergy-dialog-custom-note">Custom sleeves auto-assign the next available letter (E-Z). Minimum 1 term required to save.</div>
+      <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Add or edit a sleeve to see live feedback here.</div>
     </section>
   </dialog>
 
@@ -308,6 +328,7 @@
         dialogGenerateTermsBtn: document.getElementById("dialogGenerateTermsBtn"),
         dialogClearTermsBtn: document.getElementById("dialogClearTermsBtn"),
         dialogSaveSleeveBtn: document.getElementById("dialogSaveSleeveBtn"),
+        dialogCustomNote: document.getElementById("dialogCustomNote"),
       };
 
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
@@ -348,6 +369,21 @@
         if (type === "error") els.statusBox.classList.add("is-error");
       }
 
+      function setDialogNote(msg, type = "info") {
+        if (!els.dialogCustomNote) return;
+        els.dialogCustomNote.textContent = String(msg || "").trim();
+        els.dialogCustomNote.classList.remove("is-info", "is-success", "is-error");
+        if (type === "success") {
+          els.dialogCustomNote.classList.add("is-success");
+          return;
+        }
+        if (type === "error") {
+          els.dialogCustomNote.classList.add("is-error");
+          return;
+        }
+        els.dialogCustomNote.classList.add("is-info");
+      }
+
       function renderDialogTerms() {
         els.dialogTermChipList.innerHTML = "";
         const editor = collectEditor();
@@ -372,6 +408,7 @@
           remove.addEventListener("click", () => {
             state.editor.terms = state.editor.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
             renderDialogTerms();
+            setDialogNote(`Removed term "${term}".`, "info");
           });
           chip.appendChild(remove);
           els.dialogTermChipList.appendChild(chip);
@@ -427,6 +464,7 @@
         if (!options.silent) {
           const suffix = sleeve.locked ? "(fixed)" : "(custom)";
           setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
+          setDialogNote(`Loaded Career Sleeve ${sleeve.letter} ${suffix}.`, "success");
         }
       }
 
@@ -536,16 +574,19 @@
         const editor = collectEditor();
         if (!editor.title) {
           setStatus("Set a sleeve title first, then generate terms.", "error");
+          setDialogNote("Set a sleeve title first, then generate terms.", "error");
           return;
         }
         const generated = guessTermsFromTitle(editor.title, editor.letter);
         if (!generated.length) {
           setStatus("Could not generate terms from this title.", "error");
+          setDialogNote("Could not generate terms from this title.", "error");
           return;
         }
         state.editor.terms = dedupeTerms([...(state.editor.terms || []), ...generated]);
         renderDialogTerms();
         setStatus(`Generated ${generated.length} terms locally (free, no paid API).`, "success");
+        setDialogNote(`Generated ${generated.length} terms. Review and save when ready.`, "success");
       }
 
       function renderMetrics(summary) {
@@ -789,10 +830,15 @@
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
           setStatus("Only custom sleeves (E-Z) can be edited.", "error");
+          setDialogNote("Only custom sleeves (E-Z) can be edited.", "error");
           return;
         }
         applySleeveToEditor(sleeve, { silent: true });
         resetDialogEditor("edit", sleeve, true);
+        setDialogNote(
+          `Editing Career Sleeve ${letter}. Update title and terms, then save your changes.`,
+          "info"
+        );
         setTimeout(() => {
           if (els.dialogCustomTitleInput) {
             els.dialogCustomTitleInput.focus();
@@ -804,10 +850,31 @@
         const editor = collectEditor();
         if (editor.mode === "edit" && editor.letter) {
           els.dialogEditorTitle.textContent = `EDIT CAREER SLEEVE ${editor.letter}`;
-          els.dialogSaveSleeveBtn.textContent = `Save edits to sleeve ${editor.letter}`;
+          els.dialogSaveSleeveBtn.textContent = `Save Career Sleeve ${editor.letter} edits`;
+          setDialogNote(
+            `Editing Career Sleeve ${editor.letter}. Update title and terms, then save your changes.`,
+            "info"
+          );
         } else {
           els.dialogEditorTitle.textContent = "ADD CUSTOM CAREER SLEEVE";
-          els.dialogSaveSleeveBtn.textContent = "Add custom sleeve";
+          const usedCustomLetters = new Set(
+            (state.catalog.custom || [])
+              .map((entry) => normalizeLetter(entry && entry.letter))
+              .filter(Boolean)
+          );
+          let nextLetter = "?";
+          for (let code = 69; code <= 90; code += 1) {
+            const letter = String.fromCharCode(code);
+            if (!usedCustomLetters.has(letter)) {
+              nextLetter = letter;
+              break;
+            }
+          }
+          els.dialogSaveSleeveBtn.textContent = `Save Career Sleeve ${nextLetter} as new addition`;
+          setDialogNote(
+            `Adding a new custom sleeve. Next available letter: ${nextLetter}. Add at least 1 search term, then save.`,
+            "info"
+          );
         }
         els.dialogCustomTitleInput.value = editor.title;
         renderDialogTerms();
@@ -817,11 +884,17 @@
         const silent = Boolean(options.silent);
         const editor = collectEditor();
         if (!editor.title) {
-          if (!silent) setStatus("Type a sleeve title before saving.", "error");
+          if (!silent) {
+            setStatus("Type a sleeve title before saving.", "error");
+            setDialogNote("Title is required before you can save this sleeve.", "error");
+          }
           return null;
         }
         if (!editor.terms.length) {
-          if (!silent) setStatus("Add at least one search term before saving.", "error");
+          if (!silent) {
+            setStatus("Add at least one search term before saving.", "error");
+            setDialogNote("Add at least one search term before saving.", "error");
+          }
           return null;
         }
 
@@ -841,7 +914,11 @@
         });
         const payload = await res.json();
         if (!res.ok) {
-          if (!silent) setStatus(payload.error || "Could not save sleeve.", "error");
+          if (!silent) {
+            const errorMessage = payload.error || "Could not save sleeve.";
+            setStatus(errorMessage, "error");
+            setDialogNote(errorMessage, "error");
+          }
           return null;
         }
 
@@ -852,12 +929,11 @@
         resetDialogEditor("edit", saved, true);
         renderLoadDialogList();
         if (!silent) {
-          setStatus(
-            wasEdit
-              ? `Saved edits to Career Sleeve ${saved.letter || "?"}.`
-              : `Added custom Career Sleeve ${saved.letter || "?"}.`,
-            "success"
-          );
+          const successMessage = wasEdit
+            ? `Saved edits to Career Sleeve ${saved.letter || "?"}.`
+            : `Added custom Career Sleeve ${saved.letter || "?"}.`;
+          setStatus(successMessage, "success");
+          setDialogNote(successMessage, "success");
         }
         return saved;
       }
@@ -866,6 +942,7 @@
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
           setStatus("Only custom sleeves (E-Z) can be deleted.", "error");
+          setDialogNote("Only custom sleeves (E-Z) can be deleted.", "error");
           return;
         }
         const confirmed = window.confirm(`Delete Career Sleeve ${letter}?`);
@@ -879,7 +956,9 @@
         });
         const payload = await res.json();
         if (!res.ok) {
-          setStatus(payload.error || "Could not delete custom sleeve.", "error");
+          const errorMessage = payload.error || "Could not delete custom sleeve.";
+          setStatus(errorMessage, "error");
+          setDialogNote(errorMessage, "error");
           return;
         }
 
@@ -895,6 +974,7 @@
         }
         renderLoadDialogList();
         setStatus(`Deleted Career Sleeve ${letter}.`, "success");
+        setDialogNote(`Deleted Career Sleeve ${letter} successfully.`, "success");
       }
 
       async function loadCatalog() {
@@ -984,6 +1064,7 @@
           state.editor.terms = dedupeTerms([...(state.editor.terms || []), term]);
           els.dialogTermInput.value = "";
           renderDialogTerms();
+          setDialogNote(`Added term "${term}".`, "success");
         });
         els.dialogGenerateTermsBtn.addEventListener("click", () => {
           generateTermsFromEditorTitle();
@@ -994,6 +1075,7 @@
         els.dialogClearTermsBtn.addEventListener("click", () => {
           state.editor.terms = [];
           renderDialogTerms();
+          setDialogNote("Cleared all search terms for this editor.", "info");
         });
         els.dialogSaveSleeveBtn.addEventListener("click", () => {
           saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
