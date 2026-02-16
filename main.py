@@ -12,6 +12,7 @@ import time
 import re
 import threading
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 from parsel import Selector
@@ -188,16 +189,16 @@ INDEED_SEARCH_URL_BY_MODE = {
     "nl_eu": INDEED_SEARCH_URL_NL,
     "global": INDEED_SEARCH_URL,
 }
-DEFAULT_MAX_PAGES = 8
+DEFAULT_MAX_PAGES = 4
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
-DEFAULT_RATE_LIMIT_RPS = 0.8
-DEFAULT_DETAIL_RATE_LIMIT_RPS = 0.6
+DEFAULT_RATE_LIMIT_RPS = 0.45
+DEFAULT_DETAIL_RATE_LIMIT_RPS = 0.25
 DEFAULT_HTTP_TIMEOUT = 14
 DEFAULT_HTTP_RETRIES = 2
 PASS_FALLBACK_MIN_COUNT = 10
 DEFAULT_NO_NEW_UNIQUE_PAGES = 2
-DEFAULT_DETAIL_FETCH_BASE_BUDGET = 10
-DEFAULT_DETAIL_FETCH_REDUCED_BUDGET = 4
+DEFAULT_DETAIL_FETCH_BASE_BUDGET = 4
+DEFAULT_DETAIL_FETCH_REDUCED_BUDGET = 2
 SNAPSHOT_DIR = Path(os.getenv("SCRAPE_SNAPSHOT_DIR", "debug_snapshots"))
 STATE_DIR = Path(os.getenv("SCRAPE_STATE_DIR", "debug_state"))
 QUERY_PERFORMANCE_STATE_PATH = STATE_DIR / "query_performance_state.json"
@@ -459,12 +460,26 @@ def _load_runtime_config():
             "min_avg_parsed_per_page": 0.5,
             "min_queries_to_keep": 8,
         },
+        "anti_block": {
+            "prefer_rss_first": True,
+            "skip_html_if_rss_has_items": True,
+            "rss_skip_threshold_per_query": 5,
+            "disable_detail_fetch": True,
+            "warmup_gate_to_rss_only": True,
+        },
     }
     loaded = _load_json_file(RUNTIME_CONFIG_PATH, {})
     if not isinstance(loaded, dict):
         return default_config
     merged = dict(default_config)
-    for key in ("query_overrides", "threshold_overrides", "detail_fetch", "crawl", "query_performance"):
+    for key in (
+        "query_overrides",
+        "threshold_overrides",
+        "detail_fetch",
+        "crawl",
+        "query_performance",
+        "anti_block",
+    ):
         incoming = loaded.get(key)
         if isinstance(incoming, dict):
             merged[key] = {**default_config.get(key, {}), **incoming}
@@ -1295,7 +1310,7 @@ def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
     return _prioritize_queries(sleeve, ordered_terms)
 
 
-def _source_headers(source_name, location_mode="nl_only"):
+def _source_headers(source_name, location_mode="nl_only", user_agent=""):
     mode = _normalized_location_mode(location_mode)
     if mode in {"nl_only", "nl_eu"}:
         accept_language = "nl-NL,nl;q=0.9,en-US;q=0.7,en;q=0.6"
@@ -1303,13 +1318,36 @@ def _source_headers(source_name, location_mode="nl_only"):
     else:
         accept_language = "en-US,en;q=0.9,nl;q=0.8"
         referer = "https://www.google.com/"
+    agent = _clean_value(user_agent, "")
+    if not agent:
+        agent = REQUEST_USER_AGENTS[0]
     return {
-        "User-Agent": random.choice(REQUEST_USER_AGENTS),
+        "User-Agent": agent,
         "Accept-Language": accept_language,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Referer": referer,
-        "X-Source": source_name,
     }
+
+
+def _configure_session_for_scrape(session):
+    http_proxy = _clean_value(os.getenv("SCRAPE_HTTP_PROXY"), "")
+    https_proxy = _clean_value(os.getenv("SCRAPE_HTTPS_PROXY"), "")
+    if not https_proxy and http_proxy:
+        https_proxy = http_proxy
+    proxies = {}
+    if http_proxy:
+        proxies["http"] = http_proxy
+    if https_proxy:
+        proxies["https"] = https_proxy
+    if proxies:
+        session.proxies.update(proxies)
+
+
+def _indeed_rss_url_for_mode(location_mode):
+    mode = _normalized_location_mode(location_mode)
+    if mode in {"nl_only", "nl_eu"}:
+        return "https://nl.indeed.com/rss"
+    return "https://www.indeed.com/rss"
 
 
 def _compact_whitespace(values):
@@ -1433,6 +1471,123 @@ def _parse_indeed_cards(selector, response_url):
         if parsed_item["title"] or parsed_item["link"]:
             parsed.append(parsed_item)
     return cards, parsed
+
+
+def _parse_indeed_rss_items(xml_text, response_url):
+    text = _clean_value(xml_text, "")
+    if not text:
+        return []
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return []
+
+    items = []
+    for node in root.findall(".//item"):
+        raw_title = _clean_value(node.findtext("title"), "")
+        raw_link = _clean_value(node.findtext("link"), "")
+        raw_description = _clean_value(node.findtext("description"), "")
+        raw_date = _clean_value(node.findtext("pubDate"), "Unknown")
+
+        title = raw_title
+        company = ""
+        location = ""
+        parts = [part.strip() for part in raw_title.split(" - ") if part.strip()]
+        if len(parts) >= 3:
+            title, company, location = parts[0], parts[1], parts[2]
+        elif len(parts) == 2:
+            title, company = parts[0], parts[1]
+
+        snippet = _strip_html(raw_description)
+        salary = _extract_salary_from_chunks([raw_description])
+        link = requests.compat.urljoin(response_url, raw_link) if raw_link else ""
+
+        parsed_item = {
+            "title": _clean_value(title, ""),
+            "company": _clean_value(company, ""),
+            "location": _clean_value(location, ""),
+            "link": _clean_value(link, ""),
+            "snippet": _clean_value(snippet, ""),
+            "salary": _clean_value(salary, "Not listed"),
+            "work_mode_hint": _normalize_text(snippet, location),
+            "date": raw_date,
+            "source": "Indeed",
+        }
+        if parsed_item["title"] or parsed_item["link"]:
+            items.append(parsed_item)
+    return items
+
+
+def _warmup_indeed_session(
+    session,
+    request_headers,
+    domain_state,
+    requests_per_second,
+    location_mode,
+):
+    home_url = "https://nl.indeed.com/" if _normalized_location_mode(location_mode) in {"nl_only", "nl_eu"} else "https://www.indeed.com/"
+    response, _ = _rate_limited_get(
+        session,
+        home_url,
+        params=None,
+        headers=request_headers,
+        domain_state=domain_state,
+        requests_per_second=requests_per_second,
+        timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+        max_retries=1,
+    )
+    if response is None:
+        return False
+    if response.status_code in {401, 403, 429}:
+        return False
+    return not sleeves.detect_blocked_html(response.text)
+
+
+def _fetch_indeed_rss_fallback(
+    session,
+    query,
+    location,
+    diagnostics,
+    domain_state,
+    requests_per_second,
+    location_mode,
+    request_headers,
+):
+    rss_url = _indeed_rss_url_for_mode(location_mode)
+    response, error = _rate_limited_get(
+        session,
+        rss_url,
+        params={"q": query, "l": location},
+        headers=request_headers,
+        domain_state=domain_state,
+        requests_per_second=requests_per_second,
+        timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+        max_retries=DEFAULT_HTTP_RETRIES,
+    )
+    status = response.status_code if response is not None else 0
+    body = response.text if response is not None else ""
+    blocked = bool(
+        status in {401, 403, 429}
+        or sleeves.detect_blocked_html(body)
+    )
+    if blocked:
+        _record_blocked(diagnostics, "Indeed")
+        if body:
+            _save_html_snapshot(
+                "Indeed",
+                query,
+                0,
+                body,
+                "rss-blocked",
+                diagnostics,
+            )
+        return [], error or "rss_blocked", blocked
+
+    if response is None or not response.ok:
+        return [], error or f"rss_status_{status}", False
+
+    items = _parse_indeed_rss_items(body, response.url or rss_url)
+    return items, "", False
 
 
 def _decode_embedded_url(value):
@@ -1655,6 +1810,7 @@ def _fetch_detail_page_text(
     domain_state,
     detail_rps,
     location_mode="nl_only",
+    request_headers=None,
 ):
     link = _clean_value(url, "")
     if not link:
@@ -1664,7 +1820,7 @@ def _fetch_detail_page_text(
         session,
         link,
         params=None,
-        headers=_source_headers(source_name, location_mode),
+        headers=request_headers or _source_headers(source_name, location_mode),
         domain_state=domain_state,
         requests_per_second=detail_rps,
         timeout_seconds=DEFAULT_HTTP_TIMEOUT,
@@ -1736,16 +1892,108 @@ def _fetch_indeed_jobs_direct(
     )
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
+    _configure_session_for_scrape(session)
+    session_user_agent = random.choice(REQUEST_USER_AGENTS)
+    request_headers = _source_headers("Indeed", location_mode, user_agent=session_user_agent)
+    anti_block_cfg = RUNTIME_CONFIG.get("anti_block") or {}
+    prefer_rss_first = bool(anti_block_cfg.get("prefer_rss_first", True))
+    skip_html_if_rss_has_items = bool(anti_block_cfg.get("skip_html_if_rss_has_items", True))
+    rss_skip_threshold = max(1, int(anti_block_cfg.get("rss_skip_threshold_per_query", 5)))
+    disable_detail_fetch = bool(anti_block_cfg.get("disable_detail_fetch", True))
+    warmup_gate_to_rss_only = bool(anti_block_cfg.get("warmup_gate_to_rss_only", True))
     detail_base_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("base_budget_per_page", DEFAULT_DETAIL_FETCH_BASE_BUDGET))
     detail_reduced_budget = int((RUNTIME_CONFIG.get("detail_fetch") or {}).get("reduced_budget_per_page", DEFAULT_DETAIL_FETCH_REDUCED_BUDGET))
     detail_failures = 0
     detail_attempts = 0
+    warmup_ok = _warmup_indeed_session(
+        session,
+        request_headers,
+        domain_state,
+        requests_per_second,
+        location_mode,
+    )
+
+    def _ingest_rss_items(rss_items, query, location):
+        rss_new_unique = 0
+        for item in rss_items:
+            dedupe_key, _, _ = _build_dedupe_key(item)
+            if dedupe_key in seen_unique:
+                continue
+            seen_unique.add(dedupe_key)
+            rss_new_unique += 1
+            item["full_description"] = ""
+            item["detail_fetch_failed"] = True
+            item["indeed_url"] = _clean_value(item.get("link"), "")
+            item["company_url"] = _extract_external_destination_from_url(item["indeed_url"])
+            item["query"] = query
+            item["query_location"] = location
+            item["source"] = "Indeed"
+            jobs.append(item)
+        return rss_new_unique
 
     for query in queries:
         for location in locations:
             previous_jobs = len(jobs)
             no_new_unique_streak = 0
+            blocked_in_query = False
             last_response_body = ""
+            rss_attempted = False
+
+            if prefer_rss_first:
+                rss_attempted = True
+                rss_items, rss_error, rss_blocked = _fetch_indeed_rss_fallback(
+                    session,
+                    query,
+                    location,
+                    diagnostics,
+                    domain_state,
+                    requests_per_second,
+                    location_mode,
+                    request_headers,
+                )
+                rss_new_unique = _ingest_rss_items(rss_items, query, location)
+                _log_page_metrics(
+                    diagnostics,
+                    source="Indeed",
+                    query=query,
+                    location=location,
+                    page=0,
+                    url=_indeed_rss_url_for_mode(location_mode),
+                    status=200 if not rss_error and not rss_blocked else 0,
+                    cards_found=len(rss_items),
+                    parsed_count=len(rss_items),
+                    new_unique_count=rss_new_unique,
+                    detailpages_fetched=0,
+                    full_description_count=0,
+                    error_count=1 if rss_error else 0,
+                    blocked_detected=rss_blocked,
+                )
+                if len(seen_unique) >= target_raw:
+                    return jobs, diagnostics
+                if skip_html_if_rss_has_items and rss_new_unique >= rss_skip_threshold:
+                    _save_debug_event(
+                        "Indeed",
+                        query,
+                        0,
+                        "skip-html-after-rss",
+                        diagnostics,
+                        location=location,
+                        rss_new_unique=rss_new_unique,
+                        threshold=rss_skip_threshold,
+                    )
+                    continue
+
+            if warmup_gate_to_rss_only and not warmup_ok:
+                _save_debug_event(
+                    "Indeed",
+                    query,
+                    0,
+                    "warmup-blocked-rss-only",
+                    diagnostics,
+                    location=location,
+                )
+                continue
+
             for page_idx in range(max_pages):
                 start = page_idx * 10
                 params = {"q": query, "l": location, "start": start}
@@ -1753,7 +2001,7 @@ def _fetch_indeed_jobs_direct(
                     session,
                     search_url,
                     params=params,
-                    headers=_source_headers("Indeed", location_mode),
+                    headers=request_headers,
                     domain_state=domain_state,
                     requests_per_second=requests_per_second,
                     timeout_seconds=DEFAULT_HTTP_TIMEOUT,
@@ -1763,13 +2011,7 @@ def _fetch_indeed_jobs_direct(
                 body = response.text if response is not None else ""
                 if body:
                     last_response_body = body
-                blocked = bool(
-                    status in {401, 403, 429}
-                    or sleeves.detect_blocked_html(body)
-                )
-                if blocked:
-                    _record_blocked(diagnostics, "Indeed")
-
+                blocked = False
                 cards_found = 0
                 parsed_count = 0
                 new_unique_count = 0
@@ -1785,11 +2027,71 @@ def _fetch_indeed_jobs_direct(
                 parsed_items = []
                 request_url = response.url if response is not None else search_url
 
-                if response is not None and response.ok and not blocked:
+                if response is not None and response.ok:
                     selector = Selector(text=body)
                     cards, parsed_items = _parse_indeed_cards(selector, request_url)
                     cards_found = len(cards)
                     parsed_count = len(parsed_items)
+                    blocked = bool(
+                        status in {401, 403, 429}
+                        or (
+                            sleeves.detect_blocked_html(body)
+                            and cards_found == 0
+                            and parsed_count == 0
+                        )
+                    )
+                    if blocked:
+                        time.sleep(random.uniform(1.1, 2.3))
+                        retry_response, retry_error = _rate_limited_get(
+                            session,
+                            search_url,
+                            params=params,
+                            headers=request_headers,
+                            domain_state=domain_state,
+                            requests_per_second=max(0.2, requests_per_second * 0.7),
+                            timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+                            max_retries=1,
+                        )
+                        retry_status = retry_response.status_code if retry_response is not None else 0
+                        retry_body = retry_response.text if retry_response is not None else ""
+                        retry_cards_found = 0
+                        retry_parsed_count = 0
+                        retry_parsed_items = []
+                        retry_blocked = bool(
+                            retry_status in {401, 403, 429}
+                            or sleeves.detect_blocked_html(retry_body)
+                        )
+                        if retry_response is not None and retry_response.ok:
+                            retry_selector = Selector(text=retry_body)
+                            retry_cards, retry_parsed_items = _parse_indeed_cards(
+                                retry_selector,
+                                retry_response.url or request_url,
+                            )
+                            retry_cards_found = len(retry_cards)
+                            retry_parsed_count = len(retry_parsed_items)
+                            retry_blocked = bool(
+                                retry_status in {401, 403, 429}
+                                or (
+                                    sleeves.detect_blocked_html(retry_body)
+                                    and retry_cards_found == 0
+                                    and retry_parsed_count == 0
+                                )
+                            )
+                        should_use_retry = bool(
+                            retry_response is not None
+                            and (
+                                not retry_blocked
+                                or (retry_response.ok and len(retry_body) > len(body))
+                            )
+                        )
+                        if should_use_retry:
+                            response, error = retry_response, retry_error
+                            status, body = retry_status, retry_body
+                            request_url = retry_response.url or request_url
+                            blocked = retry_blocked
+                            cards_found = retry_cards_found
+                            parsed_count = retry_parsed_count
+                            parsed_items = retry_parsed_items
 
                     if cards_found == 0 or parsed_count == 0:
                         error_count += 1
@@ -1801,10 +2103,14 @@ def _fetch_indeed_jobs_direct(
                             "parse-empty",
                             diagnostics,
                         )
+                    if blocked:
+                        blocked_in_query = True
+                        _record_blocked(diagnostics, "Indeed")
+                        error_count += 1
 
                     fail_rate = (detail_failures / detail_attempts) if detail_attempts else 0.0
-                    detail_budget = min(detail_base_budget, len(parsed_items))
-                    if blocked or fail_rate > 0.5:
+                    detail_budget = 0 if disable_detail_fetch else min(detail_base_budget, len(parsed_items))
+                    if not disable_detail_fetch and (blocked or fail_rate > 0.5):
                         detail_budget = min(detail_reduced_budget, len(parsed_items))
 
                     for idx, item in enumerate(parsed_items):
@@ -1829,6 +2135,7 @@ def _fetch_indeed_jobs_direct(
                                 domain_state,
                                 detail_rps,
                                 location_mode,
+                                request_headers=request_headers,
                             )
                             detail_attempts += 1
                             if detail_failed:
@@ -1853,6 +2160,13 @@ def _fetch_indeed_jobs_direct(
                         item["source"] = "Indeed"
                         jobs.append(item)
                 else:
+                    blocked = bool(
+                        status in {401, 403, 429}
+                        or sleeves.detect_blocked_html(body)
+                    )
+                    if blocked:
+                        blocked_in_query = True
+                        _record_blocked(diagnostics, "Indeed")
                     if response is not None:
                         _save_html_snapshot(
                             "Indeed",
@@ -1887,6 +2201,44 @@ def _fetch_indeed_jobs_direct(
                     break
                 if len(seen_unique) >= target_raw:
                     return jobs, diagnostics
+            if len(jobs) == previous_jobs and not rss_attempted:
+                rss_items, rss_error, rss_blocked = _fetch_indeed_rss_fallback(
+                    session,
+                    query,
+                    location,
+                    diagnostics,
+                    domain_state,
+                    requests_per_second,
+                    location_mode,
+                    request_headers,
+                )
+                rss_new_unique = _ingest_rss_items(rss_items, query, location)
+                _log_page_metrics(
+                    diagnostics,
+                    source="Indeed",
+                    query=query,
+                    location=location,
+                    page=0,
+                    url=_indeed_rss_url_for_mode(location_mode),
+                    status=200 if not rss_error and not rss_blocked else 0,
+                    cards_found=len(rss_items),
+                    parsed_count=len(rss_items),
+                    new_unique_count=rss_new_unique,
+                    detailpages_fetched=0,
+                    full_description_count=0,
+                    error_count=1 if rss_error else 0,
+                    blocked_detected=rss_blocked,
+                )
+            elif len(jobs) == previous_jobs and blocked_in_query and rss_attempted:
+                _save_debug_event(
+                    "Indeed",
+                    query,
+                    0,
+                    "rss-and-html-blocked",
+                    diagnostics,
+                    location=location,
+                    pages_attempted=max_pages,
+                )
             if len(jobs) == previous_jobs:
                 _save_debug_event(
                     "Indeed",
@@ -2468,7 +2820,7 @@ def _derive_source_fetch_error(items, diagnostics):
     total_parsed = sum(int(entry.get("parsed_count", 0)) for entry in summaries)
     total_errors = sum(int(entry.get("error_count", 0)) for entry in summaries)
     blocked_any = any(bool(entry.get("blocked_detected")) for entry in summaries)
-    if blocked_any:
+    if blocked_any and not items:
         return "blocked_detected"
     if not items and total_parsed == 0 and total_errors > 0:
         return f"zero_parsed_with_errors:{total_errors}"

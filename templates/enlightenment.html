@@ -955,10 +955,10 @@
         Number(scrapeConfig.defaults?.max_results || DEFAULT_FETCH_LIMIT)
       );
       const hasDirectScrape = sources.includes('indeed_web');
-      const tunedMaxPages = hasDirectScrape ? 2 : 4;
+      const tunedMaxPages = hasDirectScrape ? 1 : 3;
       const tunedTargetRaw = hasDirectScrape
-        ? Math.max(40, Math.min(120, maxResults * 3))
-        : Math.max(60, Math.min(150, maxResults * 4));
+        ? Math.max(30, Math.min(90, maxResults * 2))
+        : Math.max(50, Math.min(130, maxResults * 3));
       const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
       if (!queryTerms.length) {
         const errorDiv = document.getElementById(`error-${sleeveKey}`);
@@ -975,8 +975,8 @@
       params.set('max_results', String(maxResults));
       params.set('max_pages', String(tunedMaxPages));
       params.set('target_raw', String(tunedTargetRaw));
-      params.set('rps', '0.65');
-      params.set('detail_rps', '0.45');
+      params.set('rps', '0.35');
+      params.set('detail_rps', '0.20');
       params.set('no_new_unique_pages', hasDirectScrape ? '1' : '2');
       params.set('refresh', '0');
       params.set('failover', '0');
@@ -1085,7 +1085,12 @@
               ? payload.summary.source_errors.filter(Boolean)
               : [];
             if (sourceErrors.length) {
-              resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}.`;
+              const blocked = sourceErrors.some(error => String(error || '').toLowerCase().includes('blocked_detected'));
+              if (blocked) {
+                resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}. Indeed is blocking this server IP right now. Retry later, or configure SCRAPE_HTTP_PROXY/SCRAPE_HTTPS_PROXY on the server.`;
+              } else {
+                resultsDiv.textContent = `No jobs matched this Career Sleeve. Source diagnostics: ${sourceErrors.slice(0, 2).join(' | ')}.`;
+              }
               return;
             }
             if (payload.summary && Array.isArray(payload.summary.top_fail_reasons) && payload.summary.top_fail_reasons.length) {
