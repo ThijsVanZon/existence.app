@@ -198,7 +198,7 @@ SYNERGY_SIGNALS = {
 
 SLEEVE_CONFIG = {
     "A": {
-        "name": "International Music Events & Festivals",
+        "name": "Music Events & Festivals",
         "tagline": "Creative + operations roles in international live music where shows, teams, and on-site delivery must align.",
         "must_haves": {
             "min_title_hits": 1,
@@ -272,7 +272,7 @@ SLEEVE_CONFIG = {
         },
     },
     "B": {
-        "name": "International Theme Parks & Destinations",
+        "name": "Theme Parks & Destinations",
         "tagline": "Experience delivery + operations discipline for theme parks and immersive destinations in multi-site international settings.",
         "must_haves": {
             "min_title_hits": 1,
@@ -338,7 +338,7 @@ SLEEVE_CONFIG = {
         },
     },
     "C": {
-        "name": "International Data Centers & Facilities",
+        "name": "Data Centers & Facilities",
         "tagline": "AI/compute infrastructure operations where reliability, safety, scaling, and execution across sites are central.",
         "must_haves": {
             "min_title_hits": 1,
@@ -410,7 +410,7 @@ SLEEVE_CONFIG = {
         },
     },
     "D": {
-        "name": "International Supply Chains & Ecosystems",
+        "name": "Supply Chains & Ecosystems",
         "tagline": "Operations roles where cross-site flow, vendor ecosystems, and delivery reliability need structured execution.",
         "must_haves": {
             "min_title_hits": 1,

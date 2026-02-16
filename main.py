@@ -3934,8 +3934,6 @@ def save_synergy_sleeve():
         return jsonify({"error": "Title is required."}), 400
 
     terms = _parse_terms_for_storage(payload.get("terms"))
-    if not terms:
-        return jsonify({"error": "Add at least one search term before saving."}), 400
 
     record = {
         "letter": letter,
