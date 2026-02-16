@@ -1,329 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2025-2035</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <style>
-    .synergy-shell {
-      max-width: 920px;
-      margin: 18px auto 32px;
-    }
-
+    .synergy-shell { max-width: 920px; margin: 18px auto 32px; }
     .synergy-column {
-      border: none;
-      border-radius: 22px;
+      border: none; border-radius: 22px; padding: 16px; display: grid; gap: 12px;
       background: linear-gradient(145deg, rgba(var(--white-rgb), 0.78), rgba(var(--white-rgb), 0.58));
-      box-shadow: var(--shadow-soft);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      padding: 16px;
-      display: grid;
-      gap: 12px;
+      box-shadow: var(--shadow-soft); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
     }
-
-    .synergy-column h2 {
-      margin: 0;
-      font-size: 1.28rem;
+    .synergy-sleeve-header {
+      margin: 0; padding: 8px 10px; border-radius: 10px; color: var(--white);
+      text-shadow: 0 1px 2px rgba(var(--black-rgb), 0.18);
+      background: linear-gradient(100deg, rgba(var(--amethyst-rgb), 0.84), rgba(var(--zircon-rgb), 0.68));
     }
-
-    .synergy-subtitle {
-      margin: 0;
-      color: var(--ink-muted);
-      font-size: 0.92rem;
-      font-weight: 600;
-    }
-
-    .synergy-row {
-      display: grid;
-      gap: 6px;
-    }
-
-    .synergy-row label {
-      font-weight: 600;
-      color: var(--ink-muted);
-      font-size: 0.85rem;
-    }
-
-    .synergy-inline {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .synergy-inline select,
-    .synergy-inline input,
-    .synergy-row input {
-      border: none;
-      border-radius: 10px;
-      padding: 8px 10px;
+    .synergy-subtitle { margin: 0; color: var(--ink-muted); font-size: 0.92rem; font-weight: 600; }
+    .synergy-row { display: grid; gap: 6px; }
+    .synergy-row label { font-weight: 600; color: var(--ink-muted); font-size: 0.85rem; }
+    .synergy-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .synergy-editor-grid { display: grid; grid-template-columns: 180px 1fr; gap: 8px; }
+    .synergy-row select, .synergy-row input, .synergy-inline input {
+      border: none; border-radius: 10px; padding: 8px 10px; color: var(--ink);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.66));
-      color: var(--ink);
-      min-width: 160px;
-      flex: 1 1 220px;
     }
-
-    .synergy-editor-grid {
-      display: grid;
-      grid-template-columns: 110px 1fr;
-      gap: 8px;
-    }
-
-    .synergy-editor-grid input:first-child {
-      text-transform: uppercase;
-      text-align: center;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-    }
-
     .synergy-term-box {
-      border: none;
-      border-radius: 14px;
+      border: none; border-radius: 14px; padding: 10px; display: grid; gap: 8px;
       background: linear-gradient(140deg, rgba(var(--amethyst-rgb), 0.06), rgba(var(--white-rgb), 0.45));
-      padding: 10px;
-      display: grid;
-      gap: 8px;
     }
-
-    .synergy-term-input {
+    .synergy-term-chip {
+      display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+      padding: 4px 9px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--amethyst);
+      font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+    }
+    .synergy-term-chip button {
+      border: none; border-radius: 999px; width: 18px; height: 18px; min-width: 18px;
+      padding: 0; margin: 0; font-size: 0.8rem; line-height: 1;
+      background: rgba(var(--amethyst-rgb), 0.2); color: var(--amethyst); opacity: 1;
+      transform: none; transition: background 0.14s ease;
+    }
+    .synergy-term-chip button:hover { transform: none; filter: none; background: rgba(var(--amethyst-rgb), 0.26); }
+    .synergy-status {
+      border: none; border-radius: 12px; padding: 10px; min-height: 44px; display: flex; align-items: center;
+      font-size: 0.9rem; font-weight: 600; background: rgba(var(--heliodor-rgb), 0.18); color: rgba(var(--black-rgb), 0.82);
+    }
+    .synergy-status.is-success { background: rgba(var(--zircon-rgb), 0.2); }
+    .synergy-status.is-error { background: rgba(var(--rubellite-rgb), 0.16); }
+    .synergy-progress, .synergy-results {
+      border: none; border-radius: 14px; padding: 12px; display: grid; gap: 10px;
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.76), rgba(var(--white-rgb), 0.52));
+    }
+    .synergy-progress h3, .synergy-results h3 { margin: 0; font-size: 1rem; }
+    .synergy-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
+    .synergy-metric { border-radius: 999px; padding: 4px 9px; font-size: 0.74rem; font-weight: 800; background: rgba(var(--black-rgb), 0.06); }
+    .synergy-metric-pass { background: rgba(var(--zircon-rgb), 0.2); color: #00bfc9; }
+    .synergy-metric-maybe { background: rgba(var(--heliodor-rgb), 0.26); color: #8f6800; }
+    .synergy-metric-fail { background: rgba(var(--rubellite-rgb), 0.18); color: #ff3f79; }
+    .synergy-event-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 0.84rem; }
+    .synergy-empty { color: var(--ink-muted); font-size: 0.86rem; font-weight: 600; }
+    .synergy-result-list { display: grid; gap: 10px; max-height: 760px; overflow-y: auto; padding-right: 4px; }
+    .synergy-job-card { border: none; border-radius: 12px; padding: 10px; display: grid; gap: 7px; background: linear-gradient(145deg, rgba(var(--white-rgb), 0.84), rgba(var(--white-rgb), 0.62)); }
+    .synergy-job-title { margin: 0; font-size: 0.98rem; color: var(--ink); }
+    .synergy-job-meta { margin: 0; color: var(--ink-muted); font-size: 0.84rem; font-weight: 600; }
+    .synergy-job-links { display: flex; flex-wrap: wrap; gap: 6px; }
+    .synergy-link-btn {
+      border: none; border-radius: 999px; padding: 6px 10px; font-size: 0.78rem; font-weight: 800; color: var(--white);
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      opacity: 0.9; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .synergy-link-btn:hover { filter: brightness(0.98); transform: translateY(-1px); opacity: 1; }
+    .synergy-dialog {
+      border: none; border-radius: 14px; padding: 14px; width: min(680px, calc(100vw - 28px));
+      background: linear-gradient(145deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.82));
+      box-shadow: 0 20px 44px rgba(var(--black-rgb), 0.24);
+    }
+    .synergy-dialog::backdrop { background: rgba(var(--black-rgb), 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .synergy-dialog-header h3 { margin: 0; font-size: 1.05rem; }
+    .synergy-dialog-list { display: grid; gap: 10px; max-height: 56vh; overflow-y: auto; padding-right: 2px; }
+    .synergy-dialog-search {
+      width: 100%;
       border: none;
       border-radius: 10px;
       padding: 8px 10px;
-      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.68));
-      color: var(--ink);
-      width: 100%;
-    }
-
-    .synergy-term-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 999px;
-      padding: 4px 9px;
-      background: rgba(var(--amethyst-rgb), 0.14);
-      color: var(--amethyst);
-      font-size: 0.8rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .synergy-term-chip button {
-      border: none;
-      border-radius: 999px;
-      width: 18px;
-      height: 18px;
-      min-width: 18px;
-      padding: 0;
-      margin: 0;
-      font-size: 0.8rem;
-      line-height: 1;
-      background: rgba(var(--amethyst-rgb), 0.2);
-      color: var(--amethyst);
-      opacity: 1;
-      transform: none;
-      transition: background 0.14s ease;
-    }
-
-    .synergy-term-chip button:hover {
-      transform: none;
-      background: rgba(var(--amethyst-rgb), 0.26);
-      filter: none;
-    }
-
-    .synergy-status {
-      border: none;
-      border-radius: 12px;
-      padding: 10px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      background: rgba(var(--heliodor-rgb), 0.18);
-      color: rgba(var(--black-rgb), 0.82);
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-    }
-
-    .synergy-status.is-success {
-      background: rgba(var(--zircon-rgb), 0.2);
-      color: rgba(var(--black-rgb), 0.88);
-    }
-
-    .synergy-status.is-error {
-      background: rgba(var(--rubellite-rgb), 0.16);
-      color: rgba(var(--black-rgb), 0.92);
-    }
-
-    .synergy-progress,
-    .synergy-results {
-      border: none;
-      border-radius: 14px;
-      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.76), rgba(var(--white-rgb), 0.52));
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .synergy-progress h3,
-    .synergy-results h3 {
-      margin: 0;
-      font-size: 1rem;
-    }
-
-    .synergy-metrics {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .synergy-metric {
-      border-radius: 999px;
-      padding: 4px 9px;
-      font-size: 0.74rem;
-      font-weight: 800;
-      background: rgba(var(--black-rgb), 0.06);
-      color: rgba(var(--black-rgb), 0.74);
-    }
-
-    .synergy-metric-pass {
-      background: rgba(var(--zircon-rgb), 0.2);
-      color: #00bfc9;
-    }
-
-    .synergy-metric-maybe {
-      background: rgba(var(--heliodor-rgb), 0.26);
-      color: #8f6800;
-    }
-
-    .synergy-metric-fail {
-      background: rgba(var(--rubellite-rgb), 0.18);
-      color: #ff3f79;
-    }
-
-    .synergy-event-list {
-      margin: 0;
-      padding-left: 18px;
-      display: grid;
-      gap: 4px;
-      max-height: 220px;
-      overflow-y: auto;
-      font-size: 0.84rem;
-    }
-
-    .synergy-empty {
-      color: var(--ink-muted);
-      font-size: 0.86rem;
-      font-weight: 600;
-    }
-
-    .synergy-result-list {
-      display: grid;
-      gap: 10px;
-      max-height: 760px;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .synergy-job-card {
-      border: none;
-      border-radius: 12px;
-      padding: 10px;
-      background: linear-gradient(145deg, rgba(var(--white-rgb), 0.84), rgba(var(--white-rgb), 0.62));
-      display: grid;
-      gap: 7px;
-    }
-
-    .synergy-job-title {
-      margin: 0;
-      font-size: 0.98rem;
+      margin-bottom: 8px;
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
       color: var(--ink);
     }
-
-    .synergy-job-meta {
-      margin: 0;
-      color: var(--ink-muted);
-      font-size: 0.84rem;
-      font-weight: 600;
-    }
-
-    .synergy-job-links {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .synergy-link-btn {
-      border: none;
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 0.78rem;
-      font-weight: 800;
-      color: var(--white);
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
-      opacity: 0.9;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .synergy-link-btn:hover {
-      filter: brightness(0.98);
-      transform: translateY(-1px);
-      opacity: 1;
-    }
-
-    @media (max-width: 720px) {
-      .synergy-editor-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .synergy-shell {
-        margin-top: 12px;
-      }
-    }
+    .synergy-dialog-group { display: grid; gap: 6px; }
+    .synergy-dialog-group-title { font-size: 0.82rem; color: var(--ink-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .synergy-dialog-option { width: 100%; text-align: left; }
+    @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
   </style>
 </head>
-
 <body>
-  <a href="{{ url_for('index') }}">
-    <h1>Timeline</h1>
-  </a>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
   <nav class="timeline" aria-label="synergy timeline">
-    <div class="sub-decade-container" id="decade-2025">
-      <span class="sub-decade" id="sub-decade-2025">2025</span>
-    </div>
-    <div class="main-decade-container highlight" id="decade-2030">
-      <span class="main-decade" id="main-decade-2030">SYNERGY</span>
-    </div>
-    <div class="sub-decade-container" id="decade-2035">
-      <span class="sub-decade" id="sub-decade-2035">2035</span>
-    </div>
+    <div class="sub-decade-container"><span class="sub-decade">2025</span></div>
+    <div class="main-decade-container highlight"><span class="main-decade">SYNERGY</span></div>
+    <div class="sub-decade-container"><span class="sub-decade">2035</span></div>
   </nav>
 
   <main class="synergy-shell">
     <section class="synergy-column">
-      <h2>Single-Column Sleeve Workspace</h2>
-      <p class="synergy-subtitle">Start empty, load saved sleeves, edit terms, save custom sleeves from E-Z, and scrape.</p>
+      <header class="synergy-sleeve-header">
+        <span id="headerName" class="sleeve-header-name">Supply Chains & Ecosystems</span>
+        <span id="headerCode" class="sleeve-header-code">Career Sleeve D</span>
+      </header>
+      <p class="synergy-subtitle">Load a saved sleeve, then edit letter/title/terms and scrape in one column.</p>
 
       <div class="synergy-row">
-        <label for="savedSleeveSelect">Saved sleeves</label>
+        <label>Workspace actions</label>
         <div class="synergy-inline">
-          <select id="savedSleeveSelect">
-            <option value="">Select a saved sleeve</option>
-          </select>
-          <button id="loadSleeveBtn" type="button">Load sleeve</button>
+          <button id="loadSleeveBtn" type="button">Load saved sleeve</button>
           <button id="newSleeveBtn" type="button">New empty</button>
         </div>
       </div>
 
       <div class="synergy-row">
-        <label>Sleeve identity</label>
+        <label for="sleeveLetterSelect">Sleeve identity</label>
         <div class="synergy-editor-grid">
-          <input id="sleeveLetterInput" type="text" maxlength="1" autocomplete="off" placeholder="E">
-          <input id="sleeveTitleInput" type="text" maxlength="120" autocomplete="off"
-            placeholder="Type sleeve title...">
+          <select id="sleeveLetterSelect" aria-label="Sleeve letter">
+            <option value="">Select sleeve letter</option>
+          </select>
+          <input id="sleeveTitleInput" type="text" maxlength="120" autocomplete="off" placeholder="Type sleeve title...">
         </div>
       </div>
 
@@ -331,8 +133,7 @@
         <label for="termInput">Search terms</label>
         <div id="termChipList" class="terms-chip-list"></div>
         <div class="synergy-inline">
-          <input id="termInput" class="synergy-term-input" type="text" autocomplete="off"
-            placeholder="Type term and press Enter">
+          <input id="termInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
           <button id="addTermBtn" type="button">Add term</button>
           <button id="clearTermsBtn" type="button">Clear terms</button>
         </div>
@@ -359,20 +160,27 @@
     </section>
   </main>
 
+  <dialog id="loadDialog" class="synergy-dialog">
+    <div class="synergy-dialog-header">
+      <h3>Select saved sleeve</h3>
+      <button id="closeLoadDialogBtn" type="button">Close</button>
+    </div>
+    <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
+    <div id="loadDialogList" class="synergy-dialog-list"></div>
+  </dialog>
+
   <script>
     (() => {
       const state = {
         catalog: { fixed: [], custom: [], all: [] },
         terms: [],
         progressTimer: null,
-        activeRunId: "",
+        loadFilter: "",
       };
-
-      const elements = {
-        savedSleeveSelect: document.getElementById("savedSleeveSelect"),
+      const els = {
         loadSleeveBtn: document.getElementById("loadSleeveBtn"),
         newSleeveBtn: document.getElementById("newSleeveBtn"),
-        sleeveLetterInput: document.getElementById("sleeveLetterInput"),
+        sleeveLetterSelect: document.getElementById("sleeveLetterSelect"),
         sleeveTitleInput: document.getElementById("sleeveTitleInput"),
         termChipList: document.getElementById("termChipList"),
         termInput: document.getElementById("termInput"),
@@ -385,422 +193,388 @@
         metricBadges: document.getElementById("metricBadges"),
         progressEvents: document.getElementById("progressEvents"),
         resultList: document.getElementById("resultList"),
+        headerName: document.getElementById("headerName"),
+        headerCode: document.getElementById("headerCode"),
+        loadDialog: document.getElementById("loadDialog"),
+        loadDialogList: document.getElementById("loadDialogList"),
+        loadDialogSearch: document.getElementById("loadDialogSearch"),
+        closeLoadDialogBtn: document.getElementById("closeLoadDialogBtn"),
       };
 
-      function normalizeLetter(value) {
-        const text = String(value || "").trim().toUpperCase();
-        if (!/^[A-Z]$/.test(text)) {
-          return "";
-        }
-        return text;
-      }
-
-      function isFixedLetter(letter) {
-        return ["A", "B", "C", "D"].includes(letter);
-      }
-
-      function isCustomLetter(letter) {
-        if (!letter || !/^[A-Z]$/.test(letter)) {
-          return false;
-        }
-        return letter >= "E";
-      }
-
-      function dedupeTerms(terms) {
+      const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
+      const isFixedLetter = (l) => ["A", "B", "C", "D"].includes(l);
+      const isCustomLetter = (l) => /^[A-Z]$/.test(l || "") && l >= "E";
+      const dedupeTerms = (arr) => {
         const seen = new Set();
-        const output = [];
-        for (const raw of terms || []) {
-          const cleaned = String(raw || "").trim();
-          if (cleaned.length < 2) {
-            continue;
-          }
-          const key = cleaned.toLowerCase();
-          if (seen.has(key)) {
-            continue;
-          }
-          seen.add(key);
-          output.push(cleaned);
-        }
-        return output;
-      }
+        const out = [];
+        (arr || []).forEach((raw) => {
+          const t = String(raw || "").trim();
+          if (t.length < 2) return;
+          const k = t.toLowerCase();
+          if (seen.has(k)) return;
+          seen.add(k);
+          out.push(t);
+        });
+        return out;
+      };
+      const findFixed = (l) => (state.catalog.fixed || []).find((x) => x.letter === l) || null;
+      const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
+      const collectEditor = () => ({ letter: normalizeLetter(els.sleeveLetterSelect.value), title: String(els.sleeveTitleInput.value || "").trim(), terms: dedupeTerms(state.terms) });
 
-      function setStatus(message, type = "info") {
-        elements.statusBox.textContent = message;
-        elements.statusBox.classList.remove("is-success", "is-error");
-        if (type === "success") {
-          elements.statusBox.classList.add("is-success");
-        } else if (type === "error") {
-          elements.statusBox.classList.add("is-error");
-        }
-      }
-
-      function collectEditorState() {
-        return {
-          letter: normalizeLetter(elements.sleeveLetterInput.value),
-          title: String(elements.sleeveTitleInput.value || "").trim(),
-          terms: dedupeTerms(state.terms),
-        };
+      function setStatus(msg, type = "info") {
+        els.statusBox.textContent = msg;
+        els.statusBox.classList.remove("is-success", "is-error");
+        if (type === "success") els.statusBox.classList.add("is-success");
+        if (type === "error") els.statusBox.classList.add("is-error");
       }
 
       function renderTerms() {
-        elements.termChipList.innerHTML = "";
+        els.termChipList.innerHTML = "";
         if (!state.terms.length) {
           const empty = document.createElement("div");
           empty.className = "synergy-empty";
           empty.textContent = "No terms configured.";
-          elements.termChipList.appendChild(empty);
+          els.termChipList.appendChild(empty);
           return;
         }
-        for (const term of state.terms) {
+        state.terms.forEach((term) => {
           const chip = document.createElement("span");
           chip.className = "synergy-term-chip";
-
           const label = document.createElement("span");
           label.textContent = term;
           chip.appendChild(label);
-
-          const removeBtn = document.createElement("button");
-          removeBtn.type = "button";
-          removeBtn.setAttribute("aria-label", `Remove ${term}`);
-          removeBtn.textContent = "×";
-          removeBtn.addEventListener("click", () => {
-            state.terms = state.terms.filter((item) => item.toLowerCase() !== term.toLowerCase());
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.textContent = "x";
+          remove.setAttribute("aria-label", `Remove ${term}`);
+          remove.addEventListener("click", () => {
+            state.terms = state.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
             renderTerms();
           });
-          chip.appendChild(removeBtn);
-          elements.termChipList.appendChild(chip);
-        }
+          chip.appendChild(remove);
+          els.termChipList.appendChild(chip);
+        });
       }
 
-      function renderCatalogSelect() {
-        const currentValue = elements.savedSleeveSelect.value;
-        elements.savedSleeveSelect.innerHTML = "";
-
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "Select a saved sleeve";
-        elements.savedSleeveSelect.appendChild(placeholder);
-
+      function renderLetterOptions() {
+        const current = normalizeLetter(els.sleeveLetterSelect.value);
+        els.sleeveLetterSelect.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = "Select sleeve letter";
+        els.sleeveLetterSelect.appendChild(ph);
         const fixedGroup = document.createElement("optgroup");
-        fixedGroup.label = "Fixed sleeves (A-D)";
-        for (const item of state.catalog.fixed || []) {
-          const option = document.createElement("option");
-          option.value = `fixed:${item.letter}`;
-          option.textContent = `${item.letter} - ${item.title}`;
-          fixedGroup.appendChild(option);
-        }
-        elements.savedSleeveSelect.appendChild(fixedGroup);
-
+        fixedGroup.label = "Fixed (A-D)";
         const customGroup = document.createElement("optgroup");
-        customGroup.label = "Custom sleeves (E-Z)";
-        for (const item of state.catalog.custom || []) {
-          const option = document.createElement("option");
-          option.value = `custom:${item.letter}`;
-          option.textContent = `${item.letter} - ${item.title}`;
-          customGroup.appendChild(option);
-        }
-        elements.savedSleeveSelect.appendChild(customGroup);
+        customGroup.label = "Custom (E-Z)";
 
-        if (currentValue && elements.savedSleeveSelect.querySelector(`option[value="${currentValue}"]`)) {
-          elements.savedSleeveSelect.value = currentValue;
+        for (let code = 65; code <= 90; code += 1) {
+          const letter = String.fromCharCode(code);
+          const opt = document.createElement("option");
+          opt.value = letter;
+          opt.textContent = isFixedLetter(letter) ? `${letter} (fixed)` : letter;
+          if (isFixedLetter(letter)) {
+            fixedGroup.appendChild(opt);
+          } else {
+            customGroup.appendChild(opt);
+          }
         }
+        els.sleeveLetterSelect.appendChild(fixedGroup);
+        els.sleeveLetterSelect.appendChild(customGroup);
+        if (current) els.sleeveLetterSelect.value = current;
       }
 
-      function applySleeveToEditor(sleeve) {
-        if (!sleeve) {
-          return;
+      function updateHeaderPreview() {
+        const letter = normalizeLetter(els.sleeveLetterSelect.value);
+        const inputTitle = String(els.sleeveTitleInput.value || "").trim();
+        let title = inputTitle;
+        if (!title && letter) {
+          const fixed = findFixed(letter);
+          if (fixed && fixed.title) title = fixed.title;
         }
-        elements.sleeveLetterInput.value = sleeve.letter || "";
-        elements.sleeveTitleInput.value = sleeve.title || "";
+        if (!title) title = "Supply Chains & Ecosystems";
+        els.headerName.textContent = title;
+        els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve";
+      }
+
+      function updateActionState() {
+        const letter = normalizeLetter(els.sleeveLetterSelect.value);
+        const customExists = Boolean(letter && findCustom(letter));
+        els.saveSleeveBtn.disabled = !letter || isFixedLetter(letter);
+        els.deleteSleeveBtn.disabled = !letter || isFixedLetter(letter) || !customExists;
+      }
+
+      function applySleeveToEditor(sleeve, options = {}) {
+        if (!sleeve) return;
+        els.sleeveLetterSelect.value = sleeve.letter || "";
+        els.sleeveTitleInput.value = sleeve.title || "";
         state.terms = dedupeTerms(sleeve.terms || []);
         renderTerms();
-        const suffix = sleeve.locked ? "(fixed)" : "(custom)";
-        setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
-      }
-
-      function clearEditor() {
-        elements.sleeveLetterInput.value = "";
-        elements.sleeveTitleInput.value = "";
-        elements.savedSleeveSelect.value = "";
-        state.terms = [];
-        renderTerms();
-        setStatus("Editor reset. Configure a sleeve and scrape.", "info");
-      }
-
-      async function loadCatalog() {
-        const response = await fetch("/synergy-sleeves", { headers: { Accept: "application/json" } });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || "Could not load sleeves.");
+        updateHeaderPreview();
+        updateActionState();
+        if (!options.silent) {
+          const suffix = sleeve.locked ? "(fixed)" : "(custom)";
+          setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
         }
-        state.catalog = payload;
-        renderCatalogSelect();
-      }
-
-      function addTermFromInput() {
-        const term = String(elements.termInput.value || "").trim();
-        if (term.length < 2) {
-          return;
-        }
-        state.terms = dedupeTerms([...state.terms, term]);
-        elements.termInput.value = "";
-        renderTerms();
       }
 
       function renderMetrics(summary) {
-        elements.metricBadges.innerHTML = "";
-        if (!summary) {
-          return;
-        }
-        const metrics = [
-          { label: "RAW", value: summary.raw_count ?? 0, className: "" },
-          { label: "DEDUPED", value: summary.deduped_count ?? 0, className: "" },
-          { label: "PASS", value: summary.pass_count ?? 0, className: "synergy-metric-pass" },
-          { label: "MAYBE", value: summary.maybe_count ?? 0, className: "synergy-metric-maybe" },
-          { label: "FAIL", value: summary.fail_count ?? 0, className: "synergy-metric-fail" },
+        els.metricBadges.innerHTML = "";
+        if (!summary) return;
+        const items = [
+          ["RAW", summary.raw_count ?? 0, ""],
+          ["DEDUPED", summary.deduped_count ?? 0, ""],
+          ["PASS", summary.pass_count ?? 0, "synergy-metric-pass"],
+          ["MAYBE", summary.maybe_count ?? 0, "synergy-metric-maybe"],
+          ["FAIL", summary.fail_count ?? 0, "synergy-metric-fail"],
         ];
-        for (const metric of metrics) {
-          const badge = document.createElement("span");
-          badge.className = `synergy-metric ${metric.className}`.trim();
-          badge.textContent = `${metric.label} ${metric.value}`;
-          elements.metricBadges.appendChild(badge);
-        }
+        items.forEach(([label, value, cls]) => {
+          const b = document.createElement("span");
+          b.className = `synergy-metric ${cls}`.trim();
+          b.textContent = `${label} ${value}`;
+          els.metricBadges.appendChild(b);
+        });
       }
 
       function renderEvents(events) {
-        elements.progressEvents.innerHTML = "";
+        els.progressEvents.innerHTML = "";
         const list = Array.isArray(events) ? events.slice(-16) : [];
         if (!list.length) {
           const li = document.createElement("li");
           li.className = "synergy-empty";
           li.textContent = "No events yet.";
-          elements.progressEvents.appendChild(li);
+          els.progressEvents.appendChild(li);
           return;
         }
-        for (const event of list) {
+        list.forEach((event) => {
           const li = document.createElement("li");
           li.textContent = event && event.message ? event.message : "Update";
-          elements.progressEvents.appendChild(li);
-        }
+          els.progressEvents.appendChild(li);
+        });
       }
 
       function buildCompanyPostingUrl(job) {
-        const params = new URLSearchParams();
-        if (job.company_url) {
-          params.set("company_url", job.company_url);
-        }
-        if (job.indeed_url) {
-          params.set("indeed_url", job.indeed_url);
-        }
-        if (job.linkedin_url) {
-          params.set("linkedin_url", job.linkedin_url);
-        }
-        if (job.url) {
-          params.set("job_url", job.url);
-        }
-        const query = params.toString();
-        if (!query) {
-          return "";
-        }
-        return `/company-posting?${query}`;
+        const p = new URLSearchParams();
+        if (job.company_url) p.set("company_url", job.company_url);
+        if (job.indeed_url) p.set("indeed_url", job.indeed_url);
+        if (job.linkedin_url) p.set("linkedin_url", job.linkedin_url);
+        if (job.url) p.set("job_url", job.url);
+        const q = p.toString();
+        return q ? `/company-posting?${q}` : "";
       }
 
       function renderResults(jobs) {
-        elements.resultList.innerHTML = "";
+        els.resultList.innerHTML = "";
         if (!Array.isArray(jobs) || !jobs.length) {
           const empty = document.createElement("div");
           empty.className = "synergy-empty";
           empty.textContent = "No jobs returned.";
-          elements.resultList.appendChild(empty);
+          els.resultList.appendChild(empty);
           return;
         }
-        for (const job of jobs) {
+        jobs.forEach((job) => {
           const card = document.createElement("article");
           card.className = "synergy-job-card";
-
           const title = document.createElement("h4");
           title.className = "synergy-job-title";
           title.textContent = job.title || "Unknown role";
           card.appendChild(title);
-
           const company = document.createElement("p");
           company.className = "synergy-job-meta";
           company.textContent = `${job.company || "Unknown company"} | ${job.location || "Unknown location"}`;
           card.appendChild(company);
-
           const status = document.createElement("p");
           status.className = "synergy-job-meta";
           status.textContent = `${job.decision || "UNKNOWN"} | Sleeve ${job.primary_sleeve_id || "?"} ${job.primary_sleeve_score || 0}/5`;
           card.appendChild(status);
-
           const links = document.createElement("div");
           links.className = "synergy-job-links";
-
           const companyUrl = buildCompanyPostingUrl(job);
           if (companyUrl) {
-            const companyLink = document.createElement("a");
-            companyLink.className = "synergy-link-btn";
-            companyLink.href = companyUrl;
-            companyLink.target = "_blank";
-            companyLink.rel = "noopener noreferrer";
-            companyLink.textContent = "Company URL";
-            links.appendChild(companyLink);
+            const a = document.createElement("a");
+            a.className = "synergy-link-btn";
+            a.href = companyUrl;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = "Company URL";
+            links.appendChild(a);
           }
-
           if (job.indeed_url) {
-            const indeedLink = document.createElement("a");
-            indeedLink.className = "synergy-link-btn";
-            indeedLink.href = job.indeed_url;
-            indeedLink.target = "_blank";
-            indeedLink.rel = "noopener noreferrer";
-            indeedLink.textContent = "Indeed URL";
-            links.appendChild(indeedLink);
+            const a = document.createElement("a");
+            a.className = "synergy-link-btn";
+            a.href = job.indeed_url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = "Indeed URL";
+            links.appendChild(a);
           }
-
           if (job.linkedin_url) {
-            const linkedInLink = document.createElement("a");
-            linkedInLink.className = "synergy-link-btn";
-            linkedInLink.href = job.linkedin_url;
-            linkedInLink.target = "_blank";
-            linkedInLink.rel = "noopener noreferrer";
-            linkedInLink.textContent = "LinkedIn URL";
-            links.appendChild(linkedInLink);
+            const a = document.createElement("a");
+            a.className = "synergy-link-btn";
+            a.href = job.linkedin_url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = "LinkedIn URL";
+            links.appendChild(a);
           }
-
           if (!links.childNodes.length) {
-            const noLinks = document.createElement("span");
-            noLinks.className = "synergy-empty";
-            noLinks.textContent = "No outbound URLs available.";
-            links.appendChild(noLinks);
+            const empty = document.createElement("span");
+            empty.className = "synergy-empty";
+            empty.textContent = "No outbound URLs available.";
+            links.appendChild(empty);
           }
-
           card.appendChild(links);
-          elements.resultList.appendChild(card);
+          els.resultList.appendChild(card);
+        });
+      }
+
+      function renderLoadDialogList() {
+        els.loadDialogList.innerHTML = "";
+        const query = String(state.loadFilter || "").trim().toLowerCase();
+        const groups = [
+          { title: "Fixed sleeves (A-D)", items: state.catalog.fixed || [] },
+          { title: "Custom sleeves (E-Z)", items: state.catalog.custom || [] },
+        ];
+        groups.forEach((group) => {
+          const wrap = document.createElement("div");
+          wrap.className = "synergy-dialog-group";
+          const title = document.createElement("div");
+          title.className = "synergy-dialog-group-title";
+          title.textContent = group.title;
+          wrap.appendChild(title);
+          const filteredItems = (group.items || []).filter((sleeve) => {
+            if (!query) return true;
+            const hay = `${sleeve.letter || ""} ${sleeve.title || ""}`.toLowerCase();
+            return hay.includes(query);
+          });
+          if (!filteredItems.length) {
+            const empty = document.createElement("div");
+            empty.className = "synergy-empty";
+            empty.textContent = query ? "No matches in this group." : "No sleeves in this group.";
+            wrap.appendChild(empty);
+          } else {
+            filteredItems.forEach((sleeve) => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "synergy-dialog-option";
+              btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
+              btn.addEventListener("click", () => {
+                applySleeveToEditor(sleeve);
+                closeLoadDialog();
+              });
+              wrap.appendChild(btn);
+            });
+          }
+          els.loadDialogList.appendChild(wrap);
+        });
+      }
+
+      function openLoadDialog() {
+        state.loadFilter = "";
+        if (els.loadDialogSearch) {
+          els.loadDialogSearch.value = "";
+        }
+        renderLoadDialogList();
+        if (typeof els.loadDialog.showModal === "function") {
+          els.loadDialog.showModal();
+        } else {
+          els.loadDialog.setAttribute("open", "open");
+        }
+        if (els.loadDialogSearch) {
+          setTimeout(() => els.loadDialogSearch.focus(), 30);
+        }
+      }
+      function closeLoadDialog() {
+        state.loadFilter = "";
+        if (els.loadDialogSearch) {
+          els.loadDialogSearch.value = "";
+        }
+        if (typeof els.loadDialog.close === "function") {
+          els.loadDialog.close();
+        } else {
+          els.loadDialog.removeAttribute("open");
         }
       }
 
+      async function loadCatalog() {
+        const res = await fetch("/synergy-sleeves", { headers: { Accept: "application/json" } });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || "Could not load sleeves.");
+        state.catalog = payload;
+        renderLoadDialogList();
+        renderLetterOptions();
+        updateActionState();
+      }
+
       async function pollProgress(runId) {
-        if (!runId) {
-          return;
-        }
+        if (!runId) return;
         try {
-          const response = await fetch(`/scrape-progress/${encodeURIComponent(runId)}?tail=40`, {
-            headers: { Accept: "application/json" },
-          });
-          if (!response.ok) {
-            return;
-          }
-          const payload = await response.json();
+          const res = await fetch(`/scrape-progress/${encodeURIComponent(runId)}?tail=40`, { headers: { Accept: "application/json" } });
+          if (!res.ok) return;
+          const payload = await res.json();
           renderEvents(payload.events || []);
-          if (payload.summary) {
-            renderMetrics(payload.summary);
-          }
+          if (payload.summary) renderMetrics(payload.summary);
           if (payload.status === "done" || payload.status === "error") {
             clearInterval(state.progressTimer);
             state.progressTimer = null;
           }
-        } catch (_error) {
-          // Ignore polling hiccups and keep the run alive.
-        }
+        } catch (_error) {}
       }
 
       async function saveCurrentSleeve() {
-        const editor = collectEditorState();
-        if (!editor.letter) {
-          setStatus("Set a sleeve letter first (E-Z for custom).", "error");
-          return;
-        }
-        if (isFixedLetter(editor.letter)) {
-          setStatus("Career Sleeves A-D are fixed and cannot be overwritten.", "error");
-          return;
-        }
-        if (!isCustomLetter(editor.letter)) {
-          setStatus("Only letters E-Z can be saved as custom sleeves.", "error");
-          return;
-        }
-        if (!editor.title) {
-          setStatus("Add a sleeve title before saving.", "error");
-          return;
-        }
-        if (!editor.terms.length) {
-          setStatus("Add at least one search term before saving.", "error");
-          return;
-        }
-
-        const response = await fetch("/synergy-sleeves", {
+        const editor = collectEditor();
+        if (!editor.letter) return setStatus("Set a sleeve letter first (E-Z for custom).", "error");
+        if (isFixedLetter(editor.letter)) return setStatus("Career Sleeves A-D are fixed and cannot be overwritten.", "error");
+        if (!editor.title) return setStatus("Add a sleeve title before saving.", "error");
+        if (!editor.terms.length) return setStatus("Add at least one search term before saving.", "error");
+        const res = await fetch("/synergy-sleeves", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify(editor),
         });
-        const payload = await response.json();
-        if (!response.ok) {
-          setStatus(payload.error || "Save failed.", "error");
-          return;
-        }
+        const payload = await res.json();
+        if (!res.ok) return setStatus(payload.error || "Save failed.", "error");
         state.catalog = payload.catalog || state.catalog;
-        renderCatalogSelect();
-        elements.savedSleeveSelect.value = `custom:${editor.letter}`;
+        renderLoadDialogList();
+        renderLetterOptions();
+        updateActionState();
         setStatus(`Saved custom sleeve ${editor.letter}.`, "success");
       }
 
       async function deleteCurrentSleeve() {
-        const editor = collectEditorState();
-        if (!editor.letter) {
-          setStatus("Set a sleeve letter first.", "error");
-          return;
-        }
-        if (isFixedLetter(editor.letter)) {
-          setStatus("Career Sleeves A-D are fixed and cannot be deleted.", "error");
-          return;
-        }
-        if (!isCustomLetter(editor.letter)) {
-          setStatus("Only letters E-Z can be deleted as custom sleeves.", "error");
-          return;
-        }
-        const response = await fetch(`/synergy-sleeves/${encodeURIComponent(editor.letter)}`, {
+        const editor = collectEditor();
+        if (!editor.letter) return setStatus("Set a sleeve letter first.", "error");
+        if (isFixedLetter(editor.letter)) return setStatus("Career Sleeves A-D are fixed and cannot be deleted.", "error");
+        if (!isCustomLetter(editor.letter)) return setStatus("Only letters E-Z can be deleted as custom sleeves.", "error");
+        const res = await fetch(`/synergy-sleeves/${encodeURIComponent(editor.letter)}`, {
           method: "DELETE",
           headers: { Accept: "application/json" },
         });
-        const payload = await response.json();
-        if (!response.ok) {
-          setStatus(payload.error || "Delete failed.", "error");
-          return;
-        }
+        const payload = await res.json();
+        if (!res.ok) return setStatus(payload.error || "Delete failed.", "error");
         state.catalog = payload.catalog || state.catalog;
-        renderCatalogSelect();
-        clearEditor();
+        renderLoadDialogList();
+        renderLetterOptions();
+        els.sleeveLetterSelect.value = "";
+        els.sleeveTitleInput.value = "";
+        state.terms = [];
+        renderTerms();
+        updateHeaderPreview();
+        updateActionState();
         setStatus(`Deleted custom sleeve ${editor.letter}.`, "success");
       }
 
       async function runScrape() {
-        const editor = collectEditorState();
-        if (!editor.letter) {
-          setStatus("Set a sleeve letter before scraping.", "error");
-          return;
-        }
-        if (!editor.terms.length) {
-          setStatus("Add at least one search term before scraping.", "error");
-          return;
-        }
-
+        const editor = collectEditor();
+        if (!editor.letter) return setStatus("Set a sleeve letter before scraping.", "error");
+        if (!editor.terms.length) return setStatus("Add at least one search term before scraping.", "error");
         const effectiveSleeve = isFixedLetter(editor.letter) ? editor.letter : "E";
         const runId = `synergy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        state.activeRunId = runId;
-
         renderResults([]);
         renderMetrics(null);
         renderEvents([]);
-        setStatus(
-          `Running scrape with sleeve ${editor.letter} (mapped to ${effectiveSleeve} scoring profile).`,
-          "info"
-        );
-
-        if (state.progressTimer) {
-          clearInterval(state.progressTimer);
-        }
+        setStatus(`Running scrape with sleeve ${editor.letter} (mapped to ${effectiveSleeve}).`, "info");
+        if (state.progressTimer) clearInterval(state.progressTimer);
         state.progressTimer = setInterval(() => pollProgress(runId), 1000);
         pollProgress(runId);
 
@@ -813,27 +587,20 @@
         });
 
         try {
-          const response = await fetch(`/scrape?${params.toString()}`, { headers: { Accept: "application/json" } });
-          const payload = await response.json();
-          if (!response.ok) {
-            if (state.progressTimer) {
-              clearInterval(state.progressTimer);
-              state.progressTimer = null;
-            }
+          const res = await fetch(`/scrape?${params.toString()}`, { headers: { Accept: "application/json" } });
+          const payload = await res.json();
+          if (!res.ok) {
+            if (state.progressTimer) { clearInterval(state.progressTimer); state.progressTimer = null; }
             setStatus(payload.error || "Scrape failed.", "error");
             renderEvents([{ message: payload.error || "Scrape failed." }]);
             return;
           }
-
           renderResults(payload.jobs || []);
           renderMetrics(payload.summary || null);
           const total = Array.isArray(payload.jobs) ? payload.jobs.length : 0;
           setStatus(`Scrape finished. Returned ${total} jobs.`, "success");
         } catch (_error) {
-          if (state.progressTimer) {
-            clearInterval(state.progressTimer);
-            state.progressTimer = null;
-          }
+          if (state.progressTimer) { clearInterval(state.progressTimer); state.progressTimer = null; }
           setStatus("Scrape request failed.", "error");
         } finally {
           setTimeout(() => pollProgress(runId), 350);
@@ -841,48 +608,42 @@
       }
 
       function bindEvents() {
-        elements.loadSleeveBtn.addEventListener("click", () => {
-          const value = elements.savedSleeveSelect.value;
-          if (!value) {
-            setStatus("Select a sleeve to load.", "error");
-            return;
-          }
-          const [scope, letter] = value.split(":");
-          const list = scope === "fixed" ? (state.catalog.fixed || []) : (state.catalog.custom || []);
-          const found = list.find((item) => item.letter === letter);
-          if (!found) {
-            setStatus("Sleeve not found in catalog.", "error");
-            return;
-          }
-          applySleeveToEditor(found);
+        els.loadSleeveBtn.addEventListener("click", async () => {
+          try { await loadCatalog(); openLoadDialog(); }
+          catch (error) { setStatus(error.message || "Could not open saved sleeves.", "error"); }
         });
-
-        elements.newSleeveBtn.addEventListener("click", clearEditor);
-
-        elements.addTermBtn.addEventListener("click", addTermFromInput);
-        elements.termInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            addTermFromInput();
-          }
-        });
-        elements.clearTermsBtn.addEventListener("click", () => {
+        els.closeLoadDialogBtn.addEventListener("click", closeLoadDialog);
+        if (els.loadDialogSearch) {
+          els.loadDialogSearch.addEventListener("input", () => {
+            state.loadFilter = String(els.loadDialogSearch.value || "");
+            renderLoadDialogList();
+          });
+        }
+        els.newSleeveBtn.addEventListener("click", () => {
+          els.sleeveLetterSelect.value = "";
+          els.sleeveTitleInput.value = "";
           state.terms = [];
           renderTerms();
+          updateHeaderPreview();
+          updateActionState();
+          setStatus("Editor reset. Configure a sleeve and scrape.", "info");
         });
-        elements.sleeveLetterInput.addEventListener("input", () => {
-          elements.sleeveLetterInput.value = normalizeLetter(elements.sleeveLetterInput.value);
+        els.addTermBtn.addEventListener("click", () => {
+          const term = String(els.termInput.value || "").trim();
+          if (!term) return;
+          state.terms = dedupeTerms([...(state.terms || []), term]);
+          els.termInput.value = "";
+          renderTerms();
         });
-
-        elements.saveSleeveBtn.addEventListener("click", () => {
-          saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error"));
+        els.termInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); els.addTermBtn.click(); }
         });
-        elements.deleteSleeveBtn.addEventListener("click", () => {
-          deleteCurrentSleeve().catch(() => setStatus("Could not delete sleeve.", "error"));
-        });
-        elements.scrapeBtn.addEventListener("click", () => {
-          runScrape();
-        });
+        els.clearTermsBtn.addEventListener("click", () => { state.terms = []; renderTerms(); });
+        els.sleeveLetterSelect.addEventListener("change", () => { updateHeaderPreview(); updateActionState(); });
+        els.sleeveTitleInput.addEventListener("input", updateHeaderPreview);
+        els.saveSleeveBtn.addEventListener("click", () => saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error")));
+        els.deleteSleeveBtn.addEventListener("click", () => deleteCurrentSleeve().catch(() => setStatus("Could not delete sleeve.", "error")));
+        els.scrapeBtn.addEventListener("click", () => runScrape());
       }
 
       async function init() {
@@ -891,19 +652,19 @@
         renderEvents([]);
         renderResults([]);
         renderMetrics(null);
-        clearEditor();
+        renderLetterOptions();
+        updateHeaderPreview();
+        updateActionState();
         try {
           await loadCatalog();
-          setStatus("Catalog loaded. Start empty or load a saved sleeve.", "success");
+          setStatus("Catalog loaded. Click 'Load saved sleeve' to choose one.", "success");
         } catch (error) {
           setStatus(error.message || "Could not load sleeve catalog.", "error");
         }
       }
-
       init();
     })();
   </script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
-
 </html>
