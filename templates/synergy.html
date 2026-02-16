@@ -8,7 +8,11 @@
   <style>
     .synergy-shell { max-width: 920px; margin: 18px auto 32px; }
     .synergy-column {
-      --synergy-inner-radius: 8px;
+      --synergy-zircon-deep: #006f75;
+      --synergy-heliodor-deep: #8f6800;
+      --synergy-rubellite-deep: #8f2344;
+      --synergy-amethyst-deep: #452d8f;
+      --synergy-inner-radius: 10px;
       border: none; border-radius: 22px; padding: 16px; display: grid; gap: 12px;
       background: linear-gradient(145deg, rgba(var(--white-rgb), 0.78), rgba(var(--white-rgb), 0.58));
       box-shadow: var(--shadow-soft); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
@@ -28,21 +32,6 @@
       outline: 2px solid rgba(var(--white-rgb), 0.92);
       outline-offset: 2px;
     }
-    .synergy-header-editor {
-      border: none;
-      border-radius: var(--synergy-inner-radius);
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.8), rgba(var(--white-rgb), 0.62));
-    }
-    .synergy-header-editor-hint {
-      margin: 0;
-      color: var(--ink-muted);
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-    .synergy-subtitle { margin: 0; color: var(--ink-muted); font-size: 0.92rem; font-weight: 600; }
     .synergy-row { display: grid; gap: 6px; }
     .synergy-row label { font-weight: 600; color: var(--ink-muted); font-size: 0.85rem; }
     .synergy-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -57,14 +46,14 @@
     }
     .synergy-term-chip {
       display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
-      padding: 4px 4px 4px 9px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--amethyst);
+      padding: 4px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--synergy-amethyst-deep);
       font-size: 0.8rem; font-weight: 600; white-space: nowrap;
     }
-    .synergy-term-chip-label { margin-right: 2px; }
+    .synergy-term-chip-label { margin-right: 2px; padding-left: 5px; }
     .synergy-term-chip button {
       border: none; border-radius: 999px; width: 18px; height: 18px; min-width: 18px;
       padding: 0; margin: 0; font-size: 0.8rem; line-height: 1;
-      background: rgba(var(--amethyst-rgb), 0.2); color: var(--amethyst); opacity: 1;
+      background: rgba(var(--amethyst-rgb), 0.2); color: var(--synergy-amethyst-deep); opacity: 1;
       transform: none; transition: background 0.14s ease;
       margin-left: auto;
       display: inline-flex;
@@ -85,9 +74,9 @@
     .synergy-progress h3, .synergy-results h3 { margin: 0; font-size: 1rem; }
     .synergy-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
     .synergy-metric { border-radius: 999px; padding: 4px 9px; font-size: 0.74rem; font-weight: 800; background: rgba(var(--black-rgb), 0.06); }
-    .synergy-metric-pass { background: rgba(var(--zircon-rgb), 0.2); color: #00bfc9; }
-    .synergy-metric-maybe { background: rgba(var(--heliodor-rgb), 0.26); color: #8f6800; }
-    .synergy-metric-fail { background: rgba(var(--rubellite-rgb), 0.18); color: #ff3f79; }
+    .synergy-metric-pass { background: rgba(var(--zircon-rgb), 0.2); color: var(--synergy-zircon-deep); }
+    .synergy-metric-maybe { background: rgba(var(--heliodor-rgb), 0.26); color: var(--synergy-heliodor-deep); }
+    .synergy-metric-fail { background: rgba(var(--rubellite-rgb), 0.18); color: var(--synergy-rubellite-deep); }
     .synergy-event-list { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-height: 220px; overflow-y: auto; font-size: 0.84rem; }
     .synergy-empty { color: var(--ink-muted); font-size: 0.86rem; font-weight: 600; }
     .synergy-result-list { display: grid; gap: 10px; max-height: 760px; overflow-y: auto; padding-right: 4px; }
@@ -109,6 +98,27 @@
     .synergy-dialog::backdrop { background: rgba(var(--black-rgb), 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
     .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     .synergy-dialog-header h3 { margin: 0; font-size: 1.05rem; }
+    .synergy-dialog-form {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: var(--synergy-inner-radius);
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.86), rgba(var(--white-rgb), 0.68));
+    }
+    .synergy-dialog-form .synergy-editor-grid select,
+    .synergy-dialog-form .synergy-editor-grid input {
+      border: none;
+      border-radius: var(--synergy-inner-radius);
+      padding: 8px 10px;
+      color: var(--ink);
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
+    }
+    .synergy-dialog-form-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .synergy-dialog-list { display: grid; gap: 10px; max-height: 56vh; overflow-y: auto; padding-right: 2px; }
     .synergy-dialog-search {
       width: 100%;
@@ -142,34 +152,9 @@
         tabindex="0"
         aria-label="Set sleeve letter and title"
       >
-        <span id="headerName" class="sleeve-header-name">Select Letter &amp; Type Title</span>
-        <span id="headerCode" class="sleeve-header-code">CAREER SLEEVE ?</span>
+        <span id="headerName" class="sleeve-header-name">Click here to set letter and title</span>
+        <span id="headerCode" class="sleeve-header-code">Career Sleeve ?</span>
       </header>
-      <p class="synergy-subtitle">Click the header to set letter and title, press Enter to confirm, then scrape.</p>
-
-      <div id="headerEditorPanel" class="synergy-header-editor" hidden>
-        <div class="synergy-editor-grid">
-          <select id="sleeveLetterSelect" aria-label="Sleeve letter">
-            <option value="">Select sleeve letter</option>
-          </select>
-          <input
-            id="sleeveTitleInput"
-            type="text"
-            maxlength="120"
-            autocomplete="off"
-            placeholder="Type sleeve title..."
-          >
-        </div>
-        <p class="synergy-header-editor-hint">Press Enter to confirm.</p>
-      </div>
-
-      <div class="synergy-row">
-        <label>Workspace actions</label>
-        <div class="synergy-inline">
-          <button id="loadSleeveBtn" type="button">Load saved sleeve</button>
-          <button id="newSleeveBtn" type="button">New empty</button>
-        </div>
-      </div>
 
       <div class="synergy-term-box">
         <label for="termInput">Search terms</label>
@@ -204,8 +189,26 @@
 
   <dialog id="loadDialog" class="synergy-dialog">
     <div class="synergy-dialog-header">
-      <h3>Select saved sleeve</h3>
+      <h3>Set sleeve letter and title</h3>
       <button id="closeLoadDialogBtn" type="button">Close</button>
+    </div>
+    <div class="synergy-dialog-form">
+      <div class="synergy-editor-grid">
+        <select id="dialogSleeveLetterSelect" aria-label="Sleeve letter">
+          <option value="">Select sleeve letter</option>
+        </select>
+        <input
+          id="dialogSleeveTitleInput"
+          type="text"
+          maxlength="120"
+          autocomplete="off"
+          placeholder="Type sleeve title..."
+        >
+      </div>
+      <div class="synergy-dialog-form-actions">
+        <button id="applyHeaderDialogBtn" type="button">Apply</button>
+        <button id="newHeaderDialogBtn" type="button">New empty</button>
+      </div>
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
@@ -215,15 +218,17 @@
     (() => {
       const state = {
         catalog: { fixed: [], custom: [], all: [] },
+        currentLetter: "",
+        currentTitle: "",
         terms: [],
         progressTimer: null,
         loadFilter: "",
       };
       const els = {
-        loadSleeveBtn: document.getElementById("loadSleeveBtn"),
-        newSleeveBtn: document.getElementById("newSleeveBtn"),
-        sleeveLetterSelect: document.getElementById("sleeveLetterSelect"),
-        sleeveTitleInput: document.getElementById("sleeveTitleInput"),
+        dialogSleeveLetterSelect: document.getElementById("dialogSleeveLetterSelect"),
+        dialogSleeveTitleInput: document.getElementById("dialogSleeveTitleInput"),
+        applyHeaderDialogBtn: document.getElementById("applyHeaderDialogBtn"),
+        newHeaderDialogBtn: document.getElementById("newHeaderDialogBtn"),
         termChipList: document.getElementById("termChipList"),
         termInput: document.getElementById("termInput"),
         addTermBtn: document.getElementById("addTermBtn"),
@@ -238,7 +243,6 @@
         headerName: document.getElementById("headerName"),
         headerCode: document.getElementById("headerCode"),
         headerEditorTrigger: document.getElementById("headerEditorTrigger"),
-        headerEditorPanel: document.getElementById("headerEditorPanel"),
         loadDialog: document.getElementById("loadDialog"),
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
@@ -262,7 +266,7 @@
         return out;
       };
       const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
-      const collectEditor = () => ({ letter: normalizeLetter(els.sleeveLetterSelect.value), title: String(els.sleeveTitleInput.value || "").trim(), terms: dedupeTerms(state.terms) });
+      const collectEditor = () => ({ letter: normalizeLetter(state.currentLetter), title: String(state.currentTitle || "").trim(), terms: dedupeTerms(state.terms) });
 
       function setStatus(msg, type = "info") {
         els.statusBox.textContent = msg;
@@ -289,7 +293,7 @@
           chip.appendChild(label);
           const remove = document.createElement("button");
           remove.type = "button";
-          remove.textContent = "×";
+          remove.textContent = "\u00D7";
           remove.setAttribute("aria-label", `Remove ${term}`);
           remove.addEventListener("click", () => {
             state.terms = state.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
@@ -301,12 +305,12 @@
       }
 
       function renderLetterOptions() {
-        const current = normalizeLetter(els.sleeveLetterSelect.value);
-        els.sleeveLetterSelect.innerHTML = "";
+        const current = normalizeLetter(state.currentLetter);
+        els.dialogSleeveLetterSelect.innerHTML = "";
         const ph = document.createElement("option");
         ph.value = "";
         ph.textContent = "Select sleeve letter";
-        els.sleeveLetterSelect.appendChild(ph);
+        els.dialogSleeveLetterSelect.appendChild(ph);
         const fixedGroup = document.createElement("optgroup");
         fixedGroup.label = "Fixed (A-D)";
         const customGroup = document.createElement("optgroup");
@@ -323,42 +327,49 @@
             customGroup.appendChild(opt);
           }
         }
-        els.sleeveLetterSelect.appendChild(fixedGroup);
-        els.sleeveLetterSelect.appendChild(customGroup);
-        if (current) els.sleeveLetterSelect.value = current;
+        els.dialogSleeveLetterSelect.appendChild(fixedGroup);
+        els.dialogSleeveLetterSelect.appendChild(customGroup);
+        if (current) els.dialogSleeveLetterSelect.value = current;
       }
 
       function openHeaderEditor() {
-        if (els.headerEditorPanel) {
-          els.headerEditorPanel.hidden = false;
+        renderLetterOptions();
+        els.dialogSleeveLetterSelect.value = normalizeLetter(state.currentLetter);
+        els.dialogSleeveTitleInput.value = String(state.currentTitle || "");
+        if (typeof els.loadDialog.showModal === "function") {
+          els.loadDialog.showModal();
+        } else {
+          els.loadDialog.setAttribute("open", "open");
         }
-        if (els.sleeveLetterSelect) {
-          els.sleeveLetterSelect.focus();
-        }
+        setTimeout(() => els.dialogSleeveLetterSelect.focus(), 30);
       }
 
       function closeHeaderEditor() {
-        if (els.headerEditorPanel) {
-          els.headerEditorPanel.hidden = true;
+        if (typeof els.loadDialog.close === "function") {
+          els.loadDialog.close();
+        } else {
+          els.loadDialog.removeAttribute("open");
         }
       }
 
       function confirmHeaderEditor() {
+        state.currentLetter = normalizeLetter(els.dialogSleeveLetterSelect.value);
+        state.currentTitle = String(els.dialogSleeveTitleInput.value || "").trim();
         updateHeaderPreview();
         updateActionState();
         closeHeaderEditor();
       }
 
       function updateHeaderPreview() {
-        const letter = normalizeLetter(els.sleeveLetterSelect.value);
-        const inputTitle = String(els.sleeveTitleInput.value || "").trim();
-        const title = inputTitle || "Select Letter & Type Title";
+        const letter = normalizeLetter(state.currentLetter);
+        const inputTitle = String(state.currentTitle || "").trim();
+        const title = inputTitle || "Click here to set letter and title";
         els.headerName.textContent = title;
-        els.headerCode.textContent = letter ? `CAREER SLEEVE ${letter}` : "CAREER SLEEVE ?";
+        els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve ?";
       }
 
       function updateActionState() {
-        const letter = normalizeLetter(els.sleeveLetterSelect.value);
+        const letter = normalizeLetter(state.currentLetter);
         const customExists = Boolean(letter && findCustom(letter));
         els.saveSleeveBtn.disabled = !letter || isFixedLetter(letter);
         els.deleteSleeveBtn.disabled = !letter || isFixedLetter(letter) || !customExists;
@@ -366,8 +377,8 @@
 
       function applySleeveToEditor(sleeve, options = {}) {
         if (!sleeve) return;
-        els.sleeveLetterSelect.value = sleeve.letter || "";
-        els.sleeveTitleInput.value = sleeve.title || "";
+        state.currentLetter = normalizeLetter(sleeve.letter || "");
+        state.currentTitle = String(sleeve.title || "");
         state.terms = dedupeTerms(sleeve.terms || []);
         renderTerms();
         updateHeaderPreview();
@@ -520,41 +531,15 @@
               btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
               btn.addEventListener("click", () => {
                 applySleeveToEditor(sleeve);
+                els.dialogSleeveLetterSelect.value = normalizeLetter(state.currentLetter);
+                els.dialogSleeveTitleInput.value = String(state.currentTitle || "");
                 closeHeaderEditor();
-                closeLoadDialog();
               });
               wrap.appendChild(btn);
             });
           }
           els.loadDialogList.appendChild(wrap);
         });
-      }
-
-      function openLoadDialog() {
-        state.loadFilter = "";
-        if (els.loadDialogSearch) {
-          els.loadDialogSearch.value = "";
-        }
-        renderLoadDialogList();
-        if (typeof els.loadDialog.showModal === "function") {
-          els.loadDialog.showModal();
-        } else {
-          els.loadDialog.setAttribute("open", "open");
-        }
-        if (els.loadDialogSearch) {
-          setTimeout(() => els.loadDialogSearch.focus(), 30);
-        }
-      }
-      function closeLoadDialog() {
-        state.loadFilter = "";
-        if (els.loadDialogSearch) {
-          els.loadDialogSearch.value = "";
-        }
-        if (typeof els.loadDialog.close === "function") {
-          els.loadDialog.close();
-        } else {
-          els.loadDialog.removeAttribute("open");
-        }
       }
 
       async function loadCatalog() {
@@ -616,8 +601,14 @@
         state.catalog = payload.catalog || state.catalog;
         renderLoadDialogList();
         renderLetterOptions();
-        els.sleeveLetterSelect.value = "";
-        els.sleeveTitleInput.value = "";
+        state.currentLetter = "";
+        state.currentTitle = "";
+        if (els.dialogSleeveLetterSelect) {
+          els.dialogSleeveLetterSelect.value = "";
+        }
+        if (els.dialogSleeveTitleInput) {
+          els.dialogSleeveTitleInput.value = "";
+        }
         state.terms = [];
         renderTerms();
         updateHeaderPreview();
@@ -669,27 +660,33 @@
       }
 
       function bindEvents() {
-        els.loadSleeveBtn.addEventListener("click", async () => {
-          try { await loadCatalog(); openLoadDialog(); }
-          catch (error) { setStatus(error.message || "Could not open saved sleeves.", "error"); }
-        });
-        els.closeLoadDialogBtn.addEventListener("click", closeLoadDialog);
+        els.closeLoadDialogBtn.addEventListener("click", closeHeaderEditor);
         if (els.loadDialogSearch) {
           els.loadDialogSearch.addEventListener("input", () => {
             state.loadFilter = String(els.loadDialogSearch.value || "");
             renderLoadDialogList();
           });
         }
-        els.newSleeveBtn.addEventListener("click", () => {
-          els.sleeveLetterSelect.value = "";
-          els.sleeveTitleInput.value = "";
-          state.terms = [];
-          renderTerms();
-          updateHeaderPreview();
-          updateActionState();
-          closeHeaderEditor();
-          setStatus("Editor reset. Configure a sleeve and scrape.", "info");
-        });
+        if (els.applyHeaderDialogBtn) {
+          els.applyHeaderDialogBtn.addEventListener("click", () => {
+            confirmHeaderEditor();
+          });
+        }
+        if (els.newHeaderDialogBtn) {
+          els.newHeaderDialogBtn.addEventListener("click", () => {
+            state.currentLetter = "";
+            state.currentTitle = "";
+            if (els.dialogSleeveLetterSelect) {
+              els.dialogSleeveLetterSelect.value = "";
+            }
+            if (els.dialogSleeveTitleInput) {
+              els.dialogSleeveTitleInput.value = "";
+            }
+            updateHeaderPreview();
+            updateActionState();
+            setStatus("Created new empty sleeve setup.", "info");
+          });
+        }
         els.addTermBtn.addEventListener("click", () => {
           const term = String(els.termInput.value || "").trim();
           if (!term) return;
@@ -701,38 +698,50 @@
           if (event.key === "Enter") { event.preventDefault(); els.addTermBtn.click(); }
         });
         els.clearTermsBtn.addEventListener("click", () => { state.terms = []; renderTerms(); });
-        els.headerEditorTrigger.addEventListener("click", () => {
-          openHeaderEditor();
+        els.headerEditorTrigger.addEventListener("click", async () => {
+          try {
+            await loadCatalog();
+            openHeaderEditor();
+          } catch (error) {
+            setStatus(error.message || "Could not open sleeve dialog.", "error");
+          }
         });
-        els.headerEditorTrigger.addEventListener("keydown", (event) => {
+        els.headerEditorTrigger.addEventListener("keydown", async (event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            openHeaderEditor();
+            try {
+              await loadCatalog();
+              openHeaderEditor();
+            } catch (error) {
+              setStatus(error.message || "Could not open sleeve dialog.", "error");
+            }
           }
         });
-        els.sleeveLetterSelect.addEventListener("change", () => {
-          updateHeaderPreview();
-          updateActionState();
-          els.sleeveTitleInput.focus();
-        });
-        els.sleeveTitleInput.addEventListener("input", updateHeaderPreview);
-        els.sleeveLetterSelect.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            confirmHeaderEditor();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            closeHeaderEditor();
-          }
-        });
-        els.sleeveTitleInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            confirmHeaderEditor();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            closeHeaderEditor();
-          }
+        if (els.dialogSleeveLetterSelect) {
+          els.dialogSleeveLetterSelect.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              confirmHeaderEditor();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              closeHeaderEditor();
+            }
+          });
+        }
+        if (els.dialogSleeveTitleInput) {
+          els.dialogSleeveTitleInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              confirmHeaderEditor();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              closeHeaderEditor();
+            }
+          });
+        }
+        els.loadDialog.addEventListener("cancel", (event) => {
+          event.preventDefault();
+          closeHeaderEditor();
         });
         els.saveSleeveBtn.addEventListener("click", () => saveCurrentSleeve().catch(() => setStatus("Could not save sleeve.", "error")));
         els.deleteSleeveBtn.addEventListener("click", () => deleteCurrentSleeve().catch(() => setStatus("Could not delete sleeve.", "error")));
@@ -750,7 +759,7 @@
         updateActionState();
         try {
           await loadCatalog();
-          setStatus("Catalog loaded. Click 'Load saved sleeve' to choose one.", "success");
+          setStatus("Catalog loaded. Click the header to set or load a sleeve.", "success");
         } catch (error) {
           setStatus(error.message || "Could not load sleeve catalog.", "error");
         }
@@ -761,3 +770,4 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+
