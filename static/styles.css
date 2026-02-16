@@ -374,6 +374,11 @@ select,
   padding: 14px;
   background: linear-gradient(145deg, rgba(var(--white-rgb), 0.72), rgba(var(--white-rgb), 0.56));
   box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  height: min(82vh, 980px);
+  min-height: 720px;
+  overflow: hidden;
 }
 
 .sleeve-panel.loading {
@@ -475,6 +480,15 @@ select,
 .metric-fail {
   background: rgba(var(--rubellite-rgb), 0.17);
   color: var(--rubellite);
+}
+
+[id^="results-"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  margin-top: 6px;
 }
 
 .job-card {
@@ -584,6 +598,7 @@ select,
   gap: 8px;
   margin: 8px 0 2px;
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .progress-field {
@@ -595,6 +610,7 @@ select,
   max-height: 150px;
   overflow: auto;
   backdrop-filter: blur(6px) saturate(120%);
+  flex: 0 0 auto;
 }
 
 .progress-status {
@@ -627,6 +643,10 @@ select,
   margin-top: 8px;
   padding-top: 7px;
   border-top: 1px solid rgba(var(--black-rgb), 0.12);
+}
+
+.progress-metrics {
+  margin-top: 6px;
 }
 
 .progress-outcome-title {
@@ -776,4 +796,23 @@ select,
 
 iframe {
   width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .sleeve-panel {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  [id^="results-"] {
+    max-height: 56vh;
+  }
+}
+
+@media (max-width: 768px) {
+  [id^="results-"] {
+    max-height: none;
+    overflow: visible;
+  }
 }

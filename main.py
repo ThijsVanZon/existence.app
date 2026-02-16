@@ -3592,9 +3592,8 @@ def fetch_jobs_from_sources(
 ):
     profile = SCRAPE_MODE
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    candidate_sources = [source for source in requested if source in MVP_SOURCE_IDS]
-    if not candidate_sources:
-        candidate_sources = [source for source in MVP_SOURCE_IDS]
+    # Backend MVP rule: always attempt both direct sources on every scrape run.
+    candidate_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
     unavailable_reasons = {}
     usable_sources = []
     for source in candidate_sources:
@@ -3609,8 +3608,10 @@ def fetch_jobs_from_sources(
         (
             f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
             + (" (MVP lock: direct sources only)" if requested and set(requested) - set(MVP_SOURCE_IDS) else "")
+            + (" (backend enforces both direct sources each run)")
         ),
         requested_sources=requested,
+        candidate_sources=candidate_sources,
         usable_sources=usable_sources,
         profile=profile,
         location_mode=location_mode,
@@ -4056,9 +4057,7 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     requested_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
-    selected_sources = [source for source in requested_sources if source in MVP_SOURCE_IDS]
-    if not selected_sources:
-        selected_sources = [source for source in MVP_SOURCE_IDS]
+    selected_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
     query_terms_param = request.args.get("query_terms", "")
     query_terms = _parse_query_terms(query_terms_param)
     extra_terms_param = request.args.get("extra_terms", "")

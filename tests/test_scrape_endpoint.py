@@ -167,7 +167,7 @@ class TestScrapeEndpoint(unittest.TestCase):
         finally:
             main._fetch_source_with_cache = original_fetch_source
 
-    def test_failover_flag_does_not_force_other_mvp_source(self):
+    def test_backend_enforces_both_mvp_sources_even_when_one_requested(self):
         original_fetch_source = main._fetch_source_with_cache
         try:
             seen_sources = []
@@ -200,8 +200,8 @@ class TestScrapeEndpoint(unittest.TestCase):
                 allow_failover=True,
             )
             self.assertEqual(errors, [])
-            self.assertEqual(used_sources, ["linkedin_web"])
-            self.assertEqual(seen_sources, ["linkedin_web"])
+            self.assertEqual(used_sources, ["indeed_web", "linkedin_web"])
+            self.assertEqual(seen_sources, ["indeed_web", "linkedin_web"])
             self.assertEqual(len(items), 1)
             self.assertEqual(diagnostics["auto_failover"], [])
         finally:

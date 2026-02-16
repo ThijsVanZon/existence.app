@@ -84,7 +84,7 @@
       <button type="button" class="scrape-btn" data-sleeve="A" onclick="startScraping('A')">Scrape Career Sleeve A</button>
       <p id="status-A" aria-live="polite"></p>
       <div id="progress-A" class="progress-field" hidden></div>
-      <div id="summary-A" class="sleeve-summary"></div>
+      <div id="summary-A" class="sleeve-summary" hidden></div>
       <div id="error-A" class="error" style="display: none;"></div>
       <div id="results-A"></div>
       <div id="pager-A" class="results-pager" hidden></div>
@@ -106,7 +106,7 @@
       <button type="button" class="scrape-btn" data-sleeve="B" onclick="startScraping('B')">Scrape Career Sleeve B</button>
       <p id="status-B" aria-live="polite"></p>
       <div id="progress-B" class="progress-field" hidden></div>
-      <div id="summary-B" class="sleeve-summary"></div>
+      <div id="summary-B" class="sleeve-summary" hidden></div>
       <div id="error-B" class="error" style="display: none;"></div>
       <div id="results-B"></div>
       <div id="pager-B" class="results-pager" hidden></div>
@@ -128,7 +128,7 @@
       <button type="button" class="scrape-btn" data-sleeve="C" onclick="startScraping('C')">Scrape Career Sleeve C</button>
       <p id="status-C" aria-live="polite"></p>
       <div id="progress-C" class="progress-field" hidden></div>
-      <div id="summary-C" class="sleeve-summary"></div>
+      <div id="summary-C" class="sleeve-summary" hidden></div>
       <div id="error-C" class="error" style="display: none;"></div>
       <div id="results-C"></div>
       <div id="pager-C" class="results-pager" hidden></div>
@@ -150,7 +150,7 @@
       <button type="button" class="scrape-btn" data-sleeve="D" onclick="startScraping('D')">Scrape Career Sleeve D</button>
       <p id="status-D" aria-live="polite"></p>
       <div id="progress-D" class="progress-field" hidden></div>
-      <div id="summary-D" class="sleeve-summary"></div>
+      <div id="summary-D" class="sleeve-summary" hidden></div>
       <div id="error-D" class="error" style="display: none;"></div>
       <div id="results-D"></div>
       <div id="pager-D" class="results-pager" hidden></div>
@@ -172,7 +172,7 @@
       <button type="button" class="scrape-btn" data-sleeve="E" onclick="startScraping('E')">Scrape Career Sleeve E</button>
       <p id="status-E" aria-live="polite"></p>
       <div id="progress-E" class="progress-field" hidden></div>
-      <div id="summary-E" class="sleeve-summary"></div>
+      <div id="summary-E" class="sleeve-summary" hidden></div>
       <div id="error-E" class="error" style="display: none;"></div>
       <div id="results-E"></div>
       <div id="pager-E" class="results-pager" hidden></div>
@@ -575,21 +575,46 @@
       return link;
     }
 
+    function toMetricValue(value, fallback = '-') {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        return String(numeric);
+      }
+      return fallback;
+    }
+
+    function buildMetricsMarkup(summary, fallbackRaw = 0) {
+      const hasSummary = Boolean(summary && typeof summary === 'object');
+      const rawValue = hasSummary ? toMetricValue(summary.raw_count, '0') : toMetricValue(fallbackRaw, '0');
+      const dedupedValue = hasSummary ? toMetricValue(summary.deduped_count, '-') : '-';
+      const passValue = hasSummary ? toMetricValue(summary.pass_count, '-') : '-';
+      const maybeValue = hasSummary ? toMetricValue(summary.maybe_count, '-') : '-';
+      const failValue = hasSummary ? toMetricValue(summary.fail_count, '-') : '-';
+      return `
+        <div class="summary-metrics progress-metrics">
+          <span class="metric-badge">RAW ${rawValue}</span>
+          <span class="metric-badge">DEDUPED ${dedupedValue}</span>
+          <span class="metric-badge metric-pass">PASS ${passValue}</span>
+          <span class="metric-badge metric-maybe">MAYBE ${maybeValue}</span>
+          <span class="metric-badge metric-fail">FAIL ${failValue}</span>
+        </div>
+      `;
+    }
+
     function renderSleeveSummary(sleeveKey, summary, sourcesText) {
       const summaryWrap = document.getElementById(`summary-${sleeveKey}`);
       summaryWrap.innerHTML = '';
-      if (!summary) {
+      summaryWrap.hidden = true;
+      const progressDiv = document.getElementById(`progress-${sleeveKey}`);
+      if (!progressDiv || !summary) {
         return;
       }
-
-      const metrics = document.createElement('div');
-      metrics.className = 'summary-metrics';
-      metrics.appendChild(createBadge('metric-badge', `RAW ${summary.raw_count || 0}`));
-      metrics.appendChild(createBadge('metric-badge', `DEDUPED ${summary.deduped_count || 0}`));
-      metrics.appendChild(createBadge('metric-badge metric-pass', `PASS ${summary.pass_count || 0}`));
-      metrics.appendChild(createBadge('metric-badge metric-maybe', `MAYBE ${summary.maybe_count || 0}`));
-      metrics.appendChild(createBadge('metric-badge metric-fail', `FAIL ${summary.fail_count || 0}`));
-      summaryWrap.appendChild(metrics);
+      let metricsWrap = progressDiv.querySelector('.progress-metrics');
+      if (!metricsWrap) {
+        progressDiv.insertAdjacentHTML('beforeend', buildMetricsMarkup(summary, 0));
+      } else {
+        metricsWrap.outerHTML = buildMetricsMarkup(summary, 0);
+      }
     }
 
     function clearSleevePager(sleeveKey) {
@@ -651,9 +676,15 @@
       }
       const status = String(payload?.status || 'running').toUpperCase();
       const updated = formatProgressTime(payload?.updated_at);
+      const summary = payload?.summary && typeof payload.summary === 'object'
+        ? payload.summary
+        : null;
       const events = Array.isArray(payload?.events) ? payload.events : [];
       const latest = events[events.length - 1];
-      const recent = events.slice(-8);
+      const recent = events.slice(-12);
+      const runningRaw = events
+        .filter(event => String(event?.step || '').toLowerCase() === 'source-finish')
+        .reduce((total, event) => total + Number(event?.item_count || 0), 0);
       const listItems = recent
         .map(event => `<li>${event?.message || ''}</li>`)
         .join('');
@@ -661,16 +692,25 @@
         <div class="progress-status">
           ${status}${updated ? ` • ${updated}` : ''}
         </div>
+        ${buildMetricsMarkup(summary, runningRaw)}
         ${latest?.message ? `<div class="progress-latest">${latest.message}</div>` : ''}
         ${recent.length ? `<ul class="progress-list">${listItems}</ul>` : ''}
       `;
       progressDiv.hidden = false;
     }
 
-    function setProgressOutcome(sleeveKey, title, lines = [], tone = 'info') {
+    function setProgressOutcome(sleeveKey, title, lines = [], tone = 'info', summary = null) {
       const progressDiv = document.getElementById(`progress-${sleeveKey}`);
       if (!progressDiv) {
         return;
+      }
+      let metricsWrap = progressDiv.querySelector('.progress-metrics');
+      if (summary) {
+        if (!metricsWrap) {
+          progressDiv.insertAdjacentHTML('beforeend', buildMetricsMarkup(summary, 0));
+        } else {
+          metricsWrap.outerHTML = buildMetricsMarkup(summary, 0);
+        }
       }
       let outcome = progressDiv.querySelector('.progress-outcome');
       if (!outcome) {
@@ -1165,11 +1205,12 @@
           : Math.max(40, Math.min(120, maxResults * 3)));
       const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
       if (!queryTerms.length) {
-        const errorDiv = document.getElementById(`error-${sleeveKey}`);
-        if (errorDiv) {
-          errorDiv.textContent = `Add at least one search term before scraping Career Sleeve ${sleeveKey}.`;
-          errorDiv.style.display = 'block';
-        }
+        setProgressOutcome(
+          sleeveKey,
+          'INPUT REQUIRED',
+          [`Add at least one search term before scraping Career Sleeve ${sleeveKey}.`],
+          'warn'
+        );
         return '';
       }
       const params = new URLSearchParams();
@@ -1195,7 +1236,6 @@
 
     function startScraping(sleeveKey, options = {}) {
       const resultsDiv = document.getElementById(`results-${sleeveKey}`);
-      const errorDiv = document.getElementById(`error-${sleeveKey}`);
       const status = document.getElementById(`status-${sleeveKey}`);
       const summaryDiv = document.getElementById(`summary-${sleeveKey}`);
       const panel = document.getElementById(`panel-${sleeveKey}`);
@@ -1203,8 +1243,12 @@
       addSleeveTermsFromInput(sleeveKey);
 
       if (activeScrapeSleeve && activeScrapeSleeve !== sleeveKey) {
-        errorDiv.textContent = `Wait until Career Sleeve ${activeScrapeSleeve} is finished. We run one scrape at a time to reduce blocking.`;
-        errorDiv.style.display = 'block';
+        setProgressOutcome(
+          sleeveKey,
+          'SCRAPE LOCKED',
+          [`Wait until Career Sleeve ${activeScrapeSleeve} is finished. We run one scrape at a time to reduce blocking.`],
+          'warn'
+        );
         return;
       }
       const scrapeUrl = buildScrapeUrl(sleeveKey, runId, options);
@@ -1224,11 +1268,11 @@
       panel.classList.add('loading');
       resultsDiv.innerHTML = '';
       summaryDiv.innerHTML = '';
+      summaryDiv.hidden = true;
       clearSleevePager(sleeveKey);
       stopProgressPolling(sleeveKey);
       stopSourceHealthTimer(sleeveKey);
       startProgressPolling(sleeveKey, runId);
-      errorDiv.style.display = 'none';
       status.textContent = '';
 
       fetch(scrapeUrl, { signal: controller.signal })
@@ -1322,7 +1366,13 @@
               progressLines.push('Try broadening terms.');
             }
             resultsDiv.textContent = '';
-            setProgressOutcome(sleeveKey, finalTitle, progressLines, sourceErrors.length ? 'warn' : 'info');
+            setProgressOutcome(
+              sleeveKey,
+              finalTitle,
+              progressLines,
+              sourceErrors.length ? 'warn' : 'info',
+              payload.summary || null
+            );
             if (payload.summary && payload.summary.source_health) {
               renderSourceHealthInProgress(sleeveKey, payload.summary.source_health, () => {
                 startScraping(sleeveKey, { forceSourceRetry: true });
@@ -1334,7 +1384,7 @@
           sleevePagination[sleeveKey] = { jobs: data, page: 1 };
           renderSleevePage(sleeveKey, 1);
           progressLines.unshift(`Returned ${data.length} job result${data.length === 1 ? '' : 's'}.`);
-          setProgressOutcome(sleeveKey, finalTitle, progressLines, 'ok');
+          setProgressOutcome(sleeveKey, finalTitle, progressLines, 'ok', payload.summary || null);
           if (payload.summary && payload.summary.source_health) {
             renderSourceHealthInProgress(sleeveKey, payload.summary.source_health, () => {
               startScraping(sleeveKey, { forceSourceRetry: true });
@@ -1349,7 +1399,6 @@
           const message = isTimeout
             ? `Scrape for Career Sleeve ${sleeveKey} timed out after 120 seconds.`
             : `An error occurred while scraping jobs: ${error.message}`;
-          errorDiv.style.display = 'none';
           setProgressOutcome(sleeveKey, 'SCRAPE ERROR', [message], 'error');
         })
         .finally(() => {
