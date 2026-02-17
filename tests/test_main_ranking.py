@@ -176,6 +176,48 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("Europe", meta["continents"])
         self.assertIn("North America", meta["continents"])
 
+    def test_extract_abroad_metadata_supports_dutch_aliases(self):
+        raw_text = (
+            "Hybride rol met 35 procent internationaal reizen in Europa, "
+            "Duitsland en Spanje."
+        )
+        meta = main._extract_abroad_metadata(raw_text)
+        self.assertEqual(meta["percentage"], 35)
+        self.assertEqual(meta["percentage_text"], "35%")
+        self.assertIn("Europe", meta["continents"])
+        self.assertIn("Germany", meta["countries"])
+        self.assertIn("Spain", meta["countries"])
+
+    def test_abroad_identifiers_are_present_in_ranked_output(self):
+        jobs = [
+            self._job(
+                "AbroadMeta",
+                (
+                    "Festival operations rol met 40 procent internationaal reizen "
+                    "door Europa en Duitsland."
+                ),
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="A",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 1)
+        self.assertIn("abroad_identifiers", ranked[0])
+        self.assertIn("travel_percentage", ranked[0]["abroad_identifiers"])
+        self.assertIn("geo_scope", ranked[0]["abroad_identifiers"])
+
+    def test_score_abroad_accepts_dutch_variants_of_english_signals(self):
+        nl_text = "Hybride rol met internationaal reizen en klantlocaties."
+        en_text = "Hybrid role with international travel and client sites."
+        nl_score, _, _ = main.sleeves.score_abroad(nl_text)
+        en_score, _, _ = main.sleeves.score_abroad(en_text)
+        self.assertGreater(nl_score, 0)
+        self.assertGreater(en_score, 0)
+
     def test_location_proximity_extracts_distance_from_den_bosch_anchor(self):
         profile = main._score_location_proximity("Amsterdam, Netherlands")
         self.assertIsNotNone(profile["distance_km"])
@@ -262,7 +304,10 @@ class TestMainRanking(unittest.TestCase):
     def test_scrape_config_mode_is_mvp(self):
         config = main._public_scrape_config()
         self.assertEqual(config["profile"], "mvp")
-        self.assertEqual(config["defaults"]["sources"], ["indeed_web", "linkedin_web"])
+        self.assertEqual(
+            config["defaults"]["sources"],
+            ["indeed_web", "linkedin_web", "nl_web_openings"],
+        )
         self.assertEqual(config["defaults"]["location_mode"], "nl_only")
 
     def test_canonicalize_relative_url_returns_empty(self):
@@ -342,29 +387,29 @@ class TestMainRanking(unittest.TestCase):
         self.assertTrue(ranked)
         self.assertEqual(ranked[0]["company_url"], "")
 
-    def test_company_posting_route_redirects_when_external_company_url_exists(self):
+    def test_company_opening_route_redirects_when_external_company_url_exists(self):
         with main.app.test_client() as client:
             response = client.get(
-                "/company-posting",
+                "/company-opening",
                 query_string={"company_url": "https://company.example/jobs/42"},
             )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "https://company.example/jobs/42")
 
-    def test_company_posting_route_returns_error_when_unresolved(self):
+    def test_company_opening_route_returns_error_when_unresolved(self):
         with patch("main.requests.get", side_effect=main.requests.RequestException("network blocked")):
             with main.app.test_client() as client:
                 response = client.get(
-                    "/company-posting",
+                    "/company-opening",
                     query_string={"indeed_url": "https://nl.indeed.com/viewjob?jk=abc123"},
                 )
         self.assertEqual(response.status_code, 424)
-        self.assertIn("company posting url not found", response.get_data(as_text=True).lower())
+        self.assertIn("company opening url not found", response.get_data(as_text=True).lower())
 
-    def test_company_posting_route_resolves_from_job_url_redirect_param(self):
+    def test_company_opening_route_resolves_from_job_url_redirect_param(self):
         with main.app.test_client() as client:
             response = client.get(
-                "/company-posting",
+                "/company-opening",
                 query_string={
                     "job_url": (
                         "https://nl.indeed.com/pagead/clk?"
@@ -374,6 +419,15 @@ class TestMainRanking(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "https://company.example/careers/42")
+
+    def test_company_posting_alias_route_still_works(self):
+        with main.app.test_client() as client:
+            response = client.get(
+                "/company-posting",
+                query_string={"company_url": "https://company.example/jobs/42"},
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "https://company.example/jobs/42")
 
     def test_custom_mode_uses_query_terms_for_generic_ranking(self):
         jobs = [
@@ -399,6 +453,32 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(len(ranked), 1)
         self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
         self.assertGreaterEqual(ranked[0]["primary_sleeve_score"], 1)
+
+    def test_custom_mode_matches_dutch_variant_for_english_term(self):
+        jobs = [
+            self._job(
+                "BilingualFit",
+                "Rol met operaties analist werk en stakeholder afstemming.",
+                title="Operaties Analist",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="E",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+            custom_mode=True,
+            custom_query_terms=["operations analyst"],
+        )
+        self.assertEqual(len(ranked), 1)
+        self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
+        self.assertGreaterEqual(ranked[0]["primary_sleeve_score"], 1)
+
+    def test_query_bundle_expands_terms_with_bilingual_variants(self):
+        queries = main._query_bundle_for_sleeve("E", query_terms=["operations analyst"])
+        self.assertIn("operations analyst", queries)
+        self.assertIn("operaties analist", queries)
 
 
 if __name__ == "__main__":

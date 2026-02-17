@@ -125,11 +125,12 @@
     .synergy-dialog-option-split {
       display: flex;
       align-items: stretch;
-      gap: 0;
+      gap: 6px;
       padding: 0;
-      overflow: hidden;
-      border-radius: 10px;
+      overflow: visible;
+      border-radius: 0;
       min-height: 36px;
+      background: transparent;
     }
     .synergy-dialog-option-split-letter {
       width: 36px;
@@ -140,7 +141,8 @@
       font-size: 0.86rem;
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--black-rgb), 0.14);
+      background: rgba(var(--amethyst-rgb), 0.9);
+      border-radius: 10px;
       user-select: none;
     }
     .synergy-dialog-option-split-title {
@@ -152,16 +154,22 @@
       overflow: hidden;
       text-overflow: ellipsis;
       font-weight: 700;
+      font-size: 0.88rem;
+      color: rgba(var(--white-rgb), 0.9);
+      min-height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
     }
     .synergy-dialog-inline-title-wrap {
       flex: 1 1 auto;
       min-height: 36px;
       display: flex;
       align-items: stretch;
+      gap: 6px;
       border: none;
-      border-radius: 10px;
-      overflow: hidden;
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      border-radius: 0;
+      overflow: visible;
+      background: transparent;
       cursor: text;
       transition: filter 0.14s ease, box-shadow 0.14s ease;
     }
@@ -180,19 +188,20 @@
       font-size: 0.86rem;
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--black-rgb), 0.12);
-      border-right: 1px solid rgba(var(--white-rgb), 0.28);
+      background: rgba(var(--amethyst-rgb), 0.9);
+      border-radius: 10px;
       user-select: none;
     }
     .synergy-dialog-inline-title-input {
       flex: 1 1 auto;
       border: none;
-      border-radius: 0;
+      border-radius: 10px;
+      min-height: 36px;
       padding: 0 10px;
-      color: rgba(var(--white-rgb), 0.88);
+      color: rgba(var(--white-rgb), 0.9);
       font-weight: 700;
       font-size: 0.88rem;
-      background: transparent;
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
     }
     .synergy-dialog-inline-title-input::placeholder {
       color: rgba(var(--white-rgb), 0.62);
@@ -310,8 +319,7 @@
       border-radius: 10px;
       padding: 0;
       color: rgba(var(--white-rgb), 0.98);
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
-      box-shadow: inset 0 0 0 999px rgba(var(--black-rgb), 0.14);
+      background: rgba(var(--amethyst-rgb), 0.9);
       font-family: "Manrope", sans-serif;
       font-weight: 800;
       font-size: 1.05rem;
@@ -919,14 +927,14 @@
         });
       }
 
-      function buildCompanyPostingUrl(job) {
+      function buildCompanyOpeningUrl(job) {
         const p = new URLSearchParams();
         if (job.company_url) p.set("company_url", job.company_url);
         if (job.indeed_url) p.set("indeed_url", job.indeed_url);
         if (job.linkedin_url) p.set("linkedin_url", job.linkedin_url);
         if (job.url) p.set("job_url", job.url);
         const q = p.toString();
-        return q ? `/company-posting?${q}` : "";
+        return q ? `/company-opening?${q}` : "";
       }
 
       function formatDistanceFromHome(value) {
@@ -935,6 +943,30 @@
         const rounded = numeric >= 100 ? Math.round(numeric) : Math.round(numeric * 10) / 10;
         const display = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
         return `${display}km from home`;
+      }
+
+      function formatAbroadSummary(job) {
+        const scoreValue = Number(job && job.abroad_score);
+        const scoreText = Number.isFinite(scoreValue)
+          ? `${Math.round(scoreValue * 10) / 10}/4`
+          : "0/4";
+        const identifiers = Array.isArray(job && job.abroad_identifiers) && job.abroad_identifiers.length
+          ? job.abroad_identifiers
+          : (Array.isArray(job && job.abroad_badges) ? job.abroad_badges : []);
+        const parts = [`Abroad ${scoreText}`];
+        if (identifiers.length) {
+          parts.push(`Identifiers ${identifiers.slice(0, 4).join(", ")}`);
+        }
+        if (job && job.abroad_percentage_text) {
+          parts.push(`Travel ${job.abroad_percentage_text}`);
+        }
+        const geo = Array.isArray(job && job.abroad_locations)
+          ? job.abroad_locations.slice(0, 3).join(", ")
+          : "";
+        if (geo) {
+          parts.push(`Geo ${geo}`);
+        }
+        return parts.join(" · ");
       }
 
       function renderResults(jobs) {
@@ -966,9 +998,13 @@
           status.className = "synergy-job-meta";
           status.textContent = `${job.decision || "UNKNOWN"} · Sleeve ${job.primary_sleeve_id || "?"} ${job.primary_sleeve_score || 0}/5`;
           card.appendChild(status);
+          const abroad = document.createElement("p");
+          abroad.className = "synergy-job-meta";
+          abroad.textContent = formatAbroadSummary(job);
+          card.appendChild(abroad);
           const links = document.createElement("div");
           links.className = "synergy-job-links";
-          const companyUrl = buildCompanyPostingUrl(job);
+          const companyUrl = buildCompanyOpeningUrl(job);
           if (companyUrl) {
             const a = document.createElement("a");
             a.className = "synergy-link-btn";

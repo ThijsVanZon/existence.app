@@ -127,7 +127,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
-    def test_fetch_jobs_enforces_mvp_direct_sources_only(self):
+    def test_fetch_jobs_enforces_mvp_source_bundle_only(self):
         original_fetch_source = main._fetch_source_with_cache
         try:
             seen_sources = []
@@ -160,14 +160,20 @@ class TestScrapeEndpoint(unittest.TestCase):
                 allow_failover=True,
             )
             self.assertEqual(errors, [])
-            self.assertEqual(used_sources, ["indeed_web", "linkedin_web"])
-            self.assertEqual(seen_sources, ["indeed_web", "linkedin_web"])
+            self.assertEqual(
+                used_sources,
+                ["indeed_web", "linkedin_web", "nl_web_openings"],
+            )
+            self.assertEqual(
+                seen_sources,
+                ["indeed_web", "linkedin_web", "nl_web_openings"],
+            )
             self.assertEqual(len(items), 1)
             self.assertEqual(diagnostics["auto_failover"], [])
         finally:
             main._fetch_source_with_cache = original_fetch_source
 
-    def test_backend_enforces_both_mvp_sources_even_when_one_requested(self):
+    def test_backend_enforces_full_mvp_source_bundle_even_when_one_requested(self):
         original_fetch_source = main._fetch_source_with_cache
         try:
             seen_sources = []
@@ -200,8 +206,14 @@ class TestScrapeEndpoint(unittest.TestCase):
                 allow_failover=True,
             )
             self.assertEqual(errors, [])
-            self.assertEqual(used_sources, ["indeed_web", "linkedin_web"])
-            self.assertEqual(seen_sources, ["indeed_web", "linkedin_web"])
+            self.assertEqual(
+                used_sources,
+                ["indeed_web", "linkedin_web", "nl_web_openings"],
+            )
+            self.assertEqual(
+                seen_sources,
+                ["indeed_web", "linkedin_web", "nl_web_openings"],
+            )
             self.assertEqual(len(items), 1)
             self.assertEqual(diagnostics["auto_failover"], [])
         finally:
@@ -274,11 +286,14 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
-    def test_mvp_profile_exposes_direct_sources(self):
+    def test_mvp_profile_exposes_mvp_source_bundle(self):
         config = main._public_scrape_config()
 
         available_ids = [source["id"] for source in config["sources"] if source["available"]]
-        self.assertEqual(available_ids, ["indeed_web", "linkedin_web"])
+        self.assertEqual(
+            available_ids,
+            ["indeed_web", "linkedin_web", "nl_web_openings"],
+        )
         self.assertEqual(config["profile"], "mvp")
         self.assertEqual([mode["id"] for mode in config["location_modes"]], ["nl_only"])
 

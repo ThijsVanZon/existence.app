@@ -178,6 +178,128 @@ ABROAD_SIGNALS = {
     },
 }
 
+_ABROAD_BILINGUAL_TOKEN_GROUPS = [
+    {"travel", "travelling", "traveling", "reizen", "reisbereidheid"},
+    {"international", "internationaal", "internationale"},
+    {"global", "wereldwijd", "wereldwijde"},
+    {"abroad", "buitenland", "overseas", "overzee"},
+    {"hybrid", "hybride"},
+    {"client", "klant"},
+    {"site", "locatie"},
+    {"visit", "bezoek"},
+    {"visits", "bezoeken"},
+    {"country", "land"},
+    {"countries", "landen"},
+    {"mobility", "mobiliteit"},
+    {"europe", "europa"},
+]
+
+_ABROAD_BILINGUAL_PHRASE_GROUPS = [
+    {"work from home", "thuiswerk", "thuis werken"},
+    {"work from abroad", "werken vanuit buitenland", "werk vanuit het buitenland"},
+    {"international travel", "internationaal reizen"},
+    {"site visit", "sitebezoek", "site bezoek"},
+    {"site visits", "sitebezoeken", "site bezoeken"},
+    {"client site", "klantlocatie", "klant locatie"},
+    {"client sites", "klantlocaties", "klant locaties"},
+    {"on site", "op locatie"},
+    {"remote within europe", "op afstand binnen europa"},
+    {"anywhere in eu", "overal in de eu"},
+    {"international mobility", "internationale mobiliteit"},
+    {"no travel required", "geen reisbereidheid nodig"},
+    {"without travel", "zonder reizen"},
+]
+
+
+def _build_bilingual_lookup(groups):
+    lookup = {}
+    for raw_group in groups or []:
+        normalized_group = sorted(
+            {
+                _normalize_for_match(item)
+                for item in (raw_group or set())
+                if _normalize_for_match(item)
+            }
+        )
+        for normalized_item in normalized_group:
+            lookup[normalized_item] = normalized_group
+    return lookup
+
+
+_ABROAD_BILINGUAL_TOKEN_LOOKUP = _build_bilingual_lookup(_ABROAD_BILINGUAL_TOKEN_GROUPS)
+_ABROAD_BILINGUAL_PHRASE_LOOKUP = _build_bilingual_lookup(_ABROAD_BILINGUAL_PHRASE_GROUPS)
+_ABROAD_PHRASE_VARIANT_CACHE = {}
+
+
+def _abroad_term_variants(term, max_variants=24):
+    normalized_term = _normalize_for_match(term)
+    if not normalized_term:
+        return []
+
+    limit = max(1, int(max_variants))
+    variants = {normalized_term}
+    tokens = normalized_term.split()
+
+    for idx, token in enumerate(tokens):
+        token_variants = _ABROAD_BILINGUAL_TOKEN_LOOKUP.get(token, [token])
+        for token_variant in token_variants:
+            if token_variant == token:
+                continue
+            candidate_tokens = list(tokens)
+            candidate_tokens[idx] = token_variant
+            candidate = _normalize_for_match(" ".join(candidate_tokens))
+            if candidate:
+                variants.add(candidate)
+            if len(variants) >= limit:
+                break
+        if len(variants) >= limit:
+            break
+
+    for phrase, phrase_group in _ABROAD_BILINGUAL_PHRASE_LOOKUP.items():
+        if phrase not in normalized_term:
+            continue
+        for phrase_variant in phrase_group:
+            if phrase_variant == phrase:
+                continue
+            candidate = _normalize_for_match(normalized_term.replace(phrase, phrase_variant))
+            if candidate:
+                variants.add(candidate)
+            if len(variants) >= limit:
+                break
+        if len(variants) >= limit:
+            break
+    return sorted(variants)
+
+
+def _expand_abroad_phrases_with_variants(phrases):
+    normalized_phrases = tuple(
+        sorted(
+            {
+                _normalize_for_match(phrase)
+                for phrase in (phrases or [])
+                if _normalize_for_match(phrase)
+            }
+        )
+    )
+    if normalized_phrases in _ABROAD_PHRASE_VARIANT_CACHE:
+        return _ABROAD_PHRASE_VARIANT_CACHE[normalized_phrases]
+
+    expanded = []
+    seen = set()
+    for phrase in normalized_phrases:
+        variants = _abroad_term_variants(phrase)
+        if not variants:
+            variants = [phrase]
+        for variant in variants:
+            normalized_variant = _normalize_for_match(variant)
+            if not normalized_variant or normalized_variant in seen:
+                continue
+            seen.add(normalized_variant)
+            expanded.append(normalized_variant)
+
+    _ABROAD_PHRASE_VARIANT_CACHE[normalized_phrases] = expanded
+    return expanded
+
 SYNERGY_SIGNALS = {
     "positive": [
         "international",
@@ -1165,8 +1287,10 @@ def score_abroad(raw_text):
     details = {}
 
     for signal_id, config in ABROAD_SIGNALS.items():
-        positive_hits = _find_hits(prepared_text, config.get("positive", []))
-        negative_hits = _find_hits(prepared_text, config.get("negative", []))
+        positive_terms = _expand_abroad_phrases_with_variants(config.get("positive", []))
+        negative_terms = _expand_abroad_phrases_with_variants(config.get("negative", []))
+        positive_hits = _find_hits(prepared_text, positive_terms)
+        negative_hits = _find_hits(prepared_text, negative_terms)
         score_cfg = config.get("score", {})
         total += len(positive_hits) * score_cfg.get("positive_hit", 0)
         total += len(negative_hits) * score_cfg.get("negative_hit", 0)

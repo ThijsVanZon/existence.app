@@ -39,21 +39,26 @@ Required query params:
 
 Useful optional query params:
 
-- `location_mode` = `nl_only|nl_eu|global` (default: `nl_only`)
-- `sources` = comma-separated source IDs (default: config defaults)
-- `max_results` = max returned records (default: `20`, max: `100`)
-- `max_pages` = pages per query/source for pagination (default: `8`)
+- `max_results` = max returned records (default: `200`, max: `500`)
+- `max_pages` = pages per query/source for pagination (default: `4`, max: `12`)
 - `target_raw` = raw target per run before early stop (default: `150`)
-- `rps` = list-page request rate per domain (default: `1.5`)
-- `detail_rps` = detail-page request rate per domain (default: `1.2`)
+- `rps` = list-page request rate per domain (default: `0.45`)
+- `detail_rps` = detail-page request rate per domain (default: `0.25`)
 - `no_new_unique_pages` = stop after N pages without new unique jobs (default: `2`)
 - `strict` = `1|0` target sleeve strictness (default: `0`)
 - `refresh` = `1|0` bypass source cache (default: `0`)
-- `failover` = `1|0` allow backend to add fallback sources on low yield/blocking (default: auto: `0` when explicit `sources` are passed, else `1`)
+- `failover` = `1|0` allow backend to add fallback sources on low yield/blocking (default: currently disabled in MVP flow)
 - `include_fail` = `1|0` include FAIL records in returned `jobs` (default: `0`)
 - `incremental` = `1|0` return only unseen jobs from local state (default: `0`)
 - `state_window_days` = retention window for incremental seen-state (default: `14`)
 - `legacy` = `1|0` return legacy list-only payload (default: `0`)
+- `query_terms` = comma-separated custom terms; backend expands EN/NL variants for querying and matching
+- abroad extraction/scoring uses EN/NL variants for travel context + geo; returned job openings include `abroad_identifiers` and `abroad_summary`
+
+Current MVP backend behavior:
+
+- `location_mode` is enforced to `nl_only`
+- sources are enforced to `indeed_web` + `linkedin_web` + `nl_web_openings`
 
 ## Debugging & observability
 

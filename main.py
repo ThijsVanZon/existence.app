@@ -3,6 +3,7 @@
 from flask import Flask, request, redirect, render_template, url_for, jsonify
 from collections import Counter
 from datetime import datetime, timezone
+import itertools
 import json
 import math
 import os
@@ -127,23 +128,42 @@ ABROAD_PERCENT_CONTEXT_KEYWORDS = [
     "reizen",
     "internationaal reizen",
 ]
+ABROAD_CONTEXT_TERMS = [
+    "international",
+    "global",
+    "abroad",
+    "overseas",
+    "travel",
+    "travelling",
+    "traveling",
+    "buitenland",
+    "cross-border",
+    "multi-country",
+    "site visit",
+    "client site",
+    "op locatie",
+    "klantlocatie",
+    "emea",
+    "european union",
+    "europe",
+]
 ABROAD_GEO_TERMS = {
     "countries": [
         ("Netherlands", ["netherlands", "nederland"]),
         ("Belgium", ["belgium", "belgie"]),
-        ("Germany", ["germany", "deutschland"]),
-        ("France", ["france"]),
-        ("Spain", ["spain"]),
-        ("Italy", ["italy"]),
+        ("Germany", ["germany", "deutschland", "duitsland"]),
+        ("France", ["france", "frankrijk"]),
+        ("Spain", ["spain", "spanje"]),
+        ("Italy", ["italy", "italie"]),
         ("Portugal", ["portugal"]),
-        ("Poland", ["poland"]),
-        ("Romania", ["romania"]),
-        ("Czech Republic", ["czech republic", "czechia"]),
-        ("Austria", ["austria"]),
-        ("Switzerland", ["switzerland"]),
-        ("United Kingdom", ["united kingdom", "uk", "england"]),
-        ("Ireland", ["ireland"]),
-        ("United States", ["usa", "united states"]),
+        ("Poland", ["poland", "polen"]),
+        ("Romania", ["romania", "roemenie"]),
+        ("Czech Republic", ["czech republic", "czechia", "tsjechie"]),
+        ("Austria", ["austria", "oostenrijk"]),
+        ("Switzerland", ["switzerland", "zwitserland"]),
+        ("United Kingdom", ["united kingdom", "uk", "england", "verenigd koninkrijk"]),
+        ("Ireland", ["ireland", "ierland"]),
+        ("United States", ["usa", "united states", "verenigde staten", "vs"]),
         ("Canada", ["canada"]),
         ("Mexico", ["mexico"]),
         ("Brazil", ["brazil"]),
@@ -152,35 +172,35 @@ ABROAD_GEO_TERMS = {
         ("Colombia", ["colombia"]),
         ("India", ["india"]),
         ("Singapore", ["singapore"]),
-        ("Philippines", ["philippines"]),
+        ("Philippines", ["philippines", "filippijnen"]),
         ("Japan", ["japan"]),
         ("China", ["china"]),
-        ("Hong Kong", ["hong kong"]),
-        ("South Korea", ["south korea", "korea"]),
-        ("United Arab Emirates", ["uae", "united arab emirates"]),
-        ("Saudi Arabia", ["saudi arabia", "saudi"]),
-        ("Egypt", ["egypt"]),
-        ("South Africa", ["south africa"]),
+        ("Hong Kong", ["hong kong", "hongkong"]),
+        ("South Korea", ["south korea", "korea", "zuid korea"]),
+        ("United Arab Emirates", ["uae", "united arab emirates", "verenigde arabische emiraten"]),
+        ("Saudi Arabia", ["saudi arabia", "saudi", "saudie arabie"]),
+        ("Egypt", ["egypt", "egypte"]),
+        ("South Africa", ["south africa", "zuid afrika"]),
         ("Nigeria", ["nigeria"]),
-        ("Australia", ["australia"]),
-        ("New Zealand", ["new zealand"]),
+        ("Australia", ["australia", "australie"]),
+        ("New Zealand", ["new zealand", "nieuw zeeland"]),
     ],
     "regions": [
-        ("EU", ["eu", "european union"]),
+        ("EU", ["eu", "european union", "europese unie"]),
         ("EMEA", ["emea"]),
         ("Benelux", ["benelux"]),
         ("DACH", ["dach"]),
-        ("Nordics", ["nordics", "scandinavia"]),
-        ("APAC", ["apac", "asia pacific"]),
-        ("LATAM", ["latam", "latin america"]),
-        ("Middle East", ["middle east", "mena"]),
+        ("Nordics", ["nordics", "scandinavia", "scandinavie"]),
+        ("APAC", ["apac", "asia pacific", "azie pacific"]),
+        ("LATAM", ["latam", "latin america", "latijns amerika"]),
+        ("Middle East", ["middle east", "mena", "midden oosten"]),
     ],
     "continents": [
-        ("Europe", ["europe"]),
-        ("Asia", ["asia"]),
-        ("Africa", ["africa"]),
-        ("North America", ["north america"]),
-        ("South America", ["south america"]),
+        ("Europe", ["europe", "europa"]),
+        ("Asia", ["asia", "azie"]),
+        ("Africa", ["africa", "afrika"]),
+        ("North America", ["north america", "noord amerika"]),
+        ("South America", ["south america", "zuid amerika"]),
         ("Oceania", ["oceania"]),
     ],
 }
@@ -194,6 +214,26 @@ INDEED_SEARCH_URL_BY_MODE = {
 }
 LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 LINKEDIN_JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
+NL_WEB_SEARCH_URL = "https://duckduckgo.com/html/"
+NL_WEB_PAGE_SIZE = 30
+NL_WEB_OPENING_HINTS = [
+    "job opening",
+    "job openings",
+    "vacature",
+    "vacatures",
+    "baan",
+    "banen",
+    "werken bij",
+    "solliciteer",
+    "sollicitatie",
+    "hiring",
+    "career",
+    "careers",
+    "functie",
+    "rol",
+    "position",
+    "positions",
+]
 DEFAULT_MAX_PAGES = 4
 DEFAULT_TARGET_RAW_PER_SLEEVE = 150
 DEFAULT_RATE_LIMIT_RPS = 0.45
@@ -228,7 +268,7 @@ TRACKING_QUERY_PARAMS = {
 }
 CANONICAL_QUERY_PARAMS = {"jk", "vjk", "jobId", "currentJobId", "id"}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
-MVP_SOURCE_IDS = ["indeed_web", "linkedin_web"]
+MVP_SOURCE_IDS = ["indeed_web", "linkedin_web", "nl_web_openings"]
 MVP_LOCATION_MODE = "nl_only"
 SCRAPE_MODE = "mvp"
 SCRAPE_PROGRESS_TTL_SECONDS = 1800
@@ -1133,8 +1173,10 @@ def _context_has_abroad_keywords(raw_text, start, end):
     text = str(raw_text or "").lower()
     left = max(0, start - 64)
     right = min(len(text), end + 64)
-    context = text[left:right]
-    return any(keyword in context for keyword in ABROAD_PERCENT_CONTEXT_KEYWORDS)
+    context = sleeves.normalize_for_match(text[left:right])
+    if not context:
+        return False
+    return any(keyword in context for keyword in _expanded_abroad_percent_context_keywords())
 
 
 def _legacy_extract_abroad_percentage(raw_text):
@@ -1195,6 +1237,44 @@ def _legacy_extract_abroad_metadata(raw_text):
     }
 
 
+_ABROAD_PERCENT_CONTEXT_CACHE = None
+_ABROAD_CONTEXT_TERMS_CACHE = None
+_ABROAD_GEO_TERMS_CACHE = None
+
+
+def _expanded_abroad_percent_context_keywords():
+    global _ABROAD_PERCENT_CONTEXT_CACHE
+    if _ABROAD_PERCENT_CONTEXT_CACHE is None:
+        _ABROAD_PERCENT_CONTEXT_CACHE = _expand_terms_with_bilingual_variants(
+            ABROAD_PERCENT_CONTEXT_KEYWORDS
+        )
+    return _ABROAD_PERCENT_CONTEXT_CACHE
+
+
+def _expanded_abroad_context_terms():
+    global _ABROAD_CONTEXT_TERMS_CACHE
+    if _ABROAD_CONTEXT_TERMS_CACHE is None:
+        _ABROAD_CONTEXT_TERMS_CACHE = _expand_terms_with_bilingual_variants(
+            ABROAD_CONTEXT_TERMS
+        )
+    return _ABROAD_CONTEXT_TERMS_CACHE
+
+
+def _expanded_abroad_geo_terms():
+    global _ABROAD_GEO_TERMS_CACHE
+    if _ABROAD_GEO_TERMS_CACHE is None:
+        expanded = {}
+        for category, entries in ABROAD_GEO_TERMS.items():
+            expanded_entries = []
+            for label, aliases in entries:
+                expanded_entries.append(
+                    (label, _expand_terms_with_bilingual_variants(aliases))
+                )
+            expanded[category] = expanded_entries
+        _ABROAD_GEO_TERMS_CACHE = expanded
+    return _ABROAD_GEO_TERMS_CACHE
+
+
 def _extract_abroad_percentage(raw_text):
     text = str(raw_text or "")
     if not text:
@@ -1204,7 +1284,7 @@ def _extract_abroad_percentage(raw_text):
     candidates = []
     range_spans = []
     for match in re.finditer(
-        r"(\d{1,3})\s*(?:-|to|tot)\s*(\d{1,3})\s*(?:%|percent|procent)",
+        r"(\d{1,3})\s*(?:-|to|tot)\s*(\d{1,3})\s*(?:%|percent|procent|percentage|pct)",
         normalized_text,
         flags=re.IGNORECASE,
     ):
@@ -1219,7 +1299,7 @@ def _extract_abroad_percentage(raw_text):
         range_spans.append((start, end))
 
     for match in re.finditer(
-        r"(\d{1,3})\s*(?:%|percent|procent)",
+        r"(\d{1,3})\s*(?:%|percent|procent|percentage|pct)",
         normalized_text,
         flags=re.IGNORECASE,
     ):
@@ -1238,35 +1318,21 @@ def _extract_abroad_percentage(raw_text):
 
 
 def _has_abroad_context(raw_text):
-    text = _normalize_text(raw_text)
-    context_terms = [
-        "international",
-        "global",
-        "abroad",
-        "overseas",
-        "travel",
-        "travelling",
-        "traveling",
-        "buitenland",
-        "cross-border",
-        "multi-country",
-        "site visit",
-        "client site",
-        "op locatie",
-        "klantlocatie",
-        "emea",
-        "european union",
-        "europe",
-    ]
-    return any(term in text for term in context_terms)
+    text = sleeves.normalize_for_match(raw_text)
+    if not text:
+        return False
+    return any(term in text for term in _expanded_abroad_context_terms())
 
 
 def _alias_has_abroad_context(raw_text, alias):
-    text = str(raw_text or "").lower()
-    alias_text = _clean_value(alias, "").lower()
+    text = sleeves.normalize_for_match(raw_text)
+    alias_text = sleeves.normalize_for_match(alias)
     if not text or not alias_text:
         return False
-    pattern = rf"\b{re.escape(alias_text)}\b"
+    parts = [re.escape(part) for part in alias_text.split()]
+    if not parts:
+        return False
+    pattern = r"\b" + r"\s+".join(parts) + r"\b"
     for match in re.finditer(pattern, text):
         if _context_has_abroad_keywords(text, *match.span()):
             return True
@@ -1278,7 +1344,7 @@ def _extract_abroad_geo_mentions(raw_text):
     has_context = _has_abroad_context(raw_text)
     geo = {"countries": [], "regions": [], "continents": []}
     for category in ("countries", "regions", "continents"):
-        for label, aliases in ABROAD_GEO_TERMS.get(category, []):
+        for label, aliases in _expanded_abroad_geo_terms().get(category, []):
             hits = sleeves.find_hits(prepared_text, aliases)
             if not hits:
                 continue
@@ -1349,6 +1415,31 @@ def _enhance_abroad_score(base_score, base_badges, abroad_meta, raw_text):
     return score, badges
 
 
+def _derive_abroad_identifiers(percentage, locations, raw_text, badges=None):
+    identifiers = []
+    seen = set()
+
+    def add_identifier(value):
+        normalized = sleeves.normalize_for_match(value)
+        if not normalized:
+            return
+        slug = normalized.replace(" ", "_")
+        if slug in seen:
+            return
+        seen.add(slug)
+        identifiers.append(slug)
+
+    for badge in badges or []:
+        add_identifier(badge)
+    if percentage is not None:
+        add_identifier("travel_percentage")
+    if locations:
+        add_identifier("geo_scope")
+    if _has_abroad_context(raw_text):
+        add_identifier("international_context")
+    return identifiers
+
+
 def _extract_abroad_metadata(raw_text):
     percentage, percentage_text = _extract_abroad_percentage(raw_text)
     geo, locations = _extract_abroad_geo_mentions(raw_text)
@@ -1359,6 +1450,7 @@ def _extract_abroad_metadata(raw_text):
         "regions": geo["regions"],
         "continents": geo["continents"],
         "locations": locations,
+        "identifiers": _derive_abroad_identifiers(percentage, locations, raw_text),
     }
 
 
@@ -1435,6 +1527,154 @@ def _location_passes_for_mode(location_mode):
     return locations or ["Netherlands"]
 
 
+_BILINGUAL_TOKEN_GROUPS = [
+    {"operations", "operaties", "operationeel", "operationele", "operational"},
+    {"operation", "operatie"},
+    {"analyst", "analist"},
+    {"analysis", "analyse"},
+    {"insights", "inzichten"},
+    {"workflow", "werkstroom"},
+    {"delivery", "levering"},
+    {"implementation", "implementatie"},
+    {"rollout", "uitrol"},
+    {"manager"},
+    {"coordinator", "coordinatie"},
+    {"specialist"},
+    {"strategy", "strategie"},
+    {"strategic", "strategisch"},
+    {"technical", "technisch"},
+    {"engineer", "ingenieur"},
+    {"infrastructure", "infrastructuur"},
+    {"reliability", "betrouwbaarheid"},
+    {"facility", "faciliteit"},
+    {"facilities", "faciliteiten"},
+    {"critical", "kritisch", "kritieke"},
+    {"supply", "toelevering"},
+    {"chain", "keten"},
+    {"logistics", "logistiek"},
+    {"vendor", "leverancier"},
+    {"partner"},
+    {"guest", "gast"},
+    {"experience", "ervaring"},
+    {"theme", "thema"},
+    {"park", "pretpark"},
+    {"travel", "travelling", "traveling", "reizen", "reisbereidheid"},
+    {"international", "internationaal", "internationale"},
+    {"global", "wereldwijd", "wereldwijde"},
+    {"abroad", "buitenland", "overseas", "overzee"},
+    {"hybrid", "hybride"},
+    {"europe", "europa"},
+    {"asia", "azie"},
+    {"africa", "afrika"},
+    {"north", "noord"},
+    {"south", "zuid"},
+    {"america", "amerika"},
+    {"middle", "midden"},
+    {"east", "oosten"},
+    {"united", "verenigde"},
+    {"states", "staten"},
+    {"kingdom", "koninkrijk"},
+    {"country", "land"},
+    {"countries", "landen"},
+    {"mobile", "mobiel"},
+    {"mobility", "mobiliteit"},
+    {"region", "regio"},
+]
+
+_BILINGUAL_PHRASE_GROUPS = [
+    {"data center", "data centre", "datacenter"},
+    {"supply chain", "toeleveringsketen"},
+    {"theme park", "pretpark"},
+    {"guest experience", "gastervaring"},
+    {"critical facilities", "kritieke faciliteiten"},
+    {"facility operations", "facilitaire operaties"},
+    {"work from home", "thuiswerk"},
+    {"work from abroad", "werken vanuit buitenland"},
+    {"international travel", "internationaal reizen"},
+    {"client site", "klantlocatie"},
+    {"site visit", "sitebezoek"},
+    {"site visits", "sitebezoeken"},
+    {"remote within europe", "op afstand binnen europa"},
+    {"on site", "op locatie"},
+    {"european union", "europese unie"},
+    {"north america", "noord amerika"},
+    {"south america", "zuid amerika"},
+    {"middle east", "midden oosten"},
+    {"asia pacific", "azie pacific"},
+    {"united states", "verenigde staten"},
+    {"united kingdom", "verenigd koninkrijk"},
+]
+
+
+def _build_bilingual_lookup(groups):
+    lookup = {}
+    for raw_group in groups or []:
+        normalized_group = sorted(
+            {
+                sleeves.normalize_for_match(item)
+                for item in (raw_group or set())
+                if sleeves.normalize_for_match(item)
+            }
+        )
+        for normalized_item in normalized_group:
+            lookup[normalized_item] = normalized_group
+    return lookup
+
+
+_BILINGUAL_TOKEN_LOOKUP = _build_bilingual_lookup(_BILINGUAL_TOKEN_GROUPS)
+_BILINGUAL_PHRASE_LOOKUP = _build_bilingual_lookup(_BILINGUAL_PHRASE_GROUPS)
+
+
+def _bilingual_term_variants(term, max_variants=24):
+    normalized_term = sleeves.normalize_for_match(term)
+    if not normalized_term:
+        return []
+
+    limit = max(1, int(max_variants))
+    variants = {normalized_term}
+    tokens = normalized_term.split()
+    if tokens:
+        per_token_options = []
+        for token in tokens:
+            token_variants = _BILINGUAL_TOKEN_LOOKUP.get(token, [token])
+            per_token_options.append(list(token_variants)[:4])
+        for option_tuple in itertools.product(*per_token_options):
+            candidate = sleeves.normalize_for_match(" ".join(option_tuple))
+            if candidate:
+                variants.add(candidate)
+            if len(variants) >= limit:
+                break
+
+    for phrase, phrase_group in _BILINGUAL_PHRASE_LOOKUP.items():
+        if phrase not in normalized_term:
+            continue
+        for phrase_variant in phrase_group:
+            if phrase_variant == phrase:
+                continue
+            candidate = sleeves.normalize_for_match(normalized_term.replace(phrase, phrase_variant))
+            if candidate:
+                variants.add(candidate)
+            if len(variants) >= limit:
+                break
+        if len(variants) >= limit:
+            break
+    return sorted(variants)
+
+
+def _expand_terms_with_bilingual_variants(terms):
+    expanded = []
+    for term in terms or []:
+        normalized_term = sleeves.normalize_for_match(term)
+        if not normalized_term:
+            continue
+        expanded.append(normalized_term)
+        for variant in _bilingual_term_variants(normalized_term):
+            if variant == normalized_term:
+                continue
+            expanded.append(variant)
+    return _dedupe_terms(expanded)
+
+
 def _parse_query_terms(raw_value):
     raw_text = str(raw_value or "")
     if not raw_text.strip():
@@ -1479,8 +1719,10 @@ def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
     overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(sleeve, [])
     base_terms = overrides if isinstance(overrides, list) and overrides else sleeves.SLEEVE_SEARCH_TERMS.get(sleeve, [])
     ordered_terms = _dedupe_terms(query_terms if query_terms else base_terms)
+    ordered_terms = _expand_terms_with_bilingual_variants(ordered_terms)
     if extra_terms:
         ordered_terms = _dedupe_terms(ordered_terms + list(extra_terms))
+        ordered_terms = _expand_terms_with_bilingual_variants(ordered_terms)
     return _prioritize_queries(sleeve, ordered_terms)
 
 
@@ -1955,6 +2197,7 @@ def _extract_external_destination_from_url(url):
         "ad_url",
         "url",
         "u",
+        "uddg",
         "target",
     }
     query_pairs = list(parse_qsl(parsed.query, keep_blank_values=False))
@@ -2956,6 +3199,352 @@ def _fetch_linkedin_web_jobs(
     )
 
 
+def _company_name_from_host(url):
+    host = _host_for_url(url).split(":")[0].strip().lower()
+    if not host:
+        return ""
+    if host.startswith("www."):
+        host = host[4:]
+    parts = [part for part in host.split(".") if part]
+    if not parts:
+        return ""
+
+    if len(parts) >= 3 and parts[-2] in {"co", "com", "org", "net", "gov"}:
+        base = parts[-3]
+    elif len(parts) >= 2:
+        base = parts[-2]
+    else:
+        base = parts[0]
+
+    if base in {"jobs", "careers", "werkenbij", "vacatures"} and len(parts) >= 3:
+        base = parts[-3]
+    cleaned = re.sub(r"[-_]+", " ", base).strip()
+    if not cleaned:
+        return ""
+    return " ".join(token.capitalize() for token in cleaned.split())
+
+
+def _looks_like_job_opening(title, snippet, url):
+    text = sleeves.normalize_for_match(_normalize_text(title, snippet, url))
+    if not text:
+        return False
+    if "openingstijden" in text:
+        return False
+    return any(hint in text for hint in NL_WEB_OPENING_HINTS)
+
+
+def _decode_nl_web_result_link(href, response_url):
+    raw = _clean_value(href, "")
+    if not raw:
+        return ""
+    absolute = requests.compat.urljoin(response_url or NL_WEB_SEARCH_URL, raw)
+    extracted = _extract_external_destination_from_url(absolute)
+    if _is_absolute_http_url(extracted):
+        return extracted
+
+    decoded = _decode_url_repeatedly(absolute, rounds=5)
+    extracted_decoded = _extract_external_destination_from_url(decoded)
+    if _is_absolute_http_url(extracted_decoded):
+        return extracted_decoded
+    if _is_absolute_http_url(decoded):
+        return decoded
+    return ""
+
+
+def _parse_nl_web_search_results(selector, response_url):
+    parsed = []
+    seen_links = set()
+    result_nodes = selector.css("div.result")
+    if not result_nodes:
+        result_nodes = selector.css("article")
+
+    for node in result_nodes:
+        anchor_nodes = node.css("a.result__a, h2 a")
+        if not anchor_nodes:
+            continue
+        anchor = anchor_nodes[0]
+        href_raw = _clean_value(anchor.attrib.get("href"), "")
+        title = (
+            _compact_whitespace(anchor.css("*::text").getall())
+            or _clean_value(anchor.xpath("string()").get(), "")
+        )
+        link = _decode_nl_web_result_link(href_raw, response_url)
+        if not _is_absolute_http_url(link):
+            continue
+        host = _host_for_url(link)
+        if not host:
+            continue
+        if "duckduckgo.com" in host or "google." in host or "bing." in host:
+            continue
+        if _is_platform_job_host(link):
+            continue
+        if link in seen_links:
+            continue
+
+        snippet = _compact_whitespace(
+            node.css(
+                ".result__snippet::text, "
+                ".result__snippet *::text, "
+                "a.result__snippet::text, "
+                "p::text"
+            ).getall()
+        )
+        if not _looks_like_job_opening(title, snippet, link):
+            continue
+
+        seen_links.add(link)
+        location = "Netherlands" if _is_netherlands_job(title, snippet, link) else "Unknown"
+        parsed.append(
+            {
+                "title": _clean_value(title, ""),
+                "company": _company_name_from_host(link),
+                "location": location,
+                "link": link,
+                "snippet": _clean_value(snippet, ""),
+                "salary": _extract_salary_from_chunks([snippet]),
+                "work_mode_hint": _normalize_text(title, snippet, location),
+                "date": "Unknown",
+                "source": "NL Web",
+            }
+        )
+    return parsed
+
+
+def _build_nl_web_search_query(query, location):
+    query_text = _clean_value(query, "")
+    location_text = _clean_value(location, "")
+    if location_text.lower() in {"netherlands", "nederland"}:
+        location_text = "Nederland"
+    parts = [
+        query_text,
+        location_text,
+        '(vacature OR "job opening" OR "werken bij")',
+        "site:.nl",
+    ]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _fetch_nl_web_openings_direct(
+    sleeve_key,
+    location_mode="nl_only",
+    max_pages=DEFAULT_MAX_PAGES,
+    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
+    diagnostics=None,
+    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
+    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
+    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
+    extra_terms=None,
+):
+    diagnostics = diagnostics or _new_diagnostics()
+    jobs = []
+    seen_unique = set()
+    domain_state = {}
+    queries = _query_bundle_for_sleeve(
+        sleeve_key,
+        query_terms=query_terms,
+        extra_terms=extra_terms,
+    )
+    locations = _location_passes_for_mode(location_mode)
+    session = requests.Session()
+    _configure_session_for_scrape(session)
+    request_headers = _source_headers(
+        "NL Web",
+        location_mode,
+        user_agent=random.choice(REQUEST_USER_AGENTS),
+    )
+    _ = detail_rps  # Reserved for future generic detail-page enrichment.
+
+    for query in queries:
+        for location in locations:
+            previous_jobs = len(jobs)
+            no_new_unique_streak = 0
+            blocked_in_query = False
+            last_response_body = ""
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-start",
+                f"NL Web: started query '{query}' in {location}",
+                source="NL Web",
+                query=query,
+                location=location,
+                max_pages=int(max_pages),
+            )
+
+            for page_idx in range(max_pages):
+                search_query = _build_nl_web_search_query(query, location)
+                params = {
+                    "q": search_query,
+                    "s": str(page_idx * NL_WEB_PAGE_SIZE),
+                }
+                _progress_from_diagnostics(
+                    diagnostics,
+                    "page-start",
+                    f"NL Web: requesting page {page_idx + 1} for '{query}' in {location}",
+                    source="NL Web",
+                    query=query,
+                    location=location,
+                    page=int(page_idx + 1),
+                )
+                response, error = _rate_limited_get(
+                    session,
+                    NL_WEB_SEARCH_URL,
+                    params=params,
+                    headers=request_headers,
+                    domain_state=domain_state,
+                    requests_per_second=requests_per_second,
+                    timeout_seconds=DEFAULT_HTTP_TIMEOUT,
+                    max_retries=DEFAULT_HTTP_RETRIES,
+                )
+                status = response.status_code if response is not None else 0
+                body = response.text if response is not None else ""
+                if body:
+                    last_response_body = body
+                blocked = False
+                cards_found = 0
+                parsed_count = 0
+                new_unique_count = 0
+                error_count = 0
+                if error:
+                    error_count += 1
+                if response is None or status >= 400:
+                    error_count += 1
+
+                parsed_items = []
+                request_url = response.url if response is not None else NL_WEB_SEARCH_URL
+                if response is not None and response.ok:
+                    blocked = bool(
+                        status in {401, 403, 429}
+                        or sleeves.detect_blocked_html(body)
+                    )
+                    if blocked:
+                        blocked_in_query = True
+                        _record_blocked(diagnostics, "NL Web")
+                        if body:
+                            _save_html_snapshot(
+                                "NL Web",
+                                query,
+                                page_idx + 1,
+                                body,
+                                "blocked",
+                                diagnostics,
+                            )
+                    else:
+                        selector = Selector(text=body)
+                        parsed_items = _parse_nl_web_search_results(selector, request_url)
+                        cards_found = len(parsed_items)
+                        parsed_count = len(parsed_items)
+
+                for item in parsed_items:
+                    dedupe_key, _, _ = _build_dedupe_key(item)
+                    if dedupe_key in seen_unique:
+                        continue
+                    seen_unique.add(dedupe_key)
+                    new_unique_count += 1
+                    item["full_description"] = ""
+                    item["detail_fetch_failed"] = True
+                    item["query"] = query
+                    item["query_location"] = location
+                    item["company_url"] = _clean_value(item.get("link"), "")
+                    item["indeed_url"] = ""
+                    item["linkedin_url"] = ""
+                    jobs.append(item)
+
+                _log_page_metrics(
+                    diagnostics,
+                    source="NL Web",
+                    query=query,
+                    location=location,
+                    page=page_idx + 1,
+                    url=request_url,
+                    status=status,
+                    cards_found=cards_found,
+                    parsed_count=parsed_count,
+                    new_unique_count=new_unique_count,
+                    detailpages_fetched=0,
+                    full_description_count=0,
+                    error_count=error_count,
+                    blocked_detected=blocked,
+                )
+                if new_unique_count == 0:
+                    no_new_unique_streak += 1
+                else:
+                    no_new_unique_streak = 0
+                if parsed_count == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
+                    break
+                if len(seen_unique) >= target_raw:
+                    _progress_from_diagnostics(
+                        diagnostics,
+                        "query-finish",
+                        f"NL Web: target reached for '{query}' in {location}",
+                        source="NL Web",
+                        query=query,
+                        location=location,
+                        new_items=int(len(jobs) - previous_jobs),
+                        blocked=bool(blocked_in_query),
+                    )
+                    return jobs, diagnostics
+
+            if len(jobs) == previous_jobs:
+                _save_debug_event(
+                    "NL Web",
+                    query,
+                    0,
+                    "no-new-items",
+                    diagnostics,
+                    location=location,
+                    pages_attempted=max_pages,
+                    unique_items=len(seen_unique),
+                )
+                if last_response_body:
+                    _save_html_snapshot(
+                        "NL Web",
+                        query,
+                        0,
+                        last_response_body,
+                        "no-new-items",
+                        diagnostics,
+                    )
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-finish",
+                f"NL Web: finished query '{query}' in {location} with {len(jobs) - previous_jobs} new items",
+                source="NL Web",
+                query=query,
+                location=location,
+                new_items=int(len(jobs) - previous_jobs),
+                blocked=bool(blocked_in_query),
+            )
+    return jobs, diagnostics
+
+
+def _fetch_nl_web_openings_jobs(
+    sleeve_key,
+    location_mode="nl_only",
+    max_pages=DEFAULT_MAX_PAGES,
+    target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
+    requests_per_second=DEFAULT_RATE_LIMIT_RPS,
+    detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
+    no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
+    query_terms=None,
+    extra_terms=None,
+    diagnostics=None,
+    **_kwargs,
+):
+    return _fetch_nl_web_openings_direct(
+        sleeve_key,
+        location_mode=location_mode,
+        max_pages=max_pages,
+        target_raw=target_raw,
+        diagnostics=diagnostics,
+        requests_per_second=requests_per_second,
+        detail_rps=detail_rps,
+        no_new_unique_pages=no_new_unique_pages,
+        query_terms=query_terms,
+        extra_terms=extra_terms,
+    )
+
+
 def rank_and_filter_jobs(
     items,
     target_sleeve=None,
@@ -2970,14 +3559,19 @@ def rank_and_filter_jobs(
 ):
     diagnostics = diagnostics or _new_diagnostics()
     normalized_custom_terms = []
+    custom_term_variant_map = {}
     if custom_mode:
-        normalized_custom_terms = [
-            sleeves.normalize_for_match(term)
-            for term in (custom_query_terms or [])
-            if term
-        ]
-        normalized_custom_terms = [term for term in normalized_custom_terms if term]
-        normalized_custom_terms = sorted(set(normalized_custom_terms))
+        normalized_custom_terms = _dedupe_terms(
+            [
+                sleeves.normalize_for_match(term)
+                for term in (custom_query_terms or [])
+                if term
+            ]
+        )
+        custom_term_variant_map = {
+            term: _bilingual_term_variants(term)
+            for term in normalized_custom_terms
+        }
     scored_jobs = []
     dedupe_seen = set()
     raw_by_source = Counter()
@@ -3104,11 +3698,26 @@ def rank_and_filter_jobs(
         custom_title_hits = []
         custom_text_hits = []
         custom_coverage_ratio = 0.0
+        custom_missing_terms = []
         if custom_mode and normalized_custom_terms:
             prepared_title = sleeves.prepare_text(title_text)
-            custom_text_hits = sorted(sleeves.find_hits(prepared_text, normalized_custom_terms))
-            custom_title_hits = sorted(sleeves.find_hits(prepared_title, normalized_custom_terms))
-            custom_hit_count = len(set(custom_text_hits).union(custom_title_hits))
+            found_terms = set()
+            for term in normalized_custom_terms:
+                term_variants = custom_term_variant_map.get(term) or [term]
+                text_variant_hits = sleeves.find_hits(prepared_text, term_variants)
+                title_variant_hits = sleeves.find_hits(prepared_title, term_variants)
+                if text_variant_hits:
+                    custom_text_hits.append(term)
+                    found_terms.add(term)
+                if title_variant_hits:
+                    custom_title_hits.append(term)
+                    found_terms.add(term)
+            custom_text_hits = sorted(set(custom_text_hits))
+            custom_title_hits = sorted(set(custom_title_hits))
+            custom_hit_count = len(found_terms)
+            custom_missing_terms = sorted(
+                [term for term in normalized_custom_terms if term not in found_terms]
+            )
             custom_coverage_ratio = (
                 custom_hit_count / len(normalized_custom_terms)
                 if normalized_custom_terms
@@ -3132,6 +3741,12 @@ def rank_and_filter_jobs(
             abroad_badges,
             abroad_meta,
             raw_text,
+        )
+        abroad_identifiers = _derive_abroad_identifiers(
+            abroad_meta.get("percentage"),
+            abroad_meta.get("locations") or [],
+            raw_text,
+            badges=abroad_badges,
         )
         location_profile = _score_location_proximity(location, raw_text, work_mode)
         location_proximity_score = float(location_profile.get("score", 0))
@@ -3171,6 +3786,11 @@ def rank_and_filter_jobs(
             )
         travel_share_text = abroad_meta.get("percentage_text") or "n/a"
         geo_scope_text = ", ".join((abroad_meta.get("locations") or [])[:4]) or "none"
+        abroad_identifier_text = ", ".join(abroad_identifiers) or "no explicit signal"
+        abroad_summary = (
+            f"Abroad score {abroad_score}/4 via {abroad_identifier_text} "
+            f"(travel share: {travel_share_text}; geo: {geo_scope_text})"
+        )
         reasons = [
             (
                 f"Sleeve {scoring_sleeve} fit {primary_score}/5 "
@@ -3178,10 +3798,7 @@ def rank_and_filter_jobs(
                 f"C:{sleeve_scores['C']} D:{sleeve_scores['D']} E:{sleeve_scores['E']})"
             ),
             proximity_reason,
-            (
-                f"Abroad score {abroad_score}/4 via {', '.join(abroad_badges) or 'no explicit signal'} "
-                f"(travel share: {travel_share_text}; geo: {geo_scope_text})"
-            ),
+            abroad_summary,
             f"Keyword coverage {total_positive_hits} hits for sleeve {scoring_sleeve}",
         ]
         if custom_mode:
@@ -3230,6 +3847,8 @@ def rank_and_filter_jobs(
                 "primary_sleeve_score": primary_score,
                 "abroad_score": abroad_score,
                 "abroad_badges": abroad_badges,
+                "abroad_identifiers": abroad_identifiers,
+                "abroad_summary": abroad_summary,
                 "abroad_percentage": abroad_meta["percentage"],
                 "abroad_percentage_text": abroad_meta["percentage_text"],
                 "abroad_countries": abroad_meta["countries"],
@@ -3268,6 +3887,7 @@ def rank_and_filter_jobs(
                     "custom_term_count": len(normalized_custom_terms),
                     "custom_text_hits": custom_text_hits,
                     "custom_title_hits": custom_title_hits,
+                    "custom_missing_terms": custom_missing_terms,
                     "custom_coverage_ratio": round(custom_coverage_ratio, 4),
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
@@ -3583,6 +4203,13 @@ SOURCE_REGISTRY = {
         "query_based": True,
         "fetcher": _fetch_linkedin_web_jobs,
     },
+    "nl_web_openings": {
+        "label": "NL Web (job openings discovery)",
+        "default_enabled": True,
+        "requires_env": [],
+        "query_based": True,
+        "fetcher": _fetch_nl_web_openings_jobs,
+    },
 }
 
 
@@ -3699,7 +4326,7 @@ def _source_available(source_key, force_retry=False):
 
 def _source_availability_reason(source_key):
     if source_key not in MVP_SOURCE_IDS:
-        return "Disabled in MVP (direct-source mode)"
+        return "Disabled in MVP source bundle"
     missing_env = _source_env_missing(source_key)
     if missing_env:
         return f"Missing env: {', '.join(missing_env)}"
@@ -3935,7 +4562,7 @@ def fetch_jobs_from_sources(
 ):
     profile = SCRAPE_MODE
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    # Backend MVP rule: always attempt both direct sources on every scrape run.
+    # Backend MVP rule: always attempt the full MVP source bundle on every scrape run.
     candidate_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
     unavailable_reasons = {}
     usable_sources = []
@@ -3950,8 +4577,8 @@ def fetch_jobs_from_sources(
         "source-plan",
         (
             f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
-            + (" (MVP lock: direct sources only)" if requested and set(requested) - set(MVP_SOURCE_IDS) else "")
-            + (" (backend enforces both direct sources each run)")
+            + (" (MVP lock: source bundle only)" if requested and set(requested) - set(MVP_SOURCE_IDS) else "")
+            + (" (backend enforces full MVP source bundle each run)")
         ),
         requested_sources=requested,
         candidate_sources=candidate_sources,
@@ -4279,8 +4906,9 @@ def scrape_progress(run_id):
     return jsonify(snapshot)
 
 
+@app.route('/company-opening')
 @app.route('/company-posting')
-def company_posting():
+def company_opening():
     def _is_external_company_url(url):
         return _is_absolute_http_url(url) and not _is_platform_job_host(url)
 
@@ -4323,7 +4951,7 @@ def company_posting():
         return ""
 
     def _error_response(message, status=424):
-        payload = {"error": message, "code": "company_posting_unresolved"}
+        payload = {"error": message, "code": "company_opening_unresolved"}
         accepts_json = (
             request.args.get("format", "").lower() == "json"
             or request.accept_mimetypes.best == "application/json"
@@ -4333,13 +4961,13 @@ def company_posting():
         html = (
             "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-            "<title>Company Posting Error</title>"
+            "<title>Company Opening Error</title>"
             "<style>body{font-family:Manrope,Arial,sans-serif;background:#f7f7f7;color:#111;"
             "margin:0;padding:24px} .card{max-width:620px;margin:40px auto;padding:20px;"
             "border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08)}"
             "h1{margin:0 0 8px;font-size:1.2rem}p{margin:0 0 10px;line-height:1.4}"
             "code{background:#f0f0f0;padding:2px 6px;border-radius:6px}</style></head>"
-            "<body><main class='card'><h1>Company posting URL not found</h1>"
+            "<body><main class='card'><h1>Company opening URL not found</h1>"
             f"<p>{message}</p>"
             "<p>The scraper tried redirect parsing and detail-page extraction, but no external company URL was resolved.</p>"
             "<p>Tip: open <code>Indeed URL</code> or <code>LinkedIn URL</code> and apply from there if needed.</p>"
