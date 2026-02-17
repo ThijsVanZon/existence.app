@@ -540,6 +540,163 @@ SLEEVE_CONFIG = {
     },
 }
 
+WEIGHT_KEYS = (
+    "abroad_score",
+    "primary_sleeve_score",
+    "synergy_score",
+    "location_proximity_score",
+)
+
+SLEEVE_RANKING_WEIGHT_OVERRIDES = {
+    "A": {
+        "abroad_score": 0.33,
+        "primary_sleeve_score": 0.45,
+        "synergy_score": 0.12,
+        "location_proximity_score": 0.10,
+    },
+    "B": {
+        "abroad_score": 0.24,
+        "primary_sleeve_score": 0.48,
+        "synergy_score": 0.18,
+        "location_proximity_score": 0.10,
+    },
+    "C": {
+        "abroad_score": 0.16,
+        "primary_sleeve_score": 0.56,
+        "synergy_score": 0.18,
+        "location_proximity_score": 0.10,
+    },
+    "D": {
+        "abroad_score": 0.20,
+        "primary_sleeve_score": 0.50,
+        "synergy_score": 0.20,
+        "location_proximity_score": 0.10,
+    },
+    "E": {
+        "abroad_score": 0.26,
+        "primary_sleeve_score": 0.44,
+        "synergy_score": 0.20,
+        "location_proximity_score": 0.10,
+    },
+}
+
+SLEEVE_DECISION_THRESHOLD_OVERRIDES = {
+    "A": {
+        "min_primary_score": 3,
+        "min_total_hits": 2,
+        "min_maybe_primary_score": 2,
+        "min_maybe_total_hits": 1,
+    },
+    "B": {
+        "min_primary_score": 2,
+        "min_total_hits": 2,
+        "min_maybe_primary_score": 1,
+        "min_maybe_total_hits": 1,
+    },
+    "C": {
+        "min_primary_score": 3,
+        "min_total_hits": 2,
+        "min_maybe_primary_score": 2,
+        "min_maybe_total_hits": 1,
+    },
+    "D": {
+        "min_primary_score": 2,
+        "min_total_hits": 2,
+        "min_maybe_primary_score": 1,
+        "min_maybe_total_hits": 1,
+    },
+    "E": {
+        "min_primary_score": 2,
+        "min_total_hits": 1,
+        "min_maybe_primary_score": 1,
+        "min_maybe_total_hits": 1,
+        "custom_pass_score": 2,
+        "custom_pass_hits": 1,
+        "custom_maybe_score": 1,
+        "custom_maybe_hits": 1,
+    },
+}
+
+SLEEVE_TITLE_INTENT_TERMS = {
+    "A": [
+        "producer",
+        "creative",
+        "artist",
+        "tour",
+        "show",
+        "stage",
+        "event",
+    ],
+    "B": [
+        "operations",
+        "guest",
+        "experience",
+        "attractions",
+        "park",
+        "ride",
+        "duty",
+    ],
+    "C": [
+        "engineer",
+        "technician",
+        "critical",
+        "facilities",
+        "infrastructure",
+        "commissioning",
+        "reliability",
+    ],
+    "D": [
+        "operations",
+        "logistics",
+        "supply",
+        "vendor",
+        "partner",
+        "implementation",
+        "analyst",
+    ],
+    "E": [
+        "operations",
+        "analyst",
+        "specialist",
+        "manager",
+        "lead",
+        "coordinator",
+    ],
+}
+
+SLEEVE_SCORE_TUNING = {
+    "A": {
+        "title_intent_weight": 1,
+        "context_density_threshold": 3,
+        "context_density_bonus": 1,
+        "title_context_blend_bonus": 1,
+    },
+    "B": {
+        "title_intent_weight": 1,
+        "context_density_threshold": 3,
+        "context_density_bonus": 1,
+        "title_context_blend_bonus": 1,
+    },
+    "C": {
+        "title_intent_weight": 1,
+        "context_density_threshold": 3,
+        "context_density_bonus": 1,
+        "title_context_blend_bonus": 1,
+    },
+    "D": {
+        "title_intent_weight": 1,
+        "context_density_threshold": 3,
+        "context_density_bonus": 1,
+        "title_context_blend_bonus": 1,
+    },
+    "E": {
+        "title_intent_weight": 1,
+        "context_density_threshold": 2,
+        "context_density_bonus": 1,
+        "title_context_blend_bonus": 1,
+    },
+}
+
 SLEEVE_SEARCH_TERMS = {
     "A": [
         "music event operations",
@@ -881,6 +1038,53 @@ def find_hits(prepared_text, phrases):
     return _find_hits(prepared_text, phrases)
 
 
+def ranking_weights_for_sleeve(sleeve_id):
+    base = {key: float(RANKING_WEIGHTS.get(key, 0.0)) for key in WEIGHT_KEYS}
+    overrides = SLEEVE_RANKING_WEIGHT_OVERRIDES.get((sleeve_id or "").upper(), {})
+    for key in WEIGHT_KEYS:
+        if key not in overrides:
+            continue
+        try:
+            base[key] = max(0.0, float(overrides[key]))
+        except (TypeError, ValueError):
+            continue
+
+    total = sum(base.values())
+    if total <= 0:
+        total = sum(float(RANKING_WEIGHTS.get(key, 0.0)) for key in WEIGHT_KEYS) or 1.0
+        return {key: float(RANKING_WEIGHTS.get(key, 0.0)) / total for key in WEIGHT_KEYS}
+    return {key: base[key] / total for key in WEIGHT_KEYS}
+
+
+def decision_thresholds_for_sleeve(sleeve_id):
+    defaults = {
+        "min_primary_score": int(MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW),
+        "min_total_hits": int(MIN_TOTAL_HITS_TO_SHOW),
+        "min_maybe_primary_score": int(MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE),
+        "min_maybe_total_hits": int(MIN_TOTAL_HITS_TO_MAYBE),
+        "custom_pass_score": 2,
+        "custom_pass_hits": 1,
+        "custom_maybe_score": 1,
+        "custom_maybe_hits": 1,
+    }
+    overrides = SLEEVE_DECISION_THRESHOLD_OVERRIDES.get((sleeve_id or "").upper(), {})
+    for key, value in overrides.items():
+        try:
+            defaults[key] = int(value)
+        except (TypeError, ValueError):
+            continue
+
+    defaults["min_primary_score"] = max(1, defaults["min_primary_score"])
+    defaults["min_total_hits"] = max(1, defaults["min_total_hits"])
+    defaults["min_maybe_primary_score"] = max(1, defaults["min_maybe_primary_score"])
+    defaults["min_maybe_total_hits"] = max(1, defaults["min_maybe_total_hits"])
+    defaults["custom_pass_score"] = max(1, defaults["custom_pass_score"])
+    defaults["custom_pass_hits"] = max(1, defaults["custom_pass_hits"])
+    defaults["custom_maybe_score"] = max(1, defaults["custom_maybe_score"])
+    defaults["custom_maybe_hits"] = max(1, defaults["custom_maybe_hits"])
+    return defaults
+
+
 def _phrase_spans(normalized_text, phrase):
     normalized_phrase = _normalize_for_match(phrase)
     if not normalized_phrase:
@@ -988,6 +1192,7 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     must_haves = config["must_haves"]
     points = config["scoring"]["points"]
     cap = config["scoring"]["cap_max"]
+    sleeve_tuning = SLEEVE_SCORE_TUNING.get(sleeve_id, {})
 
     prepared_text = _prepare_text(raw_text)
     prepared_title = _prepare_text(raw_title)
@@ -997,7 +1202,18 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     context_hits = _find_hits(prepared_text, keywords["context_positive"])
     negative_hits = _find_hits(prepared_text, keywords["negative"])
     bonus_hits = _find_hits(prepared_text, must_haves.get("bonus_signals") or [])
+    title_intent_hits = _find_hits(prepared_title, SLEEVE_TITLE_INTENT_TERMS.get(sleeve_id, []))
     total_positive_hits = len(title_hits_in_text.union(context_hits))
+
+    def _tuning_int(key, fallback=0):
+        try:
+            return int(sleeve_tuning.get(key, fallback))
+        except (TypeError, ValueError):
+            return int(fallback)
+
+    context_density_threshold = max(1, _tuning_int("context_density_threshold", 3))
+    context_density_met = len(context_hits) >= context_density_threshold
+    title_context_blend = bool(title_hits_in_title and context_hits)
 
     score = (
         len(title_hits_in_title) * points.get("title_hit", 0)
@@ -1005,6 +1221,11 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
         + len(bonus_hits) * points.get("bonus_hit", 0)
         + len(negative_hits) * points.get("negative_hit", 0)
     )
+    score += len(title_intent_hits) * _tuning_int("title_intent_weight", 0)
+    if context_density_met:
+        score += _tuning_int("context_density_bonus", 0)
+    if title_context_blend:
+        score += _tuning_int("title_context_blend_bonus", 0)
     if len(title_hits_in_title) >= must_haves.get("min_title_hits", 0):
         score += points.get("title_gate_bonus", 0)
     if total_positive_hits >= must_haves.get("min_total_hits", 0):
@@ -1017,6 +1238,11 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
         "context_hits": sorted(context_hits),
         "negative_hits": sorted(negative_hits),
         "bonus_hits": sorted(bonus_hits),
+        "title_intent_hits": sorted(title_intent_hits),
+        "title_intent_hit_count": len(title_intent_hits),
+        "context_density_threshold": context_density_threshold,
+        "context_density_met": context_density_met,
+        "title_context_blend": title_context_blend,
         "title_hit_count": len(title_hits_in_title),
         "total_positive_hits": total_positive_hits,
         "min_title_hits": int(must_haves.get("min_title_hits", 0)),

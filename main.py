@@ -3103,20 +3103,24 @@ def rank_and_filter_jobs(
         total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
         custom_title_hits = []
         custom_text_hits = []
+        custom_coverage_ratio = 0.0
         if custom_mode and normalized_custom_terms:
             prepared_title = sleeves.prepare_text(title_text)
-            for term in normalized_custom_terms:
-                token = f" {term} "
-                in_text = token in prepared_text
-                in_title = token in prepared_title
-                if in_text:
-                    custom_text_hits.append(term)
-                if in_title:
-                    custom_title_hits.append(term)
-            custom_title_hits = sorted(set(custom_title_hits))
-            custom_text_hits = sorted(set(custom_text_hits))
+            custom_text_hits = sorted(sleeves.find_hits(prepared_text, normalized_custom_terms))
+            custom_title_hits = sorted(sleeves.find_hits(prepared_title, normalized_custom_terms))
             custom_hit_count = len(set(custom_text_hits).union(custom_title_hits))
-            custom_score = min(5, custom_hit_count + (1 if custom_title_hits else 0))
+            custom_coverage_ratio = (
+                custom_hit_count / len(normalized_custom_terms)
+                if normalized_custom_terms
+                else 0.0
+            )
+            coverage_bonus = 1 if custom_hit_count >= 2 and custom_coverage_ratio >= 0.6 else 0
+            custom_score = min(
+                5,
+                custom_hit_count
+                + (1 if custom_title_hits else 0)
+                + coverage_bonus,
+            )
             primary_score = custom_score
             total_positive_hits = custom_hit_count
 
@@ -3134,7 +3138,7 @@ def rank_and_filter_jobs(
         synergy_score, synergy_hits = sleeves.score_synergy(raw_text)
         penalty_points, penalty_reasons = sleeves.evaluate_soft_penalties(raw_text)
 
-        weights = sleeves.RANKING_WEIGHTS
+        weights = sleeves.ranking_weights_for_sleeve(scoring_sleeve)
         weighted_score = (
             (abroad_score * weights.get("abroad_score", 0.30))
             + (primary_score * weights.get("primary_sleeve_score", 0.50))
@@ -3181,9 +3185,11 @@ def rank_and_filter_jobs(
             f"Keyword coverage {total_positive_hits} hits for sleeve {scoring_sleeve}",
         ]
         if custom_mode:
+            coverage_pct = int(round(custom_coverage_ratio * 100))
             reasons[0] = (
                 f"Custom sleeve relevance {primary_score}/5 "
-                f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms)"
+                f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms; "
+                f"coverage {coverage_pct}%)"
             )
             if custom_title_hits:
                 reasons.append(
@@ -3262,6 +3268,7 @@ def rank_and_filter_jobs(
                     "custom_term_count": len(normalized_custom_terms),
                     "custom_text_hits": custom_text_hits,
                     "custom_title_hits": custom_title_hits,
+                    "custom_coverage_ratio": round(custom_coverage_ratio, 4),
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
@@ -3279,10 +3286,54 @@ def rank_and_filter_jobs(
         )
 
     threshold_cfg = RUNTIME_CONFIG.get("threshold_overrides", {})
-    base_min_total_hits = int(threshold_cfg.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW))
-    base_min_primary = int(threshold_cfg.get("min_primary_score", min_target_score))
-    base_min_maybe_total = int(threshold_cfg.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE))
-    base_min_maybe_primary = int(threshold_cfg.get("min_maybe_primary_score", sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE))
+    threshold_sleeve = target_sleeve if target_sleeve in sleeves.VALID_SLEEVES else ""
+    if not threshold_sleeve and scored_jobs:
+        threshold_sleeve = _clean_value(scored_jobs[0].get("primary_sleeve_id"), "").upper()
+    sleeve_threshold_defaults = sleeves.decision_thresholds_for_sleeve(threshold_sleeve or "E")
+
+    base_min_total_hits = int(
+        threshold_cfg.get(
+            "min_total_hits",
+            sleeve_threshold_defaults.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW),
+        )
+    )
+    base_min_primary = int(
+        threshold_cfg.get(
+            "min_primary_score",
+            sleeve_threshold_defaults.get("min_primary_score", min_target_score),
+        )
+    )
+    base_min_maybe_total = int(
+        threshold_cfg.get(
+            "min_maybe_total_hits",
+            sleeve_threshold_defaults.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE),
+        )
+    )
+    base_min_maybe_primary = int(
+        threshold_cfg.get(
+            "min_maybe_primary_score",
+            sleeve_threshold_defaults.get(
+                "min_maybe_primary_score",
+                sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE,
+            ),
+        )
+    )
+    custom_pass_score = max(
+        1,
+        int(threshold_cfg.get("custom_pass_score", sleeve_threshold_defaults.get("custom_pass_score", 2))),
+    )
+    custom_pass_hits = max(
+        1,
+        int(threshold_cfg.get("custom_pass_hits", sleeve_threshold_defaults.get("custom_pass_hits", 1))),
+    )
+    custom_maybe_score = max(
+        1,
+        int(threshold_cfg.get("custom_maybe_score", sleeve_threshold_defaults.get("custom_maybe_score", 1))),
+    )
+    custom_maybe_hits = max(
+        1,
+        int(threshold_cfg.get("custom_maybe_hits", sleeve_threshold_defaults.get("custom_maybe_hits", 1))),
+    )
 
     threshold_profiles = [
         {
@@ -3341,9 +3392,9 @@ def rank_and_filter_jobs(
                 decision = "FAIL"
                 fail_reason = "custom_terms_missing"
             elif custom_mode:
-                if total_hits >= 1 and primary_score >= 2:
+                if total_hits >= custom_pass_hits and primary_score >= custom_pass_score:
                     decision = "PASS"
-                elif total_hits >= 1 and primary_score >= 1:
+                elif total_hits >= custom_maybe_hits and primary_score >= custom_maybe_score:
                     decision = "MAYBE"
                 else:
                     decision = "FAIL"

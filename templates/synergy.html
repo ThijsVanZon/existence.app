@@ -22,16 +22,6 @@
       text-shadow: 0 1px 2px rgba(var(--black-rgb), 0.18);
       background: linear-gradient(100deg, rgba(var(--amethyst-rgb), 0.84), rgba(var(--zircon-rgb), 0.68));
     }
-    .synergy-sleeve-header-clickable {
-      cursor: pointer;
-    }
-    .synergy-sleeve-header-clickable:hover {
-      filter: brightness(1.02);
-    }
-    .synergy-sleeve-header-clickable:focus-visible {
-      outline: 2px solid rgba(var(--white-rgb), 0.92);
-      outline-offset: 2px;
-    }
     .synergy-row { display: grid; gap: 6px; }
     .synergy-row label { font-weight: 600; color: var(--ink-muted); font-size: 0.85rem; }
     .synergy-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -352,18 +342,17 @@
   <main class="synergy-shell">
     <section class="synergy-column">
       <header
-        id="headerEditorTrigger"
-        class="synergy-sleeve-header synergy-sleeve-header-clickable"
-        role="button"
-        tabindex="0"
-        aria-label="Set sleeve letter and title"
+        id="sleeveHeader"
+        class="synergy-sleeve-header"
+        aria-label="Active career sleeve"
       >
-        <span id="headerName" class="sleeve-header-name">Click here to start</span>
+        <span id="headerName" class="sleeve-header-name">No sleeve selected</span>
         <span id="headerCode" class="sleeve-header-code">Career Sleeve ?</span>
       </header>
 
       <div class="synergy-column-actions">
-        <button id="scrapeNowBtn" type="button">Scrape job postings</button>
+        <button id="changeSleeveBtn" type="button">Change Career Sleeve</button>
+        <button id="scrapeNowBtn" type="button">Scrape Job Openings</button>
       </div>
 
       <section class="synergy-progress">
@@ -415,13 +404,13 @@
         remoteProgressEvents: [],
       };
       const els = {
+        changeSleeveBtn: document.getElementById("changeSleeveBtn"),
         scrapeNowBtn: document.getElementById("scrapeNowBtn"),
         metricBadges: document.getElementById("metricBadges"),
         progressEvents: document.getElementById("progressEvents"),
         resultList: document.getElementById("resultList"),
         headerName: document.getElementById("headerName"),
         headerCode: document.getElementById("headerCode"),
-        headerEditorTrigger: document.getElementById("headerEditorTrigger"),
         loadDialog: document.getElementById("loadDialog"),
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
@@ -438,6 +427,7 @@
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
       const isFixedLetter = (l) => ["A", "B", "C", "D"].includes(l);
       const isCustomLetter = (l) => /^[A-Z]$/.test(l || "") && l >= "E";
+      const LAST_SLEEVE_STORAGE_KEY = "existence.synergy.last_sleeve.v1";
       const dedupeTerms = (arr) => {
         const seen = new Set();
         const out = [];
@@ -451,6 +441,22 @@
         });
         return out;
       };
+      const persistLastLoadedSleeve = (letter) => {
+        const normalized = normalizeLetter(letter);
+        if (!normalized) return;
+        try {
+          localStorage.setItem(LAST_SLEEVE_STORAGE_KEY, normalized);
+        } catch (_error) {}
+      };
+      const loadLastLoadedSleeve = () => {
+        try {
+          return normalizeLetter(localStorage.getItem(LAST_SLEEVE_STORAGE_KEY) || "");
+        } catch (_error) {
+          return "";
+        }
+      };
+      const findSleeveByLetter = (letter) =>
+        (state.catalog.all || []).find((entry) => normalizeLetter(entry && entry.letter) === normalizeLetter(letter)) || null;
       const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
       const ICON_EDIT = "\u270E";
       const ICON_REMOVE = "\u00D7";
@@ -633,7 +639,7 @@
       function updateHeaderPreview() {
         const letter = normalizeLetter(state.current.letter);
         const inputTitle = String(state.current.title || "").trim();
-        const title = inputTitle || "Click here to start";
+        const title = inputTitle || "No sleeve selected";
         els.headerName.textContent = title;
         els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve ?";
       }
@@ -643,6 +649,7 @@
         state.current.letter = normalizeLetter(sleeve.letter || "");
         state.current.title = String(sleeve.title || "");
         state.current.terms = dedupeTerms(sleeve.terms || []);
+        persistLastLoadedSleeve(state.current.letter);
         updateHeaderPreview();
         if (!options.silent) {
           const suffix = sleeve.locked ? "(fixed)" : "(custom)";
@@ -657,100 +664,191 @@
           return fixedByLetter.terms.slice(0, 8);
         }
 
-        const lowerTitle = String(title || "").toLowerCase();
-        const presets = [
-          {
-            keywords: ["music", "festival", "concert", "tour", "venue", "artist", "event"],
-            terms: [
-              "music event operations",
-              "festival producer",
-              "tour operations",
-              "concert production",
-              "live production",
-              "artist liaison",
-              "show operations",
-              "event operations",
-            ],
-          },
-          {
-            keywords: ["theme", "park", "attraction", "guest", "destination", "resort"],
-            terms: [
-              "theme park operations",
-              "attractions operations",
-              "guest experience",
-              "show operations",
-              "ride operations",
-              "destination operations",
-              "resort operations",
-              "immersive destination operations",
-            ],
-          },
-          {
-            keywords: ["data", "center", "facility", "critical", "infrastructure", "commissioning"],
-            terms: [
-              "data center operations",
-              "critical facilities technician",
-              "facility operations",
-              "commissioning engineer data center",
-              "mission critical operations",
-              "compute infrastructure operations",
-              "ai infrastructure operations",
-              "capacity expansion data center",
-            ],
-          },
-          {
-            keywords: ["supply", "chain", "logistics", "vendor", "distribution", "ecosystem", "partner"],
-            terms: [
-              "supply chain operations",
-              "logistics operations",
-              "vendor operations",
-              "partner operations",
-              "ecosystem operations",
-              "rollout",
-              "implementation supply chain",
-              "distribution operations",
-            ],
-          },
-        ];
+        const lowerTitle = String(title || "").toLowerCase().trim();
+        if (!lowerTitle) return [];
 
-        let bestPreset = null;
-        let bestScore = 0;
-        for (const preset of presets) {
-          const score = preset.keywords.reduce((acc, keyword) => acc + (lowerTitle.includes(keyword) ? 1 : 0), 0);
-          if (score > bestScore) {
-            bestScore = score;
-            bestPreset = preset;
-          }
-        }
-        if (bestPreset && bestScore > 0) {
-          return bestPreset.terms.slice(0, 8);
-        }
-
-        const stopwords = new Set([
-          "and", "the", "for", "with", "from", "into", "across", "career", "sleeve", "operations",
-        ]);
         const tokens = Array.from(
           new Set(
             lowerTitle
               .split(/[^a-z0-9]+/g)
               .map((token) => token.trim())
-              .filter((token) => token.length >= 3 && !stopwords.has(token))
+              .filter(Boolean)
           )
         );
 
-        const fallback = [];
-        if (lowerTitle.trim()) {
-          fallback.push(lowerTitle.trim());
+        const domainPresets = [
+          {
+            id: "music",
+            keywords: ["music", "festival", "concert", "tour", "venue", "artist", "event", "live"],
+            baseTerms: [
+              "music event operations",
+              "festival producer",
+              "concert production",
+              "live production",
+            ],
+            intentTerms: {
+              creative: ["creative production", "artist liaison", "show design coordination"],
+              operations: ["show operations", "stage operations", "tour logistics"],
+              analyst: ["audience insights analyst", "event performance analysis", "ticketing analytics"],
+              technical: ["technical producer", "audio visual live systems", "show control systems"],
+              strategy: ["festival programming strategy", "venue partnership strategy", "portfolio planning live events"],
+            },
+          },
+          {
+            id: "destinations",
+            keywords: ["theme", "park", "attraction", "guest", "destination", "resort", "immersive", "ride"],
+            baseTerms: [
+              "theme park operations",
+              "attractions operations",
+              "guest experience",
+              "destination operations",
+            ],
+            intentTerms: {
+              creative: ["immersive experience design", "show quality creative", "guest journey design"],
+              operations: ["ride operations", "park operations", "resort operations"],
+              analyst: ["guest insights analyst", "queue analytics", "experience performance analysis"],
+              technical: ["attractions systems operations", "show systems technician", "safety systems operations"],
+              strategy: ["destination strategy", "experience portfolio planning", "operations excellence parks"],
+            },
+          },
+          {
+            id: "datacenter",
+            keywords: ["data", "center", "centre", "facility", "critical", "infrastructure", "commissioning", "uptime"],
+            baseTerms: [
+              "data center operations",
+              "critical facilities technician",
+              "mission critical operations",
+              "compute infrastructure operations",
+            ],
+            intentTerms: {
+              creative: ["technical storytelling infrastructure", "enablement content infrastructure"],
+              operations: ["facility operations", "capacity expansion data center", "change management facilities"],
+              analyst: ["capacity analyst data center", "infrastructure operations analyst", "reliability analytics"],
+              technical: ["commissioning engineer data center", "site reliability engineer infrastructure", "electrical mechanical operations"],
+              strategy: ["infrastructure strategy", "network capacity planning", "operations program management"],
+            },
+          },
+          {
+            id: "supply",
+            keywords: ["supply", "chain", "logistics", "vendor", "distribution", "ecosystem", "partner", "fulfillment"],
+            baseTerms: [
+              "supply chain operations",
+              "logistics operations",
+              "vendor operations",
+              "partner operations",
+            ],
+            intentTerms: {
+              creative: ["service design operations", "experience design logistics"],
+              operations: ["distribution operations", "rollout operations", "implementation supply chain"],
+              analyst: ["supply chain analyst", "logistics performance analyst", "demand planning analyst"],
+              technical: ["automation operations logistics", "warehouse systems operations", "integration specialist supply chain"],
+              strategy: ["ecosystem strategy", "network optimization strategy", "procurement strategy operations"],
+            },
+          },
+          {
+            id: "generic",
+            keywords: [],
+            baseTerms: [
+              "operations manager",
+              "program manager",
+              "delivery operations",
+              "cross-functional execution",
+            ],
+            intentTerms: {
+              creative: ["creative producer", "experience design", "content operations"],
+              operations: ["process improvement", "workflow operations", "implementation manager"],
+              analyst: ["business analyst", "operations analyst", "data insights analyst"],
+              technical: ["technical specialist", "systems operations", "integration engineer"],
+              strategy: ["strategy and operations", "program strategy", "transformation lead"],
+            },
+          },
+        ];
+        const intentProfiles = [
+          {
+            id: "creative",
+            keywords: ["creative", "producer", "content", "brand", "experience", "story", "design"],
+            globalTerms: ["creative operations", "content delivery", "experience programming"],
+          },
+          {
+            id: "operations",
+            keywords: ["operations", "ops", "coordinator", "manager", "execution", "delivery", "implementation"],
+            globalTerms: ["operations excellence", "cross-functional operations", "service delivery"],
+          },
+          {
+            id: "analyst",
+            keywords: ["analyst", "analysis", "insights", "planning", "intelligence", "reporting"],
+            globalTerms: ["operations analytics", "performance insights", "data-driven decisions"],
+          },
+          {
+            id: "technical",
+            keywords: ["engineer", "technical", "infrastructure", "systems", "commissioning", "reliability", "automation"],
+            globalTerms: ["technical operations", "systems reliability", "process automation"],
+          },
+          {
+            id: "strategy",
+            keywords: ["strategy", "strategic", "program", "portfolio", "transformation", "growth", "lead"],
+            globalTerms: ["strategy and operations", "program governance", "portfolio execution"],
+          },
+        ];
+
+        let selectedDomain = domainPresets[domainPresets.length - 1];
+        let selectedDomainScore = -1;
+        for (const preset of domainPresets) {
+          const score = preset.keywords.reduce((acc, keyword) => acc + (lowerTitle.includes(keyword) ? 1 : 0), 0);
+          if (score > selectedDomainScore) {
+            selectedDomain = preset;
+            selectedDomainScore = score;
+          }
         }
-        for (const token of tokens.slice(0, 3)) {
-          fallback.push(`${token} operations`);
-          fallback.push(`${token} coordinator`);
-          fallback.push(`${token} specialist`);
+
+        const rankedIntents = intentProfiles
+          .map((profile) => ({
+            id: profile.id,
+            score: profile.keywords.reduce((acc, keyword) => acc + (lowerTitle.includes(keyword) ? 1 : 0), 0),
+            profile,
+          }))
+          .sort((a, b) => b.score - a.score);
+
+        const activeIntents = rankedIntents
+          .filter((entry) => entry.score > 0)
+          .slice(0, 2);
+        if (!activeIntents.length) {
+          const defaultIntent = intentProfiles.find((profile) => profile.id === "operations") || intentProfiles[0];
+          activeIntents.push({ id: "operations", score: 0, profile: defaultIntent });
         }
-        fallback.push("cross-functional operations");
-        fallback.push("delivery operations");
-        fallback.push("workflow operations");
-        return dedupeTerms(fallback).slice(0, 8);
+
+        const generated = [...selectedDomain.baseTerms];
+        for (const intent of activeIntents) {
+          const intentDomainTerms = (selectedDomain.intentTerms || {})[intent.id] || [];
+          generated.push(...intentDomainTerms);
+          generated.push(...(intent.profile.globalTerms || []));
+        }
+
+        const stopwords = new Set([
+          "and", "the", "for", "with", "from", "into", "across", "career", "sleeve", "role",
+          "senior", "junior", "lead", "manager", "specialist", "associate",
+        ]);
+        const candidateTokens = tokens
+          .filter((token) => token.length >= 3 && !stopwords.has(token) && !/^\d+$/.test(token))
+          .slice(0, 4);
+        const primaryIntentId = activeIntents[0].id;
+        const tokenSuffixMap = {
+          creative: ["creative production", "experience design", "content operations"],
+          operations: ["operations", "delivery", "coordination"],
+          analyst: ["analysis", "analytics", "insights"],
+          technical: ["systems", "infrastructure", "engineering"],
+          strategy: ["strategy", "program", "planning"],
+        };
+        const suffixes = tokenSuffixMap[primaryIntentId] || tokenSuffixMap.operations;
+        for (const token of candidateTokens) {
+          for (const suffix of suffixes) {
+            generated.push(`${token} ${suffix}`);
+          }
+        }
+        generated.push(lowerTitle);
+        generated.push(`cross-functional ${primaryIntentId}`);
+        generated.push("stakeholder alignment");
+        return dedupeTerms(generated).slice(0, 12);
       }
 
       function generateTermsFromEditorTitle() {
@@ -1234,10 +1332,15 @@
 
         state.catalog = payload.catalog || state.catalog;
         if (normalizeLetter(state.current.letter) === letter) {
-          state.current.letter = "";
-          state.current.title = "";
-          state.current.terms = [];
-          updateHeaderPreview();
+          const fallbackSleeve = findSleeveByLetter(loadLastLoadedSleeve()) || findSleeveByLetter("A");
+          if (fallbackSleeve) {
+            applySleeveToEditor(fallbackSleeve, { silent: true });
+          } else {
+            state.current.letter = "";
+            state.current.title = "";
+            state.current.terms = [];
+            updateHeaderPreview();
+          }
         }
         if (state.editor.mode === "edit" && normalizeLetter(state.editor.letter) === letter) {
           resetDialogEditor("add", null, false);
@@ -1253,6 +1356,26 @@
         if (!res.ok) throw new Error(payload.error || "Could not load sleeves.");
         state.catalog = payload;
         renderLoadDialogList();
+      }
+
+      function selectInitialSleeve() {
+        const rememberedLetter = loadLastLoadedSleeve();
+        const rememberedSleeve = findSleeveByLetter(rememberedLetter);
+        if (rememberedSleeve) {
+          applySleeveToEditor(rememberedSleeve, { silent: true });
+          return rememberedSleeve;
+        }
+        const defaultSleeveA = findSleeveByLetter("A");
+        if (defaultSleeveA) {
+          applySleeveToEditor(defaultSleeveA, { silent: true });
+          return defaultSleeveA;
+        }
+        const firstAvailable = Array.isArray(state.catalog.all) && state.catalog.all.length ? state.catalog.all[0] : null;
+        if (firstAvailable) {
+          applySleeveToEditor(firstAvailable, { silent: true });
+          return firstAvailable;
+        }
+        return null;
       }
 
       async function pollProgress(runId) {
@@ -1350,23 +1473,12 @@
           setDialogNote("Cleared all search terms for this editor.", "info");
         });
         els.scrapeNowBtn.addEventListener("click", () => runScrape());
-        els.headerEditorTrigger.addEventListener("click", async () => {
+        els.changeSleeveBtn.addEventListener("click", async () => {
           try {
             await loadCatalog();
             openHeaderEditor();
           } catch (error) {
             setStatus(error.message || "Could not open sleeve dialog.", "error");
-          }
-        });
-        els.headerEditorTrigger.addEventListener("keydown", async (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            try {
-              await loadCatalog();
-              openHeaderEditor();
-            } catch (error) {
-              setStatus(error.message || "Could not open sleeve dialog.", "error");
-            }
           }
         });
         els.loadDialog.addEventListener("cancel", (event) => {
@@ -1392,7 +1504,18 @@
         updateHeaderPreview();
         try {
           await loadCatalog();
-          setStatus("Catalog loaded. Click the header to set or load a sleeve.", "success");
+          const initialSleeve = selectInitialSleeve();
+          if (initialSleeve) {
+            state.localProgressEvents = [
+              {
+                message: `Loaded Career Sleeve ${initialSleeve.letter}.`,
+                type: "info",
+                ts: new Date().toISOString(),
+              },
+            ];
+            renderEvents();
+          }
+          setStatus("Catalog loaded. Use Change Career Sleeve to switch sleeves.", "success");
         } catch (error) {
           setStatus(error.message || "Could not load sleeve catalog.", "error");
         }
