@@ -976,6 +976,13 @@ def _log_page_metrics(diagnostics, **kwargs):
         )
 
 
+def _progress_from_diagnostics(diagnostics, stage, message, **data):
+    run_id = _clean_value((diagnostics or {}).get("run_id"), "")
+    if not run_id:
+        return
+    _progress_update(run_id, stage, message, **data)
+
+
 def _record_blocked(diagnostics, source):
     diagnostics.setdefault("blocked_detected", {})[source] = True
 
@@ -2255,6 +2262,15 @@ def _fetch_indeed_jobs_direct(
             blocked_in_query = False
             last_response_body = ""
             rss_attempted = False
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-start",
+                f"Indeed: started query '{query}' in {location}",
+                source="Indeed",
+                query=query,
+                location=location,
+                max_pages=int(max_pages),
+            )
 
             if prefer_rss_first:
                 rss_attempted = True
@@ -2314,6 +2330,15 @@ def _fetch_indeed_jobs_direct(
             for page_idx in range(max_pages):
                 start = page_idx * 10
                 params = {"q": query, "l": location, "start": start}
+                _progress_from_diagnostics(
+                    diagnostics,
+                    "page-start",
+                    f"Indeed: requesting page {page_idx + 1} for '{query}' in {location}",
+                    source="Indeed",
+                    query=query,
+                    location=location,
+                    page=int(page_idx + 1),
+                )
                 response, error = _rate_limited_get(
                     session,
                     search_url,
@@ -2515,9 +2540,19 @@ def _fetch_indeed_jobs_direct(
                     no_new_unique_streak += 1
                 else:
                     no_new_unique_streak = 0
-                if cards_found == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
-                    break
+                    if cards_found == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
+                        break
                 if len(seen_unique) >= target_raw:
+                    _progress_from_diagnostics(
+                        diagnostics,
+                        "query-finish",
+                        f"Indeed: target reached for '{query}' in {location}",
+                        source="Indeed",
+                        query=query,
+                        location=location,
+                        new_items=int(len(jobs) - previous_jobs),
+                        blocked=bool(blocked_in_query),
+                    )
                     return jobs, diagnostics
             if len(jobs) == previous_jobs and not rss_attempted:
                 rss_items, rss_error, rss_blocked = _fetch_indeed_rss_fallback(
@@ -2577,6 +2612,16 @@ def _fetch_indeed_jobs_direct(
                         "no-new-items",
                         diagnostics,
                     )
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-finish",
+                f"Indeed: finished query '{query}' in {location} with {len(jobs) - previous_jobs} new items",
+                source="Indeed",
+                query=query,
+                location=location,
+                new_items=int(len(jobs) - previous_jobs),
+                blocked=bool(blocked_in_query),
+            )
     return jobs, diagnostics
 
 
@@ -2618,9 +2663,28 @@ def _fetch_linkedin_jobs_direct(
             previous_jobs = len(jobs)
             no_new_unique_streak = 0
             last_response_body = ""
+            blocked_in_query = False
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-start",
+                f"LinkedIn: started query '{query}' in {location}",
+                source="LinkedIn",
+                query=query,
+                location=location,
+                max_pages=int(max_pages),
+            )
             for page_idx in range(max_pages):
                 start = page_idx * 25
                 params = {"keywords": query, "location": location, "start": start}
+                _progress_from_diagnostics(
+                    diagnostics,
+                    "page-start",
+                    f"LinkedIn: requesting page {page_idx + 1} for '{query}' in {location}",
+                    source="LinkedIn",
+                    query=query,
+                    location=location,
+                    page=int(page_idx + 1),
+                )
                 response, error = _rate_limited_get(
                     session,
                     LINKEDIN_SEARCH_URL,
@@ -2724,6 +2788,7 @@ def _fetch_linkedin_jobs_direct(
 
                     if blocked:
                         _record_blocked(diagnostics, "LinkedIn")
+                        blocked_in_query = True
                         error_count += 1
 
                     fail_rate = (detail_failures / detail_attempts) if detail_attempts else 0.0
@@ -2785,6 +2850,7 @@ def _fetch_linkedin_jobs_direct(
                     )
                     if blocked:
                         _record_blocked(diagnostics, "LinkedIn")
+                        blocked_in_query = True
                     if response is not None:
                         _save_html_snapshot(
                             "LinkedIn",
@@ -2818,6 +2884,16 @@ def _fetch_linkedin_jobs_direct(
                 if cards_found == 0 or no_new_unique_streak >= max(1, int(no_new_unique_pages)):
                     break
                 if len(seen_unique) >= target_raw:
+                    _progress_from_diagnostics(
+                        diagnostics,
+                        "query-finish",
+                        f"LinkedIn: target reached for '{query}' in {location}",
+                        source="LinkedIn",
+                        query=query,
+                        location=location,
+                        new_items=int(len(jobs) - previous_jobs),
+                        blocked=bool(blocked_in_query),
+                    )
                     return jobs, diagnostics
 
             if len(jobs) == previous_jobs:
@@ -2840,6 +2916,16 @@ def _fetch_linkedin_jobs_direct(
                         "no-new-items",
                         diagnostics,
                     )
+            _progress_from_diagnostics(
+                diagnostics,
+                "query-finish",
+                f"LinkedIn: finished query '{query}' in {location} with {len(jobs) - previous_jobs} new items",
+                source="LinkedIn",
+                query=query,
+                location=location,
+                new_items=int(len(jobs) - previous_jobs),
+                blocked=bool(blocked_in_query),
+            )
     return jobs, diagnostics
 
 
@@ -3839,7 +3925,7 @@ def fetch_jobs_from_sources(
         _progress_update(
             run_id,
             "source-start",
-            f"Starting {source_label}",
+            f"Now scraping {source_label}",
             source=source_key,
             label=source_label,
         )
@@ -3864,7 +3950,7 @@ def fetch_jobs_from_sources(
             run_id,
             "source-finish",
             (
-                f"Finished {source_label}: {len(source_items)} items"
+                f"Completed {source_label}: {len(source_items)} items"
                 + (f", error: {source_error}" if source_error else "")
             ),
             source=source_key,
