@@ -150,7 +150,6 @@
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
       background: rgba(var(--black-rgb), 0.14);
-      border-right: 1px solid rgba(var(--white-rgb), 0.28);
       user-select: none;
     }
     .synergy-dialog-option-split-title {
@@ -313,16 +312,18 @@
       flex: 1 1 180px;
     }
     .synergy-dialog-add-trigger {
-      width: 56px;
-      min-width: 56px;
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
       border: none;
-      border-radius: 999px;
-      padding: 8px 10px;
-      color: var(--synergy-amethyst-deep);
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.24), rgba(var(--amethyst-rgb), 0.16));
+      border-radius: 10px;
+      padding: 0;
+      color: rgba(var(--white-rgb), 0.98);
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      box-shadow: inset 0 0 0 999px rgba(var(--black-rgb), 0.14);
       font-family: "Manrope", sans-serif;
       font-weight: 800;
-      font-size: 1.05rem;
+      font-size: 1.2rem;
       line-height: 1;
       text-align: center;
       display: inline-flex;
@@ -330,12 +331,11 @@
       justify-content: center;
       align-self: flex-start;
       cursor: pointer;
-      opacity: 0.92;
+      opacity: 1;
     }
     .synergy-dialog-add-trigger:hover {
-      filter: brightness(0.98);
-      opacity: 1;
-      transform: translateY(-1px);
+      filter: brightness(1.03);
+      transform: none;
     }
     @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
   </style>
