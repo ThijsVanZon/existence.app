@@ -683,14 +683,14 @@
       const latest = events[events.length - 1];
       const recent = events.slice(-7);
       const runningRaw = events
-        .filter(event => String(event?.step || '').toLowerCase() === 'source-finish')
+        .filter(event => String(event?.stage || '').toLowerCase() === 'source-finish')
         .reduce((total, event) => total + Number(event?.item_count || 0), 0);
       const listItems = recent
         .map(event => `<li>${event?.message || ''}</li>`)
         .join('');
       progressDiv.innerHTML = `
         <div class="progress-status">
-          ${status}${updated ? ` • ${updated}` : ''}
+          ${status}${updated ? ` · ${updated}` : ''}
         </div>
         ${buildMetricsMarkup(summary, runningRaw)}
         ${latest?.message ? `<div class="progress-latest">${latest.message}</div>` : ''}
@@ -1419,5 +1419,4 @@
 
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
-
 </html>

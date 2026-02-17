@@ -56,7 +56,7 @@
       background: rgba(var(--amethyst-rgb), 0.2); color: var(--synergy-amethyst-deep); opacity: 1;
       transform: none; transition: background 0.14s ease;
       margin-left: auto;
-      margin-right: 0;
+      margin-right: -1px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -109,6 +109,11 @@
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
       color: var(--ink);
     }
+    .synergy-dialog-search:focus,
+    #dialogTermInput:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 2px rgba(var(--amethyst-rgb), 0.22);
+    }
     .synergy-dialog-group { display: grid; gap: 6px; }
     .synergy-dialog-group-title { font-size: 0.82rem; color: var(--ink-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .synergy-dialog-option { width: 100%; text-align: left; }
@@ -117,6 +122,9 @@
       align-items: center;
       gap: 6px;
     }
+    .synergy-dialog-option-row-active {
+      align-items: stretch;
+    }
     .synergy-dialog-sleeve-block {
       display: grid;
       gap: 8px;
@@ -124,22 +132,84 @@
     .synergy-dialog-option-main {
       flex: 1 1 auto;
     }
+    .synergy-dialog-option-split {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+    .synergy-dialog-option-split-letter {
+      width: 40px;
+      min-width: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: rgba(var(--white-rgb), 0.98);
+      background: rgba(var(--black-rgb), 0.14);
+      border-right: 1px solid rgba(var(--white-rgb), 0.28);
+      user-select: none;
+    }
+    .synergy-dialog-option-split-title {
+      flex: 1 1 auto;
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700;
+    }
+    .synergy-dialog-inline-title-wrap {
+      flex: 1 1 auto;
+      min-height: 38px;
+      display: flex;
+      align-items: stretch;
+      border: none;
+      border-radius: 10px;
+      overflow: hidden;
+      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      cursor: text;
+      transition: filter 0.14s ease, box-shadow 0.14s ease;
+    }
+    .synergy-dialog-inline-title-wrap:hover {
+      filter: brightness(1.02);
+    }
+    .synergy-dialog-inline-title-wrap:focus-within {
+      box-shadow: inset 0 0 0 2px rgba(var(--white-rgb), 0.34);
+    }
+    .synergy-dialog-inline-title-letter {
+      width: 40px;
+      min-width: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: rgba(var(--white-rgb), 0.98);
+      background: rgba(var(--black-rgb), 0.12);
+      border-right: 1px solid rgba(var(--white-rgb), 0.28);
+      user-select: none;
+    }
     .synergy-dialog-inline-title-input {
       flex: 1 1 auto;
       border: none;
-      border-radius: 10px;
+      border-radius: 0;
       padding: 8px 10px;
-      color: rgba(var(--amethyst-rgb), 0.78);
+      color: rgba(var(--white-rgb), 0.88);
       font-weight: 700;
       font-size: 0.92rem;
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.24), rgba(var(--amethyst-rgb), 0.16));
+      background: transparent;
     }
     .synergy-dialog-inline-title-input::placeholder {
-      color: rgba(var(--amethyst-rgb), 0.52);
+      color: rgba(var(--white-rgb), 0.62);
     }
     .synergy-dialog-inline-title-input:focus {
       outline: none;
-      box-shadow: 0 0 0 2px rgba(var(--amethyst-rgb), 0.24);
+      box-shadow: none;
     }
     .synergy-dialog-row-actions {
       display: inline-flex;
@@ -150,15 +220,17 @@
     .synergy-dialog-row-save {
       border: none;
       border-radius: 999px;
-      padding: 6px 12px;
+      width: 62px;
+      min-width: 62px;
+      padding: 6px 0;
       font-size: 0.74rem;
       font-weight: 800;
       color: var(--white);
       background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
       white-space: nowrap;
-      max-width: 300px;
       overflow: hidden;
       text-overflow: ellipsis;
+      text-align: center;
     }
     .synergy-dialog-inline-editor {
       overflow: hidden;
@@ -206,24 +278,24 @@
       display: none;
     }
     .synergy-dialog-custom-note {
-      color: var(--ink-muted);
+      color: var(--synergy-heliodor-deep);
       font-size: 0.8rem;
       font-weight: 600;
       border-radius: 8px;
       padding: 6px 8px;
-      background: rgba(var(--black-rgb), 0.04);
+      background: rgba(var(--heliodor-rgb), 0.22);
     }
     .synergy-dialog-custom-note.is-info {
-      color: var(--ink-muted);
-      background: rgba(var(--black-rgb), 0.04);
+      color: var(--synergy-heliodor-deep);
+      background: rgba(var(--heliodor-rgb), 0.22);
     }
     .synergy-dialog-custom-note.is-success {
       color: var(--synergy-zircon-deep);
-      background: rgba(var(--zircon-rgb), 0.14);
+      background: rgba(var(--zircon-rgb), 0.22);
     }
     .synergy-dialog-custom-note.is-error {
       color: var(--synergy-rubellite-deep);
-      background: rgba(var(--rubellite-rgb), 0.14);
+      background: rgba(var(--rubellite-rgb), 0.18);
     }
     .synergy-term-chip-list {
       display: flex;
@@ -313,10 +385,9 @@
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
-    <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom sleeve.</div>
     <section id="dialogEditorSection" class="synergy-dialog-inline-editor synergy-dialog-custom-create is-hidden">
       <div class="synergy-term-box">
-        <label for="dialogTermInput">Search terms</label>
+        <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom sleeve.</div>
         <div id="dialogTermChipList" class="synergy-term-chip-list"></div>
         <div class="synergy-inline">
           <input id="dialogTermInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
@@ -395,11 +466,7 @@
         return "?";
       };
       const getSaveButtonLabel = () => {
-        const editor = collectEditor();
-        if (editor.mode === "edit" && editor.letter) {
-          return `Save Career Sleeve ${editor.letter} edits`;
-        }
-        return `Save Career Sleeve ${getNextCustomLetter()} as new addition`;
+        return "Save";
       };
       const collectCurrent = () => ({
         letter: normalizeLetter(state.current.letter),
@@ -413,9 +480,10 @@
         terms: dedupeTerms(state.editor.terms),
       });
 
-      function setStatus(msg, type = "info") {
+      function setStatus(msg, type = "info", scope = "ui") {
         const text = String(msg || "").trim();
         if (!text) return;
+        if (scope !== "scrape") return;
         state.localProgressEvents.push({
           message: text,
           type,
@@ -437,6 +505,61 @@
           return;
         }
         els.dialogCustomNote.classList.add("is-info");
+      }
+
+      function createInlineTitleEditor(letterValue, initialTitle, onInput, onSubmit) {
+        const wrap = document.createElement("div");
+        wrap.className = "synergy-dialog-inline-title-wrap";
+
+        const letter = document.createElement("span");
+        letter.className = "synergy-dialog-inline-title-letter";
+        letter.textContent = normalizeLetter(letterValue) || "?";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 120;
+        input.className = "synergy-dialog-inline-title-input";
+        input.value = String(initialTitle || "");
+        input.placeholder = "Type Career Sleeve title...";
+        input.addEventListener("input", () => {
+          onInput(String(input.value || "").slice(0, 120));
+        });
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSubmit();
+          }
+        });
+
+        const focusInput = () => input.focus();
+        wrap.addEventListener("click", focusInput);
+        letter.addEventListener("click", (event) => {
+          event.preventDefault();
+          focusInput();
+        });
+
+        wrap.appendChild(letter);
+        wrap.appendChild(input);
+        return { wrap, input };
+      }
+
+      function createSplitSleeveButton(letterValue, titleValue, onClick) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "synergy-dialog-option synergy-dialog-option-main synergy-dialog-option-split";
+
+        const letter = document.createElement("span");
+        letter.className = "synergy-dialog-option-split-letter";
+        letter.textContent = normalizeLetter(letterValue) || "?";
+
+        const title = document.createElement("span");
+        title.className = "synergy-dialog-option-split-title";
+        title.textContent = String(titleValue || "").trim() || "Untitled sleeve";
+
+        btn.appendChild(letter);
+        btn.appendChild(title);
+        btn.addEventListener("click", onClick);
+        return btn;
       }
 
       function renderDialogTerms() {
@@ -671,14 +794,22 @@
           state.remoteProgressEvents = events.slice();
         }
         els.progressEvents.innerHTML = "";
-        const list = [
+        const combined = [
           ...(state.localProgressEvents || []),
           ...(state.remoteProgressEvents || []),
         ];
+        const list = combined
+          .slice()
+          .sort((a, b) => {
+            const ta = Date.parse(String((a && a.ts) || "")) || 0;
+            const tb = Date.parse(String((b && b.ts) || "")) || 0;
+            return ta - tb;
+          })
+          .slice(-120);
         if (!list.length) {
           const li = document.createElement("li");
           li.className = "synergy-empty";
-          li.textContent = "No events yet.";
+          li.textContent = "Waiting for Career Sleeve selection.";
           els.progressEvents.appendChild(li);
           return;
         }
@@ -814,31 +945,27 @@
                 const isActiveEdit = activeEditorKey === `edit:${normalizeLetter(sleeve.letter)}`;
 
                 if (isActiveEdit) {
-                  const titleInput = document.createElement("input");
-                  titleInput.type = "text";
-                  titleInput.maxLength = 120;
-                  titleInput.className = "synergy-dialog-inline-title-input";
-                  titleInput.value = String(state.editor.title || sleeve.title || "");
-                  titleInput.placeholder = "Type custom sleeve title...";
-                  titleInput.addEventListener("input", () => {
-                    state.editor.title = String(titleInput.value || "").slice(0, 120);
-                  });
-                  titleInput.addEventListener("keydown", (event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
+                  row.classList.add("synergy-dialog-option-row-active");
+                  const { wrap } = createInlineTitleEditor(
+                    sleeve.letter,
+                    state.editor.title || sleeve.title || "",
+                    (value) => {
+                      state.editor.title = value;
+                    },
+                    () => {
                       saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
                     }
-                  });
-                  row.appendChild(titleInput);
+                  );
+                  row.appendChild(wrap);
                 } else {
-                  const btn = document.createElement("button");
-                  btn.type = "button";
-                  btn.className = "synergy-dialog-option synergy-dialog-option-main";
-                  btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
-                  btn.addEventListener("click", () => {
-                    applySleeveToEditor(sleeve);
-                    closeHeaderEditor();
-                  });
+                  const btn = createSplitSleeveButton(
+                    sleeve.letter,
+                    sleeve.title,
+                    () => {
+                      applySleeveToEditor(sleeve);
+                      closeHeaderEditor();
+                    }
+                  );
                   row.appendChild(btn);
                 }
 
@@ -890,14 +1017,14 @@
 
                 wrap.appendChild(sleeveBlock);
               } else {
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "synergy-dialog-option";
-                btn.textContent = `${sleeve.letter} - ${sleeve.title}`;
-                btn.addEventListener("click", () => {
-                  applySleeveToEditor(sleeve);
-                  closeHeaderEditor();
-                });
+                const btn = createSplitSleeveButton(
+                  sleeve.letter,
+                  sleeve.title,
+                  () => {
+                    applySleeveToEditor(sleeve);
+                    closeHeaderEditor();
+                  }
+                );
                 wrap.appendChild(btn);
               }
             });
@@ -910,22 +1037,18 @@
             const isActiveAdd = activeEditorKey === "add";
 
             if (isActiveAdd) {
-              const addInput = document.createElement("input");
-              addInput.type = "text";
-              addInput.maxLength = 120;
-              addInput.className = "synergy-dialog-inline-title-input";
-              addInput.value = String(state.editor.title || "");
-              addInput.placeholder = "Type custom sleeve title...";
-              addInput.addEventListener("input", () => {
-                state.editor.title = String(addInput.value || "").slice(0, 120);
-              });
-              addInput.addEventListener("keydown", (event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
+              addRow.classList.add("synergy-dialog-option-row-active");
+              const { wrap } = createInlineTitleEditor(
+                getNextCustomLetter(),
+                state.editor.title || "",
+                (value) => {
+                  state.editor.title = value;
+                },
+                () => {
                   saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
                 }
-              });
-              addRow.appendChild(addInput);
+              );
+              addRow.appendChild(wrap);
 
               const actions = document.createElement("div");
               actions.className = "synergy-dialog-row-actions";
@@ -1148,8 +1271,8 @@
 
       async function runScrape() {
         const current = collectCurrent();
-        if (!current.letter) return setStatus("Select or save a sleeve before scraping.", "error");
-        if (!current.terms.length) return setStatus("Add at least one search term before scraping.", "error");
+        if (!current.letter) return setStatus("Select or save a Career Sleeve before scraping.", "error", "scrape");
+        if (!current.terms.length) return setStatus("Add at least one search term before scraping.", "error", "scrape");
         const effectiveSleeve = isFixedLetter(current.letter) ? current.letter : "E";
         const runId = `synergy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         renderResults([]);
@@ -1157,7 +1280,11 @@
         state.localProgressEvents = [];
         state.remoteProgressEvents = [];
         renderEvents();
-        setStatus(`Running scrape with sleeve ${current.letter} (mapped to ${effectiveSleeve}).`, "info");
+        setStatus(
+          `Starting scrape for Career Sleeve ${current.letter} (using scoring profile ${effectiveSleeve}).`,
+          "info",
+          "scrape"
+        );
         if (state.progressTimer) clearInterval(state.progressTimer);
         state.progressTimer = setInterval(() => pollProgress(runId), 500);
         pollProgress(runId);
@@ -1179,17 +1306,16 @@
           const payload = await res.json();
           if (!res.ok) {
             if (state.progressTimer) { clearInterval(state.progressTimer); state.progressTimer = null; }
-            setStatus(payload.error || "Scrape failed.", "error");
-            renderEvents([{ message: payload.error || "Scrape failed." }]);
+            setStatus(payload.error || "Scrape failed.", "error", "scrape");
             return;
           }
           renderResults(payload.jobs || []);
           renderMetrics(payload.summary || null);
           const total = Array.isArray(payload.jobs) ? payload.jobs.length : 0;
-          setStatus(`Scrape finished. Returned ${total} jobs.`, "success");
+          setStatus(`Scrape completed. Returned ${total} jobs.`, "success", "scrape");
         } catch (_error) {
           if (state.progressTimer) { clearInterval(state.progressTimer); state.progressTimer = null; }
-          setStatus("Scrape request failed.", "error");
+          setStatus("Scrape request failed.", "error", "scrape");
         } finally {
           setTimeout(() => pollProgress(runId), 350);
         }
@@ -1251,7 +1377,15 @@
       async function init() {
         bindEvents();
         resetDialogEditor("add", null, false);
-        renderEvents([]);
+        state.localProgressEvents = [
+          {
+            message: "Waiting for Career Sleeve selection.",
+            type: "info",
+            ts: new Date().toISOString(),
+          },
+        ];
+        state.remoteProgressEvents = [];
+        renderEvents();
         renderResults([]);
         renderMetrics(null);
         updateHeaderPreview();
@@ -1268,5 +1402,3 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
-
-
