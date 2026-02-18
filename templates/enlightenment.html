@@ -463,6 +463,15 @@
       return badge;
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function isValidHttpUrl(url) {
       const value = String(url || '').trim();
       return /^https?:\/\//i.test(value);
@@ -686,14 +695,17 @@
         .filter(event => String(event?.stage || '').toLowerCase() === 'source-finish')
         .reduce((total, event) => total + Number(event?.item_count || 0), 0);
       const listItems = recent
-        .map(event => `<li>${event?.message || ''}</li>`)
+        .map(event => `<li>${escapeHtml(event?.message || '')}</li>`)
         .join('');
+      const latestMessage = escapeHtml(latest?.message || '');
+      const statusText = escapeHtml(status);
+      const updatedText = escapeHtml(updated);
       progressDiv.innerHTML = `
         <div class="progress-status">
-          ${status}${updated ? ` · ${updated}` : ''}
+          ${statusText}${updated ? ` - ${updatedText}` : ''}
         </div>
         ${buildMetricsMarkup(summary, runningRaw)}
-        ${latest?.message ? `<div class="progress-latest">${latest.message}</div>` : ''}
+        ${latest?.message ? `<div class="progress-latest">${latestMessage}</div>` : ''}
         ${recent.length ? `<ul class="progress-list">${listItems}</ul>` : ''}
       `;
       progressDiv.hidden = false;
@@ -1133,10 +1145,13 @@
           : `${sourceState.toUpperCase()}${sourceCooldown > 0 ? ` (${formatCooldownSeconds(sourceCooldown)})` : ''}`;
         const label = document.createElement('label');
         label.className = 'source-option source-pill';
-        label.innerHTML = `
-          <input type="checkbox" data-source-id="${source.id}" ${checkedByDefault ? 'checked' : ''} ${profile === 'mvp' ? 'disabled' : ''}>
-          ${source.label} - ${sourceStateText}
-        `;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.setAttribute('data-source-id', source.id);
+        input.checked = checkedByDefault;
+        input.disabled = profile === 'mvp';
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(` ${source.label} - ${sourceStateText}`));
         sourceWrap.appendChild(label);
       });
 
@@ -1420,3 +1435,4 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+

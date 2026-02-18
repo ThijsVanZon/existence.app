@@ -4,6 +4,8 @@ from flask import Flask, request, redirect, render_template, url_for, jsonify
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import html
+import ipaddress
 import itertools
 import json
 import math
@@ -31,6 +33,7 @@ CACHE_TTL_SECONDS = 3600
 DEFAULT_COMIC_ID = 3000
 JOBS_CACHE_TTL_SECONDS = 600
 JOBS_CACHE_EMPTY_TTL_SECONDS = 45
+MAX_STALE_CACHE_FALLBACK_SECONDS = 1800
 source_cache = {}
 source_health = {}
 SOURCE_HEALTH_DEFAULT_BLOCK_THRESHOLD = 2
@@ -302,6 +305,8 @@ REQUEST_USER_AGENTS = [
 scrape_progress_state = {}
 scrape_progress_lock = threading.Lock()
 custom_sleeves_lock = threading.Lock()
+source_cache_lock = threading.Lock()
+source_health_lock = threading.Lock()
 
 
 def _normalize_text(*parts):
@@ -463,18 +468,70 @@ def _progress_snapshot(run_id, tail=30):
 
 def _is_absolute_http_url(url):
     parsed = urlparse(_clean_value(url, ""))
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    return (
+        parsed.scheme in {"http", "https"}
+        and bool(parsed.hostname)
+        and not parsed.username
+        and not parsed.password
+    )
 
 
 def _host_for_url(url):
-    return urlparse(_clean_value(url, "")).netloc.lower()
+    return (urlparse(_clean_value(url, "")).hostname or "").lower().rstrip(".")
+
+
+def _is_indeed_host(host):
+    normalized = str(host or "").strip().lower().rstrip(".")
+    return bool(normalized) and (
+        normalized == "indeed.com" or normalized.endswith(".indeed.com")
+    )
+
+
+def _is_linkedin_host(host):
+    normalized = str(host or "").strip().lower().rstrip(".")
+    return bool(normalized) and (
+        normalized == "linkedin.com"
+        or normalized.endswith(".linkedin.com")
+        or normalized == "lnkd.in"
+        or normalized.endswith(".lnkd.in")
+    )
+
+
+def _is_public_hostname(host):
+    normalized = str(host or "").strip().lower().rstrip(".")
+    if not normalized:
+        return False
+    if (
+        normalized == "localhost"
+        or normalized.endswith(".localhost")
+        or normalized.endswith(".local")
+    ):
+        return False
+    try:
+        ip = ipaddress.ip_address(normalized.strip("[]"))
+    except ValueError:
+        return True
+    return bool(getattr(ip, "is_global", False))
+
+
+def _is_public_destination_url(url):
+    if not _is_absolute_http_url(url):
+        return False
+    return _is_public_hostname(_host_for_url(url))
+
+
+def _is_allowed_platform_lookup_url(url):
+    if not _is_absolute_http_url(url):
+        return False
+    host = _host_for_url(url)
+    return _is_indeed_host(host) or _is_linkedin_host(host)
 
 
 def _is_platform_job_host(url):
     host = _host_for_url(url)
     if not host:
         return False
-    return "indeed." in host or "linkedin.com" in host or host.endswith("lnkd.in")
+    return _is_indeed_host(host) or _is_linkedin_host(host)
 
 
 def _ensure_snapshot_dir():
@@ -1241,64 +1298,6 @@ def _context_has_abroad_keywords(raw_text, start, end):
     return any(keyword in context for keyword in _expanded_abroad_percent_context_keywords())
 
 
-def _legacy_extract_abroad_percentage(raw_text):
-    text = str(raw_text or "")
-    if not text:
-        return None, ""
-
-    candidates = []
-    range_spans = []
-    for match in re.finditer(r"(\d{1,3})\s*(?:-|to|â€“|â€”)\s*(\d{1,3})\s*%", text, flags=re.IGNORECASE):
-        start, end = match.span()
-        if not _context_has_abroad_keywords(text, start, end):
-            continue
-        first = int(match.group(1))
-        second = int(match.group(2))
-        low = max(0, min(100, min(first, second)))
-        high = max(0, min(100, max(first, second)))
-        candidates.append((high, f"{low}-{high}%"))
-        range_spans.append((start, end))
-
-    for match in re.finditer(r"(\d{1,3})\s*%", text, flags=re.IGNORECASE):
-        start, end = match.span()
-        if any(start < span_end and end > span_start for span_start, span_end in range_spans):
-            continue
-        if not _context_has_abroad_keywords(text, start, end):
-            continue
-        value = max(0, min(100, int(match.group(1))))
-        candidates.append((value, f"{value}%"))
-
-    if not candidates:
-        return None, ""
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    return candidates[0][0], candidates[0][1]
-
-
-def _legacy_extract_abroad_geo_mentions(raw_text):
-    prepared_text = sleeves.prepare_text(raw_text)
-    geo = {"countries": [], "regions": [], "continents": []}
-    for category in ("countries", "regions", "continents"):
-        for label, aliases in ABROAD_GEO_TERMS.get(category, []):
-            hits = sleeves.find_hits(prepared_text, aliases)
-            if hits and label not in geo[category]:
-                geo[category].append(label)
-    locations = geo["countries"] + geo["regions"] + geo["continents"]
-    return geo, locations
-
-
-def _legacy_extract_abroad_metadata(raw_text):
-    percentage, percentage_text = _legacy_extract_abroad_percentage(raw_text)
-    geo, locations = _legacy_extract_abroad_geo_mentions(raw_text)
-    return {
-        "percentage": percentage,
-        "percentage_text": percentage_text,
-        "countries": geo["countries"],
-        "regions": geo["regions"],
-        "continents": geo["continents"],
-        "locations": locations,
-    }
-
-
 _ABROAD_PERCENT_CONTEXT_CACHE = None
 _ABROAD_CONTEXT_TERMS_CACHE = None
 _ABROAD_GEO_TERMS_CACHE = None
@@ -1669,18 +1668,7 @@ _BILINGUAL_PHRASE_GROUPS = [
 
 
 def _build_bilingual_lookup(groups):
-    lookup = {}
-    for raw_group in groups or []:
-        normalized_group = sorted(
-            {
-                sleeves.normalize_for_match(item)
-                for item in (raw_group or set())
-                if sleeves.normalize_for_match(item)
-            }
-        )
-        for normalized_item in normalized_group:
-            lookup[normalized_item] = normalized_group
-    return lookup
+    return sleeves._build_bilingual_lookup(groups)
 
 
 _BILINGUAL_TOKEN_LOOKUP = _build_bilingual_lookup(_BILINGUAL_TOKEN_GROUPS)
@@ -1842,7 +1830,7 @@ def _looks_like_salary_text(value):
     if not text:
         return False
     pattern = (
-        r"(â‚¬|\$|Â£|Â¥|\beur\b|\busd\b|\bgbp\b|"
+        r"(\u20ac|\$|\u00a3|\u00a5|\beur\b|\busd\b|\bgbp\b|"
         r"\bper\s*(uur|hour|maand|month|jaar|year)\b|"
         r"/\s*(uur|h|maand|month|jaar|yr)|"
         r"\d+\s*-\s*\d+|\d+[.,]?\d*\s*[kK])"
@@ -2275,23 +2263,23 @@ def _extract_external_destination_from_url(url):
                 f"{parsed.scheme or 'https'}://{parsed.netloc}",
                 candidate,
             )
-        if _is_absolute_http_url(candidate) and "indeed." not in _host_for_url(candidate):
+        if _is_public_destination_url(candidate) and not _is_indeed_host(_host_for_url(candidate)):
             return candidate
     return ""
 
 
 def _resolve_external_from_indeed_redirect(url, timeout_seconds=8, max_hops=4, headers=None):
     current = _clean_value(url, "")
-    if not _is_absolute_http_url(current):
+    if not _is_allowed_platform_lookup_url(current) or not _is_indeed_host(_host_for_url(current)):
         return ""
 
     for _ in range(max(1, int(max_hops))):
         direct = _extract_external_destination_from_url(current)
-        if _is_absolute_http_url(direct) and "indeed." not in _host_for_url(direct):
+        if _is_public_destination_url(direct) and not _is_indeed_host(_host_for_url(direct)):
             return direct
 
-        if "indeed." not in _host_for_url(current):
-            return current
+        if not _is_indeed_host(_host_for_url(current)):
+            return current if _is_public_destination_url(current) else ""
 
         try:
             response = requests.get(
@@ -2311,7 +2299,7 @@ def _resolve_external_from_indeed_redirect(url, timeout_seconds=8, max_hops=4, h
             return ""
 
         next_url = requests.compat.urljoin(response.url or current, location)
-        if _is_absolute_http_url(next_url) and "indeed." not in _host_for_url(next_url):
+        if _is_public_destination_url(next_url) and not _is_indeed_host(_host_for_url(next_url)):
             return next_url
         current = next_url
 
@@ -4632,7 +4620,9 @@ def _source_health_status(source_key):
         "next_retry_at": 0,
         "cooldown_seconds_remaining": 0,
     }
-    health = source_health.get(source_key)
+    with source_health_lock:
+        health_raw = source_health.get(source_key)
+        health = dict(health_raw) if isinstance(health_raw, dict) else None
     if not isinstance(health, dict):
         return default_payload
 
@@ -4711,25 +4701,28 @@ def _source_availability_reason(source_key):
 
 
 def _record_source_health(source_key, error):
-    health = source_health.get(
-        source_key,
-        {
-            "failure_streak": 0,
-            "last_failure_at": 0,
-            "last_error": "",
-            "last_error_kind": "",
-        },
-    )
-    if error:
-        health["failure_streak"] = health.get("failure_streak", 0) + 1
-        health["last_failure_at"] = time.time()
-        health["last_error"] = _clean_value(error, "Unknown source error")
-        health["last_error_kind"] = _classify_source_error_kind(error)
-    else:
-        health["failure_streak"] = 0
-        health["last_error"] = ""
-        health["last_error_kind"] = ""
-    source_health[source_key] = health
+    with source_health_lock:
+        health = dict(
+            source_health.get(
+                source_key,
+                {
+                    "failure_streak": 0,
+                    "last_failure_at": 0,
+                    "last_error": "",
+                    "last_error_kind": "",
+                },
+            )
+        )
+        if error:
+            health["failure_streak"] = health.get("failure_streak", 0) + 1
+            health["last_failure_at"] = time.time()
+            health["last_error"] = _clean_value(error, "Unknown source error")
+            health["last_error_kind"] = _classify_source_error_kind(error)
+        else:
+            health["failure_streak"] = 0
+            health["last_error"] = ""
+            health["last_error_kind"] = ""
+        source_health[source_key] = health
 
 
 def _default_sources():
@@ -4816,12 +4809,14 @@ def _fetch_source_with_cache(
         extra_terms=extra_terms,
     )
     now = time.time()
-    cache_entry = source_cache.get(cache_key)
+    with source_cache_lock:
+        cache_entry = source_cache.get(cache_key)
     if cache_entry and not force_refresh:
         has_no_data = not cache_entry.get("items")
         has_error = bool(cache_entry.get("error"))
         ttl = JOBS_CACHE_EMPTY_TTL_SECONDS if (has_no_data or has_error) else JOBS_CACHE_TTL_SECONDS
-        if now - cache_entry["fetched_at"] < ttl:
+        cache_age = now - float(cache_entry.get("fetched_at", 0) or 0)
+        if cache_age < ttl:
             _progress_update(
                 run_id,
                 "source-cache",
@@ -4883,9 +4878,16 @@ def _fetch_source_with_cache(
                 "blocked_detected": False,
             }
         )
+    cache_entry_age = now - float((cache_entry or {}).get("fetched_at", 0) or 0)
+    stale_cache_usable = bool(
+        cache_entry
+        and cache_entry.get("items")
+        and cache_entry_age <= MAX_STALE_CACHE_FALLBACK_SECONDS
+    )
     # If a live refresh/source call fails but we still have previous usable cache,
     # prefer stale data over a full hard-fail in the UI.
-    if error and not items and cache_entry and cache_entry.get("items"):
+    if error and not items and stale_cache_usable:
+        _record_source_health(source_key, error)
         fallback_diag = cache_entry.get("diagnostics") or _new_diagnostics()
         fallback_diag.setdefault("auto_failover", []).append(
             {
@@ -4902,17 +4904,19 @@ def _fetch_source_with_cache(
             fallback="stale_cache",
             item_count=len(cache_entry.get("items") or []),
             error=_clean_value(error, ""),
+            cache_age_seconds=int(cache_entry_age),
         )
         return cache_entry["items"], None, fallback_diag
 
     _record_source_health(source_key, error)
 
-    source_cache[cache_key] = {
-        "items": items,
-        "error": error,
-        "diagnostics": source_diag,
-        "fetched_at": now,
-    }
+    with source_cache_lock:
+        source_cache[cache_key] = {
+            "items": items,
+            "error": error,
+            "diagnostics": source_diag,
+            "fetched_at": now,
+        }
     return items, error, source_diag
 
 
@@ -5367,7 +5371,7 @@ def scrape_progress(run_id):
 @app.route('/company-posting')
 def company_opening():
     def _is_external_company_url(url):
-        return _is_absolute_http_url(url) and not _is_platform_job_host(url)
+        return _is_public_destination_url(url) and not _is_platform_job_host(url)
 
     def _resolve_external_from_candidate(url, allow_network=False):
         candidate = _clean_value(url, "")
@@ -5376,10 +5380,10 @@ def company_opening():
         extracted = _extract_external_destination_from_url(candidate)
         if _is_external_company_url(extracted):
             return extracted
-        if not allow_network or not _is_absolute_http_url(candidate):
+        if not allow_network or not _is_allowed_platform_lookup_url(candidate):
             return ""
         host = _host_for_url(candidate)
-        if "indeed." in host:
+        if _is_indeed_host(host):
             resolved = _resolve_external_from_indeed_redirect(
                 candidate,
                 timeout_seconds=10,
@@ -5388,7 +5392,7 @@ def company_opening():
             )
             if _is_external_company_url(resolved):
                 return resolved
-        if "linkedin.com" in host or host.endswith("lnkd.in"):
+        if _is_linkedin_host(host):
             try:
                 response = requests.get(
                     candidate,
@@ -5415,7 +5419,8 @@ def company_opening():
         )
         if accepts_json:
             return jsonify(payload), status
-        html = (
+        safe_message = html.escape(_clean_value(message, "Unknown error"), quote=True)
+        html_body = (
             "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
             "<title>Company Opening Error</title>"
@@ -5425,12 +5430,12 @@ def company_opening():
             "h1{margin:0 0 8px;font-size:1.2rem}p{margin:0 0 10px;line-height:1.4}"
             "code{background:#f0f0f0;padding:2px 6px;border-radius:6px}</style></head>"
             "<body><main class='card'><h1>Company opening URL not found</h1>"
-            f"<p>{message}</p>"
+            f"<p>{safe_message}</p>"
             "<p>The scraper tried redirect parsing and detail-page extraction, but no external company URL was resolved.</p>"
             "<p>Tip: open <code>Indeed URL</code> or <code>LinkedIn URL</code> and apply from there if needed.</p>"
             "</main></body></html>"
         )
-        return html, status, {"Content-Type": "text/html; charset=utf-8"}
+        return html_body, status, {"Content-Type": "text/html; charset=utf-8"}
 
     company_url = _clean_value(request.args.get("company_url"), "")
     indeed_url = _clean_value(request.args.get("indeed_url"), "")
@@ -5446,44 +5451,17 @@ def company_opening():
         return redirect(resolved_from_job, code=302)
 
     attempted_sources = []
-    if _is_absolute_http_url(indeed_url):
+    if _is_allowed_platform_lookup_url(indeed_url):
         attempted_sources.append("Indeed")
         extracted = _resolve_external_from_candidate(indeed_url, allow_network=True)
         if extracted:
             return redirect(extracted, code=302)
 
-    if _is_absolute_http_url(linkedin_url):
+    if _is_allowed_platform_lookup_url(linkedin_url):
         attempted_sources.append("LinkedIn")
         extracted = _resolve_external_from_candidate(linkedin_url, allow_network=True)
         if extracted:
             return redirect(extracted, code=302)
-        try:
-            response = requests.get(
-                linkedin_url,
-                headers=_source_headers("LinkedIn", "nl_only"),
-                timeout=10,
-            )
-            if response.ok:
-                detail_links = _extract_linkedin_links_from_detail(response.text, response.url or linkedin_url)
-                extracted_company = _clean_value(detail_links.get("company_url"), "")
-                if _is_external_company_url(extracted_company):
-                    return redirect(extracted_company, code=302)
-                extracted_linkedin_from_detail = _resolve_external_from_candidate(
-                    detail_links.get("linkedin_url") or "",
-                    allow_network=True,
-                )
-                if extracted_linkedin_from_detail:
-                    return redirect(extracted_linkedin_from_detail, code=302)
-        except requests.RequestException as exc:
-            return _error_response(
-                f"Could not resolve company URL from LinkedIn page ({_clean_value(exc, 'request_failed')}).",
-                status=424,
-            )
-
-        return _error_response(
-            "Could not resolve company URL from LinkedIn page after all extraction steps.",
-            status=424,
-        )
 
     if attempted_sources:
         return _error_response(
@@ -5851,4 +5829,5 @@ def scrape():
 if __name__ == '__main__':
     port = int(os.getenv("PORT", "8080"))
     app.run(host='0.0.0.0', port=port, threaded=True)
+
 

@@ -1,6 +1,8 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import main
 
@@ -8,8 +10,10 @@ import main
 class TestScrapeEndpoint(unittest.TestCase):
     def setUp(self):
         self.client = main.app.test_client()
-        main.source_health.clear()
-        main.source_cache.clear()
+        with main.source_health_lock:
+            main.source_health.clear()
+        with main.source_cache_lock:
+            main.source_cache.clear()
 
     def test_summary_uses_total_pages_attempted_per_source(self):
         original_fetch = main.fetch_jobs_from_sources
@@ -248,6 +252,232 @@ class TestScrapeEndpoint(unittest.TestCase):
                 self.assertEqual(second_skipped, 2)
         finally:
             main.SEEN_JOBS_STATE_PATH = original_state_path
+
+    def test_company_opening_redirects_direct_company_url(self):
+        response = self.client.get(
+            "/company-opening?company_url=https://careers.example.com/openings"
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers.get("Location"),
+            "https://careers.example.com/openings",
+        )
+
+    def test_company_opening_resolves_indeed_redirect_query_url(self):
+        response = self.client.get(
+            "/company-opening?indeed_url=https://nl.indeed.com/rc/clk?dest=https%3A%2F%2Fcareers.example.com%2Fjobs"
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers.get("Location"),
+            "https://careers.example.com/jobs",
+        )
+
+    def test_company_opening_resolves_linkedin_detail_page_to_company_url(self):
+        class FakeResponse:
+            ok = True
+            status_code = 200
+            text = (
+                "<html><body>"
+                "<a href='https://careers.example.com/jobs/apply'>"
+                "Apply on company website"
+                "</a>"
+                "</body></html>"
+            )
+            url = "https://www.linkedin.com/jobs/view/123"
+            headers = {}
+
+        with patch("main.requests.get", return_value=FakeResponse()) as mocked_get:
+            response = self.client.get(
+                "/company-opening?linkedin_url=https://www.linkedin.com/jobs/view/123"
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers.get("Location"),
+            "https://careers.example.com/jobs/apply",
+        )
+        mocked_get.assert_called_once()
+
+    def test_company_opening_rejects_userinfo_host_confusion(self):
+        with patch("main.requests.get") as mocked_get:
+            response = self.client.get(
+                "/company-opening?linkedin_url=https://linkedin.com@127.0.0.1/private&format=json"
+            )
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json() or {}
+        self.assertEqual(payload.get("code"), "company_opening_unresolved")
+        self.assertIn("Missing usable URL inputs", payload.get("error", ""))
+        mocked_get.assert_not_called()
+
+    def test_fetch_source_stale_cache_fallback_is_age_limited(self):
+        source_key = "indeed_web"
+        original_fetcher = main.SOURCE_REGISTRY[source_key]["fetcher"]
+        original_max_stale = main.MAX_STALE_CACHE_FALLBACK_SECONDS
+        try:
+            def seed_fetcher(*args, **kwargs):
+                diagnostics = kwargs.get("diagnostics") or main._new_diagnostics()
+                diagnostics["source_query_summary"] = {
+                    "Indeed|seed|Netherlands": {
+                        "source": "Indeed",
+                        "query": "seed",
+                        "location": "Netherlands",
+                        "pages_attempted": 1,
+                        "raw_count": 1,
+                        "parsed_count": 1,
+                        "new_unique_count": 1,
+                        "detailpages_fetched": 0,
+                        "full_description_count": 0,
+                        "error_count": 0,
+                        "blocked_detected": False,
+                    }
+                }
+                return (
+                    [
+                        {
+                            "title": "Seed",
+                            "company": "Cache Co",
+                            "location": "Amsterdam",
+                            "link": "https://example.com/seed",
+                            "source": "Indeed",
+                        }
+                    ],
+                    diagnostics,
+                )
+
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = seed_fetcher
+            main.MAX_STALE_CACHE_FALLBACK_SECONDS = 30
+
+            seed_items, seed_error, _ = main._fetch_source_with_cache(
+                source_key,
+                sleeve_key="A",
+                location_mode="nl_only",
+                force_refresh=True,
+                max_pages=1,
+                target_raw=10,
+                no_new_unique_pages=1,
+            )
+            self.assertEqual(len(seed_items), 1)
+            self.assertIsNone(seed_error)
+
+            cache_key = main._cache_key_for(
+                source_key,
+                "A",
+                "nl_only",
+                1,
+                10,
+                1,
+                query_terms=None,
+                extra_terms=None,
+            )
+            with main.source_cache_lock:
+                main.source_cache[cache_key]["fetched_at"] = time.time() - 120
+
+            def failing_fetcher(*args, **kwargs):
+                raise RuntimeError("fetch_failed")
+
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = failing_fetcher
+
+            items, error, _ = main._fetch_source_with_cache(
+                source_key,
+                sleeve_key="A",
+                location_mode="nl_only",
+                force_refresh=True,
+                max_pages=1,
+                target_raw=10,
+                no_new_unique_pages=1,
+            )
+            self.assertEqual(items, [])
+            self.assertIn("fetch_failed", str(error))
+        finally:
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = original_fetcher
+            main.MAX_STALE_CACHE_FALLBACK_SECONDS = original_max_stale
+
+    def test_fetch_source_recent_stale_cache_fallback_updates_health(self):
+        source_key = "indeed_web"
+        original_fetcher = main.SOURCE_REGISTRY[source_key]["fetcher"]
+        original_max_stale = main.MAX_STALE_CACHE_FALLBACK_SECONDS
+        try:
+            def seed_fetcher(*args, **kwargs):
+                diagnostics = kwargs.get("diagnostics") or main._new_diagnostics()
+                diagnostics["source_query_summary"] = {
+                    "Indeed|seed|Netherlands": {
+                        "source": "Indeed",
+                        "query": "seed",
+                        "location": "Netherlands",
+                        "pages_attempted": 1,
+                        "raw_count": 1,
+                        "parsed_count": 1,
+                        "new_unique_count": 1,
+                        "detailpages_fetched": 0,
+                        "full_description_count": 0,
+                        "error_count": 0,
+                        "blocked_detected": False,
+                    }
+                }
+                return (
+                    [
+                        {
+                            "title": "Seed",
+                            "company": "Cache Co",
+                            "location": "Amsterdam",
+                            "link": "https://example.com/seed",
+                            "source": "Indeed",
+                        }
+                    ],
+                    diagnostics,
+                )
+
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = seed_fetcher
+            main.MAX_STALE_CACHE_FALLBACK_SECONDS = 300
+
+            seed_items, seed_error, _ = main._fetch_source_with_cache(
+                source_key,
+                sleeve_key="A",
+                location_mode="nl_only",
+                force_refresh=True,
+                max_pages=1,
+                target_raw=10,
+                no_new_unique_pages=1,
+            )
+            self.assertEqual(len(seed_items), 1)
+            self.assertIsNone(seed_error)
+
+            cache_key = main._cache_key_for(
+                source_key,
+                "A",
+                "nl_only",
+                1,
+                10,
+                1,
+                query_terms=None,
+                extra_terms=None,
+            )
+            with main.source_cache_lock:
+                main.source_cache[cache_key]["fetched_at"] = time.time() - 5
+
+            def failing_fetcher(*args, **kwargs):
+                raise RuntimeError("fetch_failed")
+
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = failing_fetcher
+
+            items, error, _ = main._fetch_source_with_cache(
+                source_key,
+                sleeve_key="A",
+                location_mode="nl_only",
+                force_refresh=True,
+                max_pages=1,
+                target_raw=10,
+                no_new_unique_pages=1,
+            )
+            self.assertEqual(len(items), 1)
+            self.assertIsNone(error)
+            status = main._source_health_status(source_key)
+            self.assertGreaterEqual(int(status.get("failure_streak", 0)), 1)
+            self.assertIn("fetch_failed", status.get("last_error", ""))
+        finally:
+            main.SOURCE_REGISTRY[source_key]["fetcher"] = original_fetcher
+            main.MAX_STALE_CACHE_FALLBACK_SECONDS = original_max_stale
 
     def test_scrape_defaults_failover_off_when_sources_are_explicit(self):
         original_fetch = main.fetch_jobs_from_sources
