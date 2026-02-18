@@ -210,6 +210,7 @@
       border-radius: 10px;
       user-select: none;
       z-index: 2;
+      transform: translateY(1px);
     }
     .synergy-dialog-inline-title-input {
       flex: 1 1 auto;
@@ -354,20 +355,29 @@
       cursor: pointer;
       opacity: 1;
     }
-    .synergy-dialog-icon-trigger:hover,
-    .synergy-dialog-add-trigger:hover,
-    .synergy-dialog-close-trigger:hover {
+    .synergy-dialog-icon-trigger:hover {
       filter: brightness(0.92);
+      transform: none;
+    }
+    .synergy-dialog-add-trigger {
+      font-size: 1.18rem;
+      background: rgb(var(--amethyst-rgb));
+    }
+    .synergy-dialog-add-trigger:hover {
+      background: rgb(var(--amethyst-rgb));
+      filter: brightness(0.9);
       transform: none;
     }
     .synergy-dialog-close-trigger {
       margin-left: auto;
       background: rgba(var(--rubellite-rgb), 0.9);
       color: rgba(var(--white-rgb), 0.98);
+      font-size: 1.18rem;
     }
     .synergy-dialog-close-trigger:hover {
-      background: rgba(var(--rubellite-rgb), 0.96);
-      filter: none;
+      background: rgba(var(--rubellite-rgb), 0.9);
+      filter: brightness(0.9);
+      transform: none;
     }
     .synergy-location-grid {
       display: grid;
