@@ -532,7 +532,7 @@ SLEEVE_CONFIG = {
         },
     },
     "D": {
-        "name": "Supply Chains & Ecosystems",
+        "name": "Value Chains & Ecosystems",
         "tagline": "Operations roles where cross-site flow, vendor ecosystems, and delivery reliability need structured execution.",
         "must_haves": {
             "min_title_hits": 1,
