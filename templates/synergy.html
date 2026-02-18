@@ -87,7 +87,7 @@
       box-shadow: 0 20px 44px rgba(var(--black-rgb), 0.24);
     }
     .synergy-dialog::backdrop { background: rgba(var(--black-rgb), 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-    .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .synergy-dialog-header h3 { margin: 0; font-size: 1.05rem; }
     .synergy-dialog-list { display: grid; gap: 10px; max-height: 56vh; overflow-y: auto; padding-right: 2px; }
     .synergy-dialog-search {
@@ -95,7 +95,9 @@
       border: none;
       border-radius: 10px;
       padding: 8px 10px;
-      margin-bottom: 8px;
+      margin-bottom: 0;
+      flex: 1 1 auto;
+      min-width: 0;
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
       color: var(--ink);
     }
@@ -141,8 +143,9 @@
       font-size: 0.86rem;
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--amethyst-rgb), 0.9);
+      background: linear-gradient(145deg, rgba(var(--amethyst-rgb), 0.98), rgba(var(--amethyst-rgb), 0.84));
       border-radius: 10px 0 0 10px;
+      box-shadow: inset -1px 0 0 rgba(var(--white-rgb), 0.14);
       user-select: none;
       z-index: 1;
     }
@@ -189,8 +192,9 @@
       font-size: 0.86rem;
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--amethyst-rgb), 0.9);
+      background: linear-gradient(145deg, rgba(var(--amethyst-rgb), 0.98), rgba(var(--amethyst-rgb), 0.84));
       border-radius: 10px 0 0 10px;
+      box-shadow: inset -1px 0 0 rgba(var(--white-rgb), 0.14);
       user-select: none;
       z-index: 1;
     }
@@ -344,6 +348,12 @@
     }
     .synergy-dialog-close-trigger {
       margin-left: auto;
+      background: rgba(var(--rubellite-rgb), 0.9);
+      color: rgba(var(--white-rgb), 0.98);
+    }
+    .synergy-dialog-close-trigger:hover {
+      background: rgba(var(--rubellite-rgb), 0.96);
+      filter: none;
     }
     .synergy-location-grid {
       display: grid;
@@ -419,7 +429,7 @@
 
   <dialog id="loadDialog" class="synergy-dialog">
     <div class="synergy-dialog-header">
-      <h3>Set sleeve letter and title</h3>
+      <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
       <button
         id="closeLoadDialogBtn"
         class="synergy-dialog-icon-trigger synergy-dialog-close-trigger"
@@ -428,7 +438,6 @@
         title="Close"
       >&times;</button>
     </div>
-    <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
     <section id="dialogEditorSection" class="synergy-dialog-inline-editor synergy-dialog-custom-create is-hidden">
       <div class="synergy-term-box">
