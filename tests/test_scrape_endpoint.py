@@ -339,6 +339,111 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
+    def test_scrape_default_variant_uses_parallel_mvp_bundle(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            captured = {
+                "selected_sources": None,
+                "enforce_mvp_bundle": None,
+                "parallel_fetch": None,
+            }
+
+            def fake_fetch(*args, **kwargs):
+                captured["selected_sources"] = list(args[0]) if args else []
+                captured["enforce_mvp_bundle"] = kwargs.get("enforce_mvp_bundle")
+                captured["parallel_fetch"] = kwargs.get("parallel_fetch")
+                return [], [], ["indeed_web", "linkedin_web", "nl_web_openings"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get("/scrape?sleeve=A")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json() or {}
+            summary = payload.get("summary") or {}
+            self.assertEqual(summary.get("scrape_variant"), "default")
+            self.assertEqual(
+                captured["selected_sources"],
+                ["indeed_web", "linkedin_web", "nl_web_openings"],
+            )
+            self.assertTrue(captured["enforce_mvp_bundle"])
+            self.assertTrue(captured["parallel_fetch"])
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
+    def test_scrape_ultra_fast_variant_uses_linkedin_only(self):
+        original_fetch = main.fetch_jobs_from_sources
+        original_rank = main.rank_and_filter_jobs
+        try:
+            captured = {
+                "selected_sources": None,
+                "enforce_mvp_bundle": None,
+                "parallel_fetch": None,
+                "max_pages": None,
+                "target_raw": None,
+            }
+
+            def fake_fetch(*args, **kwargs):
+                captured["selected_sources"] = list(args[0]) if args else []
+                captured["enforce_mvp_bundle"] = kwargs.get("enforce_mvp_bundle")
+                captured["parallel_fetch"] = kwargs.get("parallel_fetch")
+                captured["max_pages"] = kwargs.get("max_pages")
+                captured["target_raw"] = kwargs.get("target_raw")
+                return [], [], ["linkedin_web"], main._new_diagnostics()
+
+            def fake_rank(*args, **kwargs):
+                return {
+                    "jobs": [],
+                    "funnel": {
+                        "raw": 0,
+                        "after_dedupe": 0,
+                        "pass_count": 0,
+                        "maybe_count": 0,
+                        "fail_count": 0,
+                        "full_description_count": 0,
+                        "full_description_coverage": 0.0,
+                        "top_fail_reasons": [],
+                    },
+                    "top_fail_reasons": [],
+                    "fallbacks_applied": [],
+                }
+
+            main.fetch_jobs_from_sources = fake_fetch
+            main.rank_and_filter_jobs = fake_rank
+
+            response = self.client.get("/scrape?sleeve=A&scrape_variant=ultra_fast&max_pages=8&target_raw=200")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json() or {}
+            summary = payload.get("summary") or {}
+            self.assertEqual(summary.get("scrape_variant"), "ultra_fast")
+            self.assertEqual(captured["selected_sources"], ["linkedin_web"])
+            self.assertFalse(captured["enforce_mvp_bundle"])
+            self.assertFalse(captured["parallel_fetch"])
+            self.assertLessEqual(int(captured["max_pages"]), 2)
+            self.assertLessEqual(int(captured["target_raw"]), 90)
+        finally:
+            main.fetch_jobs_from_sources = original_fetch
+            main.rank_and_filter_jobs = original_rank
+
     def test_scrape_passes_query_terms(self):
         original_fetch = main.fetch_jobs_from_sources
         original_rank = main.rank_and_filter_jobs

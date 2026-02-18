@@ -35,18 +35,18 @@
       background: linear-gradient(140deg, rgba(var(--amethyst-rgb), 0.06), rgba(var(--white-rgb), 0.45));
     }
     .synergy-term-chip {
-      display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
-      padding: 4px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--synergy-amethyst-deep);
+      display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
+      padding: 4px 6px 4px 4px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--synergy-amethyst-deep);
       font-size: 0.8rem; font-weight: 600; white-space: nowrap;
     }
-    .synergy-term-chip-label { margin-right: 2px; padding-left: 5px; }
+    .synergy-term-chip-label { margin-right: 0; padding-left: 6px; }
     .synergy-term-chip button {
       border: none; border-radius: 999px; width: 18px; height: 18px; min-width: 18px;
       padding: 0; margin: 0; font-size: 0.8rem; line-height: 1;
       background: rgba(var(--amethyst-rgb), 0.2); color: var(--synergy-amethyst-deep); opacity: 1;
       transform: none; transition: background 0.14s ease;
-      margin-left: auto;
-      margin-right: -1px;
+      margin-left: 0;
+      margin-right: 1px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -82,7 +82,7 @@
       justify-content: flex-start;
     }
     .synergy-dialog {
-      border: none; border-radius: 14px; padding: 14px; width: min(680px, calc(100vw - 28px));
+      border: none; border-radius: 20px; padding: 15px; width: min(680px, calc(100vw - 28px));
       background: linear-gradient(145deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.82));
       box-shadow: 0 20px 44px rgba(var(--black-rgb), 0.24);
     }
@@ -125,10 +125,10 @@
     .synergy-dialog-option-split {
       display: flex;
       align-items: stretch;
-      gap: 6px;
+      gap: 0;
       padding: 0;
-      overflow: visible;
-      border-radius: 0;
+      overflow: hidden;
+      border-radius: 10px;
       min-height: 36px;
       background: transparent;
     }
@@ -142,8 +142,9 @@
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
       background: rgba(var(--amethyst-rgb), 0.9);
-      border-radius: 10px;
+      border-radius: 10px 0 0 10px;
       user-select: none;
+      z-index: 1;
     }
     .synergy-dialog-option-split-title {
       flex: 1 1 auto;
@@ -157,7 +158,7 @@
       font-size: 0.88rem;
       color: rgba(var(--white-rgb), 0.9);
       min-height: 36px;
-      border-radius: 10px;
+      border-radius: 0 10px 10px 0;
       background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
     }
     .synergy-dialog-inline-title-wrap {
@@ -165,10 +166,10 @@
       min-height: 36px;
       display: flex;
       align-items: stretch;
-      gap: 6px;
+      gap: 0;
       border: none;
-      border-radius: 0;
-      overflow: visible;
+      border-radius: 10px;
+      overflow: hidden;
       background: transparent;
       cursor: text;
       transition: filter 0.14s ease, box-shadow 0.14s ease;
@@ -189,13 +190,14 @@
       font-weight: 800;
       color: rgba(var(--white-rgb), 0.98);
       background: rgba(var(--amethyst-rgb), 0.9);
-      border-radius: 10px;
+      border-radius: 10px 0 0 10px;
       user-select: none;
+      z-index: 1;
     }
     .synergy-dialog-inline-title-input {
       flex: 1 1 auto;
       border: none;
-      border-radius: 10px;
+      border-radius: 0 10px 10px 0;
       min-height: 36px;
       padding: 0 10px;
       color: rgba(var(--white-rgb), 0.9);
@@ -311,7 +313,9 @@
     .synergy-dialog-editor-actions button {
       flex: 1 1 180px;
     }
-    .synergy-dialog-add-trigger {
+    .synergy-dialog-icon-trigger,
+    .synergy-dialog-add-trigger,
+    .synergy-dialog-close-trigger {
       width: 36px;
       height: 36px;
       min-width: 36px;
@@ -332,11 +336,47 @@
       cursor: pointer;
       opacity: 1;
     }
-    .synergy-dialog-add-trigger:hover {
-      filter: brightness(1.03);
+    .synergy-dialog-icon-trigger:hover,
+    .synergy-dialog-add-trigger:hover,
+    .synergy-dialog-close-trigger:hover {
+      filter: brightness(0.92);
       transform: none;
     }
-    @media (max-width: 720px) { .synergy-editor-grid { grid-template-columns: 1fr; } .synergy-shell { margin-top: 12px; } }
+    .synergy-dialog-close-trigger {
+      margin-left: auto;
+    }
+    .synergy-location-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .synergy-location-grid input {
+      width: 100%;
+    }
+    .synergy-location-range {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .synergy-field-stack {
+      display: grid;
+      gap: 4px;
+    }
+    .synergy-field-stack label {
+      font-size: 0.76rem;
+      color: var(--ink-muted);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    @media (max-width: 720px) {
+      .synergy-editor-grid { grid-template-columns: 1fr; }
+      .synergy-shell { margin-top: 12px; }
+      .synergy-location-grid,
+      .synergy-location-range { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -361,6 +401,7 @@
       <div class="synergy-column-actions">
         <button id="changeSleeveBtn" type="button">Change Career Sleeve</button>
         <button id="scrapeNowBtn" type="button">Scrape Job Openings</button>
+        <button id="scrapeUltraFastBtn" type="button">Scrape Ultra Fast</button>
       </div>
 
       <section class="synergy-progress">
@@ -379,7 +420,13 @@
   <dialog id="loadDialog" class="synergy-dialog">
     <div class="synergy-dialog-header">
       <h3>Set sleeve letter and title</h3>
-      <button id="closeLoadDialogBtn" type="button">Close</button>
+      <button
+        id="closeLoadDialogBtn"
+        class="synergy-dialog-icon-trigger synergy-dialog-close-trigger"
+        type="button"
+        aria-label="Close sleeve editor"
+        title="Close"
+      >&times;</button>
     </div>
     <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
     <div id="loadDialogList" class="synergy-dialog-list"></div>
@@ -389,6 +436,26 @@
         <div id="dialogTermChipList" class="synergy-term-chip-list"></div>
         <div class="synergy-inline">
           <input id="dialogTermInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
+        </div>
+        <div class="synergy-location-grid">
+          <div class="synergy-field-stack">
+            <label for="dialogCountriesInput">Preferred Countries</label>
+            <input id="dialogCountriesInput" type="text" autocomplete="off" placeholder="e.g. Germany, Spain, Japan">
+          </div>
+          <div class="synergy-field-stack">
+            <label for="dialogRegionsInput">Preferred Regions</label>
+            <input id="dialogRegionsInput" type="text" autocomplete="off" placeholder="e.g. EMEA, APAC, LATAM">
+          </div>
+        </div>
+        <div class="synergy-location-range">
+          <div class="synergy-field-stack">
+            <label for="dialogAbroadMinInput">Abroad % Min</label>
+            <input id="dialogAbroadMinInput" type="number" min="0" max="100" step="1" placeholder="0">
+          </div>
+          <div class="synergy-field-stack">
+            <label for="dialogAbroadMaxInput">Abroad % Max</label>
+            <input id="dialogAbroadMaxInput" type="number" min="0" max="100" step="1" placeholder="100">
+          </div>
         </div>
         <div class="synergy-dialog-editor-actions">
           <button id="dialogAddTermBtn" type="button">Add term</button>
@@ -403,17 +470,31 @@
     (() => {
       const state = {
         catalog: { fixed: [], custom: [], all: [] },
-        current: { letter: "", title: "", terms: [] },
-        editor: { mode: "add", letter: "", title: "", terms: [], anchor: "" },
+        current: {
+          letter: "",
+          title: "",
+          terms: [],
+          location_preferences: { countries: [], regions: [], abroad_min_percent: 0, abroad_max_percent: 100 },
+        },
+        editor: {
+          mode: "add",
+          letter: "",
+          title: "",
+          terms: [],
+          location_preferences: { countries: [], regions: [], abroad_min_percent: 0, abroad_max_percent: 100 },
+          anchor: "",
+        },
         editorVisible: false,
         progressTimer: null,
         loadFilter: "",
         localProgressEvents: [],
         remoteProgressEvents: [],
+        scrapeBusy: false,
       };
       const els = {
         changeSleeveBtn: document.getElementById("changeSleeveBtn"),
         scrapeNowBtn: document.getElementById("scrapeNowBtn"),
+        scrapeUltraFastBtn: document.getElementById("scrapeUltraFastBtn"),
         metricBadges: document.getElementById("metricBadges"),
         progressEvents: document.getElementById("progressEvents"),
         resultList: document.getElementById("resultList"),
@@ -430,6 +511,10 @@
         dialogGenerateTermsBtn: document.getElementById("dialogGenerateTermsBtn"),
         dialogClearTermsBtn: document.getElementById("dialogClearTermsBtn"),
         dialogCustomNote: document.getElementById("dialogCustomNote"),
+        dialogCountriesInput: document.getElementById("dialogCountriesInput"),
+        dialogRegionsInput: document.getElementById("dialogRegionsInput"),
+        dialogAbroadMinInput: document.getElementById("dialogAbroadMinInput"),
+        dialogAbroadMaxInput: document.getElementById("dialogAbroadMaxInput"),
       };
 
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
@@ -449,6 +534,38 @@
         });
         return out;
       };
+      const parseCommaList = (value) =>
+        dedupeTerms(
+          String(value || "")
+            .split(/[,;\n\r|]+/g)
+            .map((part) => String(part || "").trim())
+            .filter(Boolean)
+        );
+      const clampPercent = (value, fallback) => {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return fallback;
+        const rounded = Math.round(numeric);
+        return Math.max(0, Math.min(100, rounded));
+      };
+      const defaultLocationPreferences = () => ({
+        countries: [],
+        regions: [],
+        abroad_min_percent: 0,
+        abroad_max_percent: 100,
+      });
+      const normalizeLocationPreferences = (raw) => {
+        const source = raw && typeof raw === "object" ? raw : {};
+        const normalized = defaultLocationPreferences();
+        normalized.countries = dedupeTerms(source.countries || []);
+        normalized.regions = dedupeTerms(source.regions || []);
+        normalized.abroad_min_percent = clampPercent(source.abroad_min_percent, 0);
+        normalized.abroad_max_percent = clampPercent(source.abroad_max_percent, 100);
+        if (normalized.abroad_max_percent < normalized.abroad_min_percent) {
+          normalized.abroad_max_percent = normalized.abroad_min_percent;
+        }
+        return normalized;
+      };
+      const formatLocationList = (arr) => dedupeTerms(arr || []).join(", ");
       const persistLastLoadedSleeve = (letter) => {
         const normalized = normalizeLetter(letter);
         if (!normalized) return;
@@ -487,12 +604,14 @@
         letter: normalizeLetter(state.current.letter),
         title: String(state.current.title || "").trim(),
         terms: dedupeTerms(state.current.terms),
+        location_preferences: normalizeLocationPreferences(state.current.location_preferences),
       });
       const collectEditor = () => ({
         mode: state.editor.mode === "edit" ? "edit" : "add",
         letter: normalizeLetter(state.editor.letter),
         title: String(state.editor.title || "").trim(),
         terms: dedupeTerms(state.editor.terms),
+        location_preferences: normalizeLocationPreferences(state.editor.location_preferences),
       });
 
       function setStatus(msg, type = "info", scope = "ui") {
@@ -608,6 +727,39 @@
         });
       }
 
+      function syncDialogLocationInputs() {
+        const prefs = normalizeLocationPreferences(state.editor.location_preferences);
+        if (els.dialogCountriesInput) {
+          els.dialogCountriesInput.value = formatLocationList(prefs.countries);
+        }
+        if (els.dialogRegionsInput) {
+          els.dialogRegionsInput.value = formatLocationList(prefs.regions);
+        }
+        if (els.dialogAbroadMinInput) {
+          els.dialogAbroadMinInput.value = String(prefs.abroad_min_percent);
+        }
+        if (els.dialogAbroadMaxInput) {
+          els.dialogAbroadMaxInput.value = String(prefs.abroad_max_percent);
+        }
+      }
+
+      function setEditorLocationPreferencesFromInputs() {
+        const nextPrefs = normalizeLocationPreferences({
+          countries: parseCommaList(els.dialogCountriesInput ? els.dialogCountriesInput.value : ""),
+          regions: parseCommaList(els.dialogRegionsInput ? els.dialogRegionsInput.value : ""),
+          abroad_min_percent: clampPercent(
+            els.dialogAbroadMinInput ? els.dialogAbroadMinInput.value : 0,
+            0
+          ),
+          abroad_max_percent: clampPercent(
+            els.dialogAbroadMaxInput ? els.dialogAbroadMaxInput.value : 100,
+            100
+          ),
+        });
+        state.editor.location_preferences = nextPrefs;
+        syncDialogLocationInputs();
+      }
+
       function openHeaderEditor() {
         state.loadFilter = "";
         if (els.loadDialogSearch) {
@@ -657,6 +809,7 @@
         state.current.letter = normalizeLetter(sleeve.letter || "");
         state.current.title = String(sleeve.title || "");
         state.current.terms = dedupeTerms(sleeve.terms || []);
+        state.current.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
         persistLastLoadedSleeve(state.current.letter);
         updateHeaderPreview();
         if (!options.silent) {
@@ -1232,12 +1385,14 @@
           state.editor.letter = normalizeLetter(sleeve.letter || "");
           state.editor.title = String(sleeve.title || "");
           state.editor.terms = dedupeTerms(sleeve.terms || []);
+          state.editor.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
           state.editor.anchor = `edit:${state.editor.letter}`;
         } else {
           state.editor.mode = "add";
           state.editor.letter = "";
           state.editor.title = "";
           state.editor.terms = [];
+          state.editor.location_preferences = defaultLocationPreferences();
           state.editor.anchor = "add";
         }
         setDialogEditorVisible(visible);
@@ -1266,6 +1421,7 @@
 
       function renderDialogEditor() {
         renderDialogTerms();
+        syncDialogLocationInputs();
         if (!state.editorVisible) {
           setDialogNote("Click + to add a custom sleeve.", "info");
           return;
@@ -1286,6 +1442,7 @@
 
       async function saveDialogEditor(options = {}) {
         const silent = Boolean(options.silent);
+        setEditorLocationPreferencesFromInputs();
         const editor = collectEditor();
         if (!editor.title) {
           if (!silent) {
@@ -1305,6 +1462,7 @@
         const payloadBody = {
           title: editor.title,
           terms: editor.terms,
+          location_preferences: editor.location_preferences,
         };
         if (editor.mode === "edit" && isCustomLetter(editor.letter)) {
           payloadBody.letter = editor.letter;
@@ -1429,19 +1587,39 @@
         } catch (_error) {}
       }
 
-      async function runScrape() {
+      function setScrapeButtonsBusy(isBusy, variant = "default") {
+        const defaultLabel = "Scrape Job Openings";
+        const ultraLabel = "Scrape Ultra Fast";
+        if (els.scrapeNowBtn) {
+          els.scrapeNowBtn.disabled = !!isBusy;
+          els.scrapeNowBtn.textContent = isBusy && variant === "default" ? "Scraping..." : defaultLabel;
+        }
+        if (els.scrapeUltraFastBtn) {
+          els.scrapeUltraFastBtn.disabled = !!isBusy;
+          els.scrapeUltraFastBtn.textContent = isBusy && variant === "ultra_fast" ? "Scraping..." : ultraLabel;
+        }
+      }
+
+      async function runScrape(variant = "default") {
+        const scrapeVariant = String(variant || "default").toLowerCase() === "ultra_fast" ? "ultra_fast" : "default";
+        const variantLabel = scrapeVariant === "ultra_fast" ? "Ultra Fast" : "Default";
+        if (state.scrapeBusy) {
+          return setStatus("A scrape run is already in progress.", "error", "scrape");
+        }
         const current = collectCurrent();
         if (!current.letter) return setStatus("Select or save a Career Sleeve before scraping.", "error", "scrape");
         if (!current.terms.length) return setStatus("Add at least one search term before scraping.", "error", "scrape");
         const effectiveSleeve = isFixedLetter(current.letter) ? current.letter : "E";
         const runId = `synergy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        state.scrapeBusy = true;
+        setScrapeButtonsBusy(true, scrapeVariant);
         renderResults([]);
         renderMetrics(null);
         state.localProgressEvents = [];
         state.remoteProgressEvents = [];
         renderEvents();
         setStatus(
-          `Starting scrape for Career Sleeve ${current.letter} (using scoring profile ${effectiveSleeve}).`,
+          `Starting ${variantLabel} scrape for Career Sleeve ${current.letter} (using scoring profile ${effectiveSleeve}).`,
           "info",
           "scrape"
         );
@@ -1455,10 +1633,20 @@
           query_terms: current.terms.join(","),
           strict: "0",
           max_results: "200",
+          scrape_variant: scrapeVariant,
         });
         if (!isFixedLetter(current.letter)) {
           params.set("custom_mode", "1");
           params.set("custom_letter", current.letter);
+          const prefs = normalizeLocationPreferences(current.location_preferences);
+          if (prefs.countries.length) {
+            params.set("custom_geo_countries", prefs.countries.join(","));
+          }
+          if (prefs.regions.length) {
+            params.set("custom_geo_regions", prefs.regions.join(","));
+          }
+          params.set("custom_abroad_min_percent", String(prefs.abroad_min_percent));
+          params.set("custom_abroad_max_percent", String(prefs.abroad_max_percent));
         }
 
         try {
@@ -1472,12 +1660,14 @@
           renderResults(payload.jobs || []);
           renderMetrics(payload.summary || null);
           const total = Array.isArray(payload.jobs) ? payload.jobs.length : 0;
-          setStatus(`Scrape completed. Returned ${total} jobs.`, "success", "scrape");
+          setStatus(`${variantLabel} scrape completed. Returned ${total} job openings.`, "success", "scrape");
         } catch (_error) {
           if (state.progressTimer) { clearInterval(state.progressTimer); state.progressTimer = null; }
-          setStatus("Scrape request failed.", "error", "scrape");
+          setStatus(`${variantLabel} scrape request failed.`, "error", "scrape");
         } finally {
           setTimeout(() => pollProgress(runId), 350);
+          state.scrapeBusy = false;
+          setScrapeButtonsBusy(false, scrapeVariant);
         }
       }
 
@@ -1508,7 +1698,36 @@
           renderDialogTerms();
           setDialogNote("Cleared all search terms for this editor.", "info");
         });
-        els.scrapeNowBtn.addEventListener("click", () => runScrape());
+        if (els.dialogCountriesInput) {
+          els.dialogCountriesInput.addEventListener("input", () => {
+            state.editor.location_preferences = normalizeLocationPreferences({
+              ...(state.editor.location_preferences || defaultLocationPreferences()),
+              countries: parseCommaList(els.dialogCountriesInput.value),
+            });
+          });
+        }
+        if (els.dialogRegionsInput) {
+          els.dialogRegionsInput.addEventListener("input", () => {
+            state.editor.location_preferences = normalizeLocationPreferences({
+              ...(state.editor.location_preferences || defaultLocationPreferences()),
+              regions: parseCommaList(els.dialogRegionsInput.value),
+            });
+          });
+        }
+        if (els.dialogAbroadMinInput) {
+          els.dialogAbroadMinInput.addEventListener("change", () => {
+            setEditorLocationPreferencesFromInputs();
+          });
+        }
+        if (els.dialogAbroadMaxInput) {
+          els.dialogAbroadMaxInput.addEventListener("change", () => {
+            setEditorLocationPreferencesFromInputs();
+          });
+        }
+        els.scrapeNowBtn.addEventListener("click", () => runScrape("default"));
+        if (els.scrapeUltraFastBtn) {
+          els.scrapeUltraFastBtn.addEventListener("click", () => runScrape("ultra_fast"));
+        }
         els.changeSleeveBtn.addEventListener("click", async () => {
           try {
             await loadCatalog();

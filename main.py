@@ -2,6 +2,7 @@
 
 from flask import Flask, request, redirect, render_template, url_for, jsonify
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import itertools
 import json
@@ -271,6 +272,14 @@ TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 MVP_SOURCE_IDS = ["indeed_web", "linkedin_web", "nl_web_openings"]
 MVP_LOCATION_MODE = "nl_only"
 SCRAPE_MODE = "mvp"
+SCRAPE_VARIANT_DEFAULT = "default"
+SCRAPE_VARIANT_ULTRA_FAST = "ultra_fast"
+ULTRA_FAST_SOURCE_IDS = ["linkedin_web"]
+ULTRA_FAST_MAX_PAGES = 2
+ULTRA_FAST_TARGET_RAW = 90
+ULTRA_FAST_MIN_RPS = 1.1
+ULTRA_FAST_MIN_DETAIL_RPS = 1.0
+ULTRA_FAST_NO_NEW_UNIQUE_PAGES = 1
 SCRAPE_PROGRESS_TTL_SECONDS = 1800
 SCRAPE_PROGRESS_MAX_EVENTS = 220
 REQUEST_USER_AGENTS = [
@@ -533,6 +542,54 @@ def _parse_terms_for_storage(raw_terms):
     return _dedupe_terms(normalized_terms)[:80]
 
 
+def _default_custom_location_preferences():
+    return {
+        "countries": [],
+        "regions": [],
+        "abroad_min_percent": 0,
+        "abroad_max_percent": 100,
+    }
+
+
+def _parse_geo_preferences_for_storage(raw_terms, limit=24):
+    parsed = _parse_terms_for_storage(raw_terms)
+    return parsed[: max(1, int(limit))]
+
+
+def _parse_abroad_percent_for_storage(raw_value, fallback=0):
+    try:
+        value = int(float(str(raw_value).strip()))
+    except (TypeError, ValueError):
+        value = int(fallback)
+    return max(0, min(100, value))
+
+
+def _parse_custom_location_preferences(raw_payload):
+    defaults = _default_custom_location_preferences()
+    if not isinstance(raw_payload, dict):
+        return defaults
+
+    countries = _parse_geo_preferences_for_storage(raw_payload.get("countries"))
+    regions = _parse_geo_preferences_for_storage(raw_payload.get("regions"))
+    min_percent = _parse_abroad_percent_for_storage(
+        raw_payload.get("abroad_min_percent"),
+        fallback=defaults["abroad_min_percent"],
+    )
+    max_percent = _parse_abroad_percent_for_storage(
+        raw_payload.get("abroad_max_percent"),
+        fallback=defaults["abroad_max_percent"],
+    )
+    if max_percent < min_percent:
+        max_percent = min_percent
+
+    return {
+        "countries": countries,
+        "regions": regions,
+        "abroad_min_percent": min_percent,
+        "abroad_max_percent": max_percent,
+    }
+
+
 def _next_available_custom_synergy_letter(records):
     used_letters = set()
     for entry in records or []:
@@ -558,6 +615,7 @@ def _fixed_synergy_sleeves():
                 "letter": letter,
                 "title": _clean_value(config.get("name"), f"Career Sleeve {letter}"),
                 "terms": _dedupe_terms(sleeves.SLEEVE_SEARCH_TERMS.get(letter, [])),
+                "location_preferences": _default_custom_location_preferences(),
                 "locked": True,
                 "scope": "fixed",
                 "updated_at": _now_utc_stamp(),
@@ -581,12 +639,14 @@ def _load_custom_synergy_sleeves():
             continue
         title = _clean_value(entry.get("title"), "")[:120]
         terms = _parse_terms_for_storage(entry.get("terms"))
+        location_preferences = _parse_custom_location_preferences(entry.get("location_preferences"))
         if not title:
             continue
         by_letter[letter] = {
             "letter": letter,
             "title": title,
             "terms": terms,
+            "location_preferences": location_preferences,
             "locked": False,
             "scope": "custom",
             "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
@@ -605,6 +665,7 @@ def _save_custom_synergy_sleeves(records):
             continue
         title = _clean_value(entry.get("title"), "")[:120]
         terms = _parse_terms_for_storage(entry.get("terms"))
+        location_preferences = _parse_custom_location_preferences(entry.get("location_preferences"))
         if not title:
             continue
         serializable.append(
@@ -612,6 +673,7 @@ def _save_custom_synergy_sleeves(records):
                 "letter": letter,
                 "title": title,
                 "terms": terms,
+                "location_preferences": location_preferences,
                 "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
             }
         )
@@ -3556,10 +3618,16 @@ def rank_and_filter_jobs(
     diagnostics=None,
     custom_mode=False,
     custom_query_terms=None,
+    custom_location_preferences=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     normalized_custom_terms = []
     custom_term_variant_map = {}
+    normalized_custom_location_preferences = _default_custom_location_preferences()
+    normalized_custom_geo_terms = []
+    custom_abroad_min_percent = 0
+    custom_abroad_max_percent = 100
+    custom_abroad_range_active = False
     if custom_mode:
         normalized_custom_terms = _dedupe_terms(
             [
@@ -3572,6 +3640,28 @@ def rank_and_filter_jobs(
             term: _bilingual_term_variants(term)
             for term in normalized_custom_terms
         }
+        normalized_custom_location_preferences = _parse_custom_location_preferences(
+            custom_location_preferences
+        )
+        normalized_custom_geo_terms = _dedupe_terms(
+            [
+                sleeves.normalize_for_match(term)
+                for term in (
+                    list(normalized_custom_location_preferences.get("countries") or [])
+                    + list(normalized_custom_location_preferences.get("regions") or [])
+                )
+                if term
+            ]
+        )
+        custom_abroad_min_percent = int(
+            normalized_custom_location_preferences.get("abroad_min_percent", 0) or 0
+        )
+        custom_abroad_max_percent = int(
+            normalized_custom_location_preferences.get("abroad_max_percent", 100) or 100
+        )
+        custom_abroad_range_active = (
+            custom_abroad_min_percent > 0 or custom_abroad_max_percent < 100
+        )
     scored_jobs = []
     dedupe_seen = set()
     raw_by_source = Counter()
@@ -3699,6 +3789,10 @@ def rank_and_filter_jobs(
         custom_text_hits = []
         custom_coverage_ratio = 0.0
         custom_missing_terms = []
+        custom_geo_matches = []
+        custom_pref_bonus = 0
+        custom_abroad_percent = None
+        custom_abroad_percent_in_range = None
         if custom_mode and normalized_custom_terms:
             prepared_title = sleeves.prepare_text(title_text)
             found_terms = set()
@@ -3736,6 +3830,30 @@ def rank_and_filter_jobs(
         hard_reject_reason = sleeves.detect_hard_reject(title, raw_text)
         abroad_base_score, abroad_badges, _ = sleeves.score_abroad(raw_text)
         abroad_meta = _extract_abroad_metadata(raw_text)
+        custom_abroad_percent = abroad_meta.get("percentage")
+        if custom_mode and normalized_custom_terms:
+            if normalized_custom_geo_terms:
+                geo_candidates = _expand_terms_with_bilingual_variants(normalized_custom_geo_terms)
+                custom_geo_matches = sorted(
+                    {
+                        sleeves.normalize_for_match(hit)
+                        for hit in sleeves.find_hits(prepared_text, geo_candidates)
+                        if sleeves.normalize_for_match(hit)
+                    }
+                )
+                if custom_geo_matches:
+                    custom_pref_bonus += 1
+            if custom_abroad_range_active:
+                if (
+                    custom_abroad_percent is not None
+                    and custom_abroad_min_percent <= int(custom_abroad_percent) <= custom_abroad_max_percent
+                ):
+                    custom_abroad_percent_in_range = True
+                    custom_pref_bonus += 1
+                else:
+                    custom_abroad_percent_in_range = False
+            if custom_pref_bonus:
+                primary_score = min(5, float(primary_score) + custom_pref_bonus)
         abroad_score, abroad_badges = _enhance_abroad_score(
             abroad_base_score,
             abroad_badges,
@@ -3808,6 +3926,26 @@ def rank_and_filter_jobs(
                 f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms; "
                 f"coverage {coverage_pct}%)"
             )
+            custom_pref_parts = []
+            if normalized_custom_geo_terms:
+                custom_pref_parts.append(
+                    f"geo matches {len(custom_geo_matches)}/{len(normalized_custom_geo_terms)}"
+                )
+            if custom_abroad_range_active:
+                if custom_abroad_percent is None:
+                    custom_pref_parts.append(
+                        f"abroad % n/a (requested {custom_abroad_min_percent}-{custom_abroad_max_percent}%)"
+                    )
+                elif custom_abroad_percent_in_range:
+                    custom_pref_parts.append(
+                        f"abroad % {custom_abroad_percent}% within {custom_abroad_min_percent}-{custom_abroad_max_percent}%"
+                    )
+                else:
+                    custom_pref_parts.append(
+                        f"abroad % {custom_abroad_percent}% outside {custom_abroad_min_percent}-{custom_abroad_max_percent}%"
+                    )
+            if custom_pref_parts:
+                reasons.append(f"Custom location preferences: {'; '.join(custom_pref_parts)}")
             if custom_title_hits:
                 reasons.append(
                     f"Custom title hits: {', '.join(custom_title_hits[:4])}"
@@ -3876,6 +4014,11 @@ def rank_and_filter_jobs(
                 "salary": salary,
                 "primary_sleeve": scoring_sleeve,
                 "why_relevant": reasons,
+                "custom_location_preferences": (
+                    normalized_custom_location_preferences if custom_mode else _default_custom_location_preferences()
+                ),
+                "custom_geo_matches": custom_geo_matches,
+                "custom_abroad_percent_in_range": custom_abroad_percent_in_range,
                 "_base_reasons": list(reasons),
                 "_score_components": {
                     "synergy_score": synergy_score,
@@ -3889,6 +4032,14 @@ def rank_and_filter_jobs(
                     "custom_title_hits": custom_title_hits,
                     "custom_missing_terms": custom_missing_terms,
                     "custom_coverage_ratio": round(custom_coverage_ratio, 4),
+                    "custom_geo_terms": normalized_custom_geo_terms,
+                    "custom_geo_matches": custom_geo_matches,
+                    "custom_pref_bonus": custom_pref_bonus,
+                    "custom_abroad_range_active": custom_abroad_range_active,
+                    "custom_abroad_min_percent": custom_abroad_min_percent,
+                    "custom_abroad_max_percent": custom_abroad_max_percent,
+                    "custom_abroad_percent": custom_abroad_percent,
+                    "custom_abroad_percent_in_range": custom_abroad_percent_in_range,
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
@@ -4375,6 +4526,13 @@ def _default_sources():
     ]
 
 
+def _normalize_scrape_variant(value):
+    normalized = _clean_value(value, SCRAPE_VARIANT_DEFAULT).lower().strip()
+    if normalized in {"ultra_fast", "ultrafast", "ultra"}:
+        return SCRAPE_VARIANT_ULTRA_FAST
+    return SCRAPE_VARIANT_DEFAULT
+
+
 def _cache_key_for(
     source_key,
     sleeve_key,
@@ -4559,11 +4717,15 @@ def fetch_jobs_from_sources(
     allow_failover=True,
     run_id="",
     force_source_retry=False,
+    enforce_mvp_bundle=True,
+    parallel_fetch=False,
 ):
     profile = SCRAPE_MODE
     requested = [source for source in selected_sources if source in SOURCE_REGISTRY]
-    # Backend MVP rule: always attempt the full MVP source bundle on every scrape run.
-    candidate_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
+    if enforce_mvp_bundle:
+        candidate_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
+    else:
+        candidate_sources = requested or [source for source in _default_sources() if source in SOURCE_REGISTRY]
     unavailable_reasons = {}
     usable_sources = []
     for source in candidate_sources:
@@ -4572,13 +4734,23 @@ def fetch_jobs_from_sources(
             continue
         reason = _source_availability_reason(source)
         unavailable_reasons[source] = reason or "Source unavailable"
+
+    source_policy_note = (
+        "backend enforces full MVP source bundle each run"
+        if enforce_mvp_bundle
+        else "using requested source subset"
+    )
     _progress_update(
         run_id,
         "source-plan",
         (
             f"Using sources: {', '.join(usable_sources) if usable_sources else 'none'}"
-            + (" (MVP lock: source bundle only)" if requested and set(requested) - set(MVP_SOURCE_IDS) else "")
-            + (" (backend enforces full MVP source bundle each run)")
+            + (
+                " (MVP lock: source bundle only)"
+                if enforce_mvp_bundle and requested and set(requested) - set(MVP_SOURCE_IDS)
+                else ""
+            )
+            + (f" ({source_policy_note})")
         ),
         requested_sources=requested,
         candidate_sources=candidate_sources,
@@ -4586,6 +4758,8 @@ def fetch_jobs_from_sources(
         profile=profile,
         location_mode=location_mode,
         force_source_retry=bool(force_source_retry),
+        enforce_mvp_bundle=bool(enforce_mvp_bundle),
+        parallel_fetch=bool(parallel_fetch and len(usable_sources) > 1),
         unavailable_reasons=unavailable_reasons,
     )
     if not usable_sources:
@@ -4598,43 +4772,9 @@ def fetch_jobs_from_sources(
     errors = []
     diagnostics = _new_diagnostics()
     diagnostics["run_id"] = run_id
-    for source_key in usable_sources:
-        source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
-        _progress_update(
-            run_id,
-            "source-start",
-            f"Now scraping {source_label}",
-            source=source_key,
-            label=source_label,
-        )
-        source_items, source_error, source_diag = _fetch_source_with_cache(
-            source_key,
-            sleeve_key,
-            location_mode,
-            force_refresh=force_refresh,
-            max_pages=max_pages,
-            target_raw=target_raw,
-            requests_per_second=requests_per_second,
-            detail_rps=detail_rps,
-            no_new_unique_pages=no_new_unique_pages,
-            query_terms=query_terms,
-            extra_terms=extra_terms,
-            run_id=run_id,
-        )
-        items.extend(source_items)
-        if source_error:
-            errors.append(f"{source_key}: {source_error}")
-        _progress_update(
-            run_id,
-            "source-finish",
-            (
-                f"Completed {source_label}: {len(source_items)} items"
-                + (f", error: {source_error}" if source_error else "")
-            ),
-            source=source_key,
-            item_count=len(source_items),
-            error=source_error or "",
-        )
+
+    def _merge_source_diagnostics(source_diag):
+        source_diag = source_diag or {}
         diagnostics["source_query_pages"].extend(source_diag.get("source_query_pages", []))
         diagnostics["snapshots"].extend(source_diag.get("snapshots", []))
         for source, blocked in (source_diag.get("blocked_detected") or {}).items():
@@ -4643,6 +4783,107 @@ def fetch_jobs_from_sources(
             )
         for key, value in (source_diag.get("source_query_summary") or {}).items():
             diagnostics["source_query_summary"][key] = value
+
+    def _consume_source_result(source_key, source_label, source_items, source_error, source_diag):
+        items.extend(source_items or [])
+        if source_error:
+            errors.append(f"{source_key}: {source_error}")
+        _progress_update(
+            run_id,
+            "source-finish",
+            (
+                f"Completed {source_label}: {len(source_items or [])} items"
+                + (f", error: {source_error}" if source_error else "")
+            ),
+            source=source_key,
+            item_count=len(source_items or []),
+            error=source_error or "",
+        )
+        _merge_source_diagnostics(source_diag)
+
+    if parallel_fetch and len(usable_sources) > 1:
+        worker_count = min(3, len(usable_sources))
+        _progress_update(
+            run_id,
+            "source-parallel",
+            f"Running {len(usable_sources)} sources in parallel ({worker_count} workers)",
+            worker_count=worker_count,
+        )
+        future_map = {}
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            for source_key in usable_sources:
+                source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
+                _progress_update(
+                    run_id,
+                    "source-start",
+                    f"Now scraping {source_label}",
+                    source=source_key,
+                    label=source_label,
+                    mode="parallel",
+                )
+                future = executor.submit(
+                    _fetch_source_with_cache,
+                    source_key,
+                    sleeve_key,
+                    location_mode,
+                    force_refresh=force_refresh,
+                    max_pages=max_pages,
+                    target_raw=target_raw,
+                    requests_per_second=requests_per_second,
+                    detail_rps=detail_rps,
+                    no_new_unique_pages=no_new_unique_pages,
+                    query_terms=query_terms,
+                    extra_terms=extra_terms,
+                    run_id=run_id,
+                )
+                future_map[future] = (source_key, source_label)
+            for future in as_completed(future_map):
+                source_key, source_label = future_map[future]
+                try:
+                    source_items, source_error, source_diag = future.result()
+                except Exception as exc:  # pragma: no cover
+                    source_items = []
+                    source_error = str(exc)
+                    source_diag = _new_diagnostics()
+                _consume_source_result(
+                    source_key,
+                    source_label,
+                    source_items,
+                    source_error,
+                    source_diag,
+                )
+    else:
+        for source_key in usable_sources:
+            source_label = SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
+            _progress_update(
+                run_id,
+                "source-start",
+                f"Now scraping {source_label}",
+                source=source_key,
+                label=source_label,
+                mode="sequential",
+            )
+            source_items, source_error, source_diag = _fetch_source_with_cache(
+                source_key,
+                sleeve_key,
+                location_mode,
+                force_refresh=force_refresh,
+                max_pages=max_pages,
+                target_raw=target_raw,
+                requests_per_second=requests_per_second,
+                detail_rps=detail_rps,
+                no_new_unique_pages=no_new_unique_pages,
+                query_terms=query_terms,
+                extra_terms=extra_terms,
+                run_id=run_id,
+            )
+            _consume_source_result(
+                source_key,
+                source_label,
+                source_items,
+                source_error,
+                source_diag,
+            )
 
     _update_query_performance_from_diagnostics(diagnostics, sleeve_key)
 
@@ -4771,6 +5012,7 @@ def save_synergy_sleeve():
     terms = _parse_terms_for_storage(payload.get("terms"))
     if not terms:
         return jsonify({"error": "At least one search term is required."}), 400
+    location_preferences = _parse_custom_location_preferences(payload.get("location_preferences"))
     allow_overwrite = bool(payload.get("allow_overwrite"))
 
     with custom_sleeves_lock:
@@ -4794,6 +5036,7 @@ def save_synergy_sleeve():
             "letter": letter,
             "title": title,
             "terms": terms,
+            "location_preferences": location_preferences,
             "locked": False,
             "scope": "custom",
             "updated_at": _now_utc_stamp(),
@@ -5113,13 +5356,66 @@ def scrape():
 
     sources_param = request.args.get("sources", "")
     requested_sources = [source.strip().lower() for source in sources_param.split(",") if source.strip()]
+    scrape_variant = _normalize_scrape_variant(
+        request.args.get("scrape_variant", SCRAPE_VARIANT_DEFAULT)
+    )
     selected_sources = [source for source in MVP_SOURCE_IDS if source in SOURCE_REGISTRY]
+    enforce_mvp_bundle = True
+    parallel_fetch = len(selected_sources) > 1
+    if scrape_variant == SCRAPE_VARIANT_ULTRA_FAST:
+        selected_sources = [source for source in ULTRA_FAST_SOURCE_IDS if source in SOURCE_REGISTRY]
+        enforce_mvp_bundle = False
+        parallel_fetch = False
+        max_pages = min(max_pages, ULTRA_FAST_MAX_PAGES)
+        target_raw = min(target_raw, ULTRA_FAST_TARGET_RAW)
+        requests_per_second = max(requests_per_second, ULTRA_FAST_MIN_RPS)
+        detail_rps = max(detail_rps, ULTRA_FAST_MIN_DETAIL_RPS)
+        no_new_unique_pages = min(no_new_unique_pages, ULTRA_FAST_NO_NEW_UNIQUE_PAGES)
     query_terms_param = request.args.get("query_terms", "")
     query_terms = _parse_query_terms(query_terms_param)
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
     custom_mode = request.args.get("custom_mode", "0") == "1"
     custom_letter = _normalize_sleeve_letter(request.args.get("custom_letter", ""))
+    custom_geo_countries = _parse_geo_preferences_for_storage(
+        request.args.get("custom_geo_countries", "")
+    )
+    custom_geo_regions = _parse_geo_preferences_for_storage(
+        request.args.get("custom_geo_regions", "")
+    )
+    custom_abroad_min_percent = _parse_abroad_percent_for_storage(
+        request.args.get("custom_abroad_min_percent", 0),
+        fallback=0,
+    )
+    custom_abroad_max_percent = _parse_abroad_percent_for_storage(
+        request.args.get("custom_abroad_max_percent", 100),
+        fallback=100,
+    )
+    if custom_abroad_max_percent < custom_abroad_min_percent:
+        custom_abroad_max_percent = custom_abroad_min_percent
+    custom_location_preferences = _parse_custom_location_preferences(
+        {
+            "countries": custom_geo_countries,
+            "regions": custom_geo_regions,
+            "abroad_min_percent": custom_abroad_min_percent,
+            "abroad_max_percent": custom_abroad_max_percent,
+        }
+    )
+    custom_pref_requested = bool(
+        custom_geo_countries
+        or custom_geo_regions
+        or request.args.get("custom_abroad_min_percent") is not None
+        or request.args.get("custom_abroad_max_percent") is not None
+    )
+    if custom_mode and custom_letter and not custom_pref_requested:
+        with custom_sleeves_lock:
+            for record in _load_custom_synergy_sleeves():
+                if _normalize_sleeve_letter(record.get("letter")) != custom_letter:
+                    continue
+                custom_location_preferences = _parse_custom_location_preferences(
+                    record.get("location_preferences")
+                )
+                break
     if custom_mode and not query_terms:
         return jsonify({"error": "Custom sleeve scraping requires at least one query term."}), 400
     allow_failover = False
@@ -5136,15 +5432,22 @@ def scrape():
         "start",
         (
             f"Scrape started for Career Sleeve {sleeve_key} "
-            f"({location_mode}, profile {profile})"
+            f"({location_mode}, profile {profile}, variant {scrape_variant})"
         ),
         sleeve=sleeve_key,
         location_mode=location_mode,
+        scrape_variant=scrape_variant,
         selected_sources=selected_sources,
         requested_sources=requested_sources,
+        enforce_mvp_bundle=bool(enforce_mvp_bundle),
+        parallel_fetch=bool(parallel_fetch),
         strict_sleeve=strict_sleeve,
         force_refresh=force_refresh,
         max_pages=max_pages,
+        target_raw=target_raw,
+        requests_per_second=requests_per_second,
+        detail_rps=detail_rps,
+        no_new_unique_pages=no_new_unique_pages,
         max_results=max_results,
     )
 
@@ -5163,6 +5466,8 @@ def scrape():
         allow_failover=allow_failover,
         run_id=run_id,
         force_source_retry=force_source_retry,
+        enforce_mvp_bundle=enforce_mvp_bundle,
+        parallel_fetch=parallel_fetch,
     )
     _progress_update(
         run_id,
@@ -5192,6 +5497,7 @@ def scrape():
         diagnostics=fetch_diagnostics,
         custom_mode=custom_mode,
         custom_query_terms=query_terms,
+        custom_location_preferences=custom_location_preferences,
     )
     candidate_items = ranking_result.get("jobs") or []
     incremental_skipped = 0
@@ -5205,11 +5511,22 @@ def scrape():
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "sleeve": sleeve_key,
         "location_mode": location_mode,
+        "scrape_variant": scrape_variant,
         "requested_sources": requested_sources,
         "enforced_sources": selected_sources,
+        "enforce_mvp_bundle": bool(enforce_mvp_bundle),
+        "fetch_parallel": bool(parallel_fetch),
+        "effective_fetch_limits": {
+            "max_pages": max_pages,
+            "target_raw": target_raw,
+            "requests_per_second": requests_per_second,
+            "detail_requests_per_second": detail_rps,
+            "no_new_unique_pages": no_new_unique_pages,
+        },
         "query_terms": query_terms,
         "custom_mode": bool(custom_mode),
         "custom_letter": custom_letter,
+        "custom_location_preferences": custom_location_preferences,
         "extra_terms": extra_terms,
         "sources_used": used_sources,
         "sources_used_labels": [
