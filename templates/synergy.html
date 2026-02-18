@@ -133,6 +133,7 @@
       border-radius: 10px;
       min-height: 36px;
       background: transparent;
+      position: relative;
     }
     .synergy-dialog-option-split-letter {
       width: 36px;
@@ -149,10 +150,10 @@
       line-height: 1;
       text-align: center;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--amethyst-rgb), 0.9);
+      background: rgb(var(--amethyst-rgb));
       border-radius: 10px;
       user-select: none;
-      z-index: 1;
+      z-index: 2;
     }
     .synergy-dialog-option-split-title {
       flex: 1 1 auto;
@@ -166,7 +167,9 @@
       font-size: 0.88rem;
       color: rgba(var(--white-rgb), 0.9);
       min-height: 36px;
-      border-radius: 0 10px 10px 0;
+      margin-left: -36px;
+      padding-left: 46px;
+      border-radius: 10px;
       background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
     }
     .synergy-dialog-inline-title-wrap {
@@ -203,17 +206,18 @@
       line-height: 1;
       text-align: center;
       color: rgba(var(--white-rgb), 0.98);
-      background: rgba(var(--amethyst-rgb), 0.9);
+      background: rgb(var(--amethyst-rgb));
       border-radius: 10px;
       user-select: none;
-      z-index: 1;
+      z-index: 2;
     }
     .synergy-dialog-inline-title-input {
       flex: 1 1 auto;
       border: none;
-      border-radius: 0 10px 10px 0;
+      border-radius: 10px;
       min-height: 36px;
-      padding: 0 10px;
+      margin-left: -36px;
+      padding: 0 10px 0 46px;
       color: rgba(var(--white-rgb), 0.9);
       font-weight: 700;
       font-size: 0.88rem;
