@@ -3607,6 +3607,167 @@ def _fetch_nl_web_openings_jobs(
     )
 
 
+def _clamp01(value):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, numeric))
+
+
+def _confidence_band(value):
+    numeric = _clamp01(value)
+    if numeric >= 0.8:
+        return "high"
+    if numeric >= 0.55:
+        return "medium"
+    return "low"
+
+
+def _text_evidence_confidence(full_description, raw_text):
+    full_length = len(_clean_value(full_description, ""))
+    raw_length = len(_clean_value(raw_text, ""))
+    if full_length >= 900:
+        return 1.0
+    if full_length >= 420:
+        return 0.9
+    if full_length >= 180:
+        return 0.78
+    if raw_length >= 280:
+        return 0.66
+    if raw_length >= 120:
+        return 0.56
+    return 0.46
+
+
+def _sleeve_fit_confidence(
+    primary_score,
+    sleeve_scores,
+    total_positive_hits,
+    full_description,
+    raw_text,
+    custom_mode=False,
+    custom_coverage_ratio=0.0,
+    custom_title_hits_count=0,
+):
+    fit_norm = _clamp01(float(primary_score or 0) / 5.0)
+    hits_norm = _clamp01(float(total_positive_hits or 0) / 8.0)
+    evidence_conf = _text_evidence_confidence(full_description, raw_text)
+
+    if custom_mode:
+        coverage_norm = _clamp01(custom_coverage_ratio)
+        title_hit_norm = 1.0 if int(custom_title_hits_count or 0) > 0 else 0.0
+        confidence = (
+            (0.46 * fit_norm)
+            + (0.29 * coverage_norm)
+            + (0.10 * title_hit_norm)
+            + (0.15 * evidence_conf)
+        )
+        return _clamp01(confidence)
+
+    score_values = sorted(
+        [float(value or 0) for value in (sleeve_scores or {}).values()],
+        reverse=True,
+    )
+    top_score = score_values[0] if score_values else 0.0
+    second_score = score_values[1] if len(score_values) > 1 else 0.0
+    margin_norm = _clamp01((top_score - second_score) / 3.0)
+    confidence = (
+        (0.40 * fit_norm)
+        + (0.27 * margin_norm)
+        + (0.18 * hits_norm)
+        + (0.15 * evidence_conf)
+    )
+    return _clamp01(confidence)
+
+
+def _abroad_range_fit(min_percent, max_percent, observed_percent):
+    if observed_percent is None:
+        return 0.45
+    observed = int(observed_percent)
+    if int(min_percent) <= observed <= int(max_percent):
+        return 1.0
+    if observed < int(min_percent):
+        delta = int(min_percent) - observed
+    else:
+        delta = observed - int(max_percent)
+    return _clamp01(1.0 - (float(delta) / 60.0))
+
+
+def _abroad_preferences_fit_profile(
+    custom_mode,
+    normalized_custom_geo_terms,
+    custom_geo_matches,
+    custom_abroad_range_active,
+    custom_abroad_min_percent,
+    custom_abroad_max_percent,
+    custom_abroad_percent,
+    abroad_score,
+    abroad_identifiers,
+    abroad_meta,
+):
+    signal_norm = _clamp01(float(abroad_score or 0) / 4.0)
+    geo_pref_count = len(normalized_custom_geo_terms or [])
+    geo_match_count = len(custom_geo_matches or [])
+    geo_requested = geo_pref_count > 0
+    range_requested = bool(custom_abroad_range_active)
+    geo_match_ratio = (
+        _clamp01(float(geo_match_count) / float(max(1, geo_pref_count)))
+        if geo_requested
+        else 1.0
+    )
+    range_fit = (
+        _abroad_range_fit(custom_abroad_min_percent, custom_abroad_max_percent, custom_abroad_percent)
+        if range_requested
+        else 1.0
+    )
+
+    requested_components = []
+    if geo_requested:
+        requested_components.append(geo_match_ratio)
+    if range_requested:
+        requested_components.append(range_fit)
+    has_explicit_preferences = bool(requested_components) and bool(custom_mode)
+    if has_explicit_preferences:
+        requested_fit = sum(requested_components) / float(len(requested_components))
+        fit_norm = _clamp01((0.68 * requested_fit) + (0.32 * signal_norm))
+        fit_mode = "custom_preferences"
+    else:
+        fit_norm = signal_norm
+        fit_mode = "general_signal"
+
+    identifier_conf = _clamp01(float(len(abroad_identifiers or [])) / 4.0)
+    geo_conf = _clamp01(float(len((abroad_meta or {}).get("locations") or [])) / 4.0)
+    percent_conf = 1.0 if (abroad_meta or {}).get("percentage") is not None else 0.45
+    if has_explicit_preferences:
+        specificity_conf = 0.85 if (geo_requested and range_requested) else 0.72
+    else:
+        specificity_conf = 0.58
+    base_confidence = (
+        (0.42 * identifier_conf)
+        + (0.24 * percent_conf)
+        + (0.18 * geo_conf)
+        + (0.16 * specificity_conf)
+    )
+    if has_explicit_preferences:
+        request_evidence = sum(requested_components) / float(len(requested_components))
+        confidence = _clamp01((0.72 * base_confidence) + (0.28 * request_evidence))
+    else:
+        confidence = _clamp01(base_confidence)
+
+    return {
+        "mode": fit_mode,
+        "fit_score": round(float(fit_norm) * 5.0, 2),
+        "fit_confidence": round(float(confidence), 4),
+        "fit_confidence_pct": int(round(float(confidence) * 100)),
+        "fit_confidence_band": _confidence_band(confidence),
+        "geo_match_ratio": round(float(geo_match_ratio), 4),
+        "geo_match_count": int(geo_match_count),
+        "geo_pref_count": int(geo_pref_count),
+        "range_fit": round(float(range_fit), 4),
+    }
+
+
 def rank_and_filter_jobs(
     items,
     target_sleeve=None,
@@ -3866,6 +4027,32 @@ def rank_and_filter_jobs(
             raw_text,
             badges=abroad_badges,
         )
+        career_sleeve_fit_confidence = _sleeve_fit_confidence(
+            primary_score=primary_score,
+            sleeve_scores=sleeve_scores,
+            total_positive_hits=total_positive_hits,
+            full_description=full_description,
+            raw_text=raw_text,
+            custom_mode=bool(custom_mode),
+            custom_coverage_ratio=custom_coverage_ratio,
+            custom_title_hits_count=len(custom_title_hits),
+        )
+        career_sleeve_fit_score = round(float(primary_score or 0), 2)
+        career_sleeve_fit_confidence = round(float(career_sleeve_fit_confidence), 4)
+        career_sleeve_fit_confidence_pct = int(round(career_sleeve_fit_confidence * 100))
+        career_sleeve_fit_confidence_band = _confidence_band(career_sleeve_fit_confidence)
+        abroad_preferences_profile = _abroad_preferences_fit_profile(
+            custom_mode=bool(custom_mode),
+            normalized_custom_geo_terms=normalized_custom_geo_terms,
+            custom_geo_matches=custom_geo_matches,
+            custom_abroad_range_active=custom_abroad_range_active,
+            custom_abroad_min_percent=custom_abroad_min_percent,
+            custom_abroad_max_percent=custom_abroad_max_percent,
+            custom_abroad_percent=custom_abroad_percent,
+            abroad_score=abroad_score,
+            abroad_identifiers=abroad_identifiers,
+            abroad_meta=abroad_meta,
+        )
         location_profile = _score_location_proximity(location, raw_text, work_mode)
         location_proximity_score = float(location_profile.get("score", 0))
         synergy_score, synergy_hits = sleeves.score_synergy(raw_text)
@@ -3911,18 +4098,18 @@ def rank_and_filter_jobs(
         )
         reasons = [
             (
-                f"Sleeve {scoring_sleeve} fit {primary_score}/5 "
+                f"Career Sleeve {scoring_sleeve} fit {primary_score}/5 "
                 f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} "
                 f"C:{sleeve_scores['C']} D:{sleeve_scores['D']} E:{sleeve_scores['E']})"
             ),
             proximity_reason,
             abroad_summary,
-            f"Keyword coverage {total_positive_hits} hits for sleeve {scoring_sleeve}",
+            f"Keyword coverage {total_positive_hits} hits for career sleeve {scoring_sleeve}",
         ]
         if custom_mode:
             coverage_pct = int(round(custom_coverage_ratio * 100))
             reasons[0] = (
-                f"Custom sleeve relevance {primary_score}/5 "
+                f"Custom career sleeve relevance {primary_score}/5 "
                 f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms; "
                 f"coverage {coverage_pct}%)"
             )
@@ -3981,12 +4168,34 @@ def rank_and_filter_jobs(
                 "primary_sleeve_id": scoring_sleeve,
                 "primary_sleeve_name": primary_sleeve_config.get("name", ""),
                 "primary_sleeve_tagline": primary_sleeve_config.get("tagline", ""),
+                "career_sleeve_id": scoring_sleeve,
+                "career_sleeve_name": primary_sleeve_config.get("name", ""),
+                "career_sleeve_tagline": primary_sleeve_config.get("tagline", ""),
                 "sleeve_scores": sleeve_scores,
                 "primary_sleeve_score": primary_score,
+                "career_sleeve_fit_score": career_sleeve_fit_score,
+                "career_sleeve_fit_confidence": career_sleeve_fit_confidence,
+                "career_sleeve_fit_confidence_pct": career_sleeve_fit_confidence_pct,
+                "career_sleeve_fit_confidence_band": career_sleeve_fit_confidence_band,
                 "abroad_score": abroad_score,
                 "abroad_badges": abroad_badges,
                 "abroad_identifiers": abroad_identifiers,
                 "abroad_summary": abroad_summary,
+                "abroad_preferences_fit_score": abroad_preferences_profile.get("fit_score", 0),
+                "abroad_preferences_fit_confidence": abroad_preferences_profile.get("fit_confidence", 0),
+                "abroad_preferences_fit_confidence_pct": abroad_preferences_profile.get(
+                    "fit_confidence_pct",
+                    0,
+                ),
+                "abroad_preferences_fit_confidence_band": abroad_preferences_profile.get(
+                    "fit_confidence_band",
+                    "low",
+                ),
+                "abroad_preferences_fit_mode": abroad_preferences_profile.get("mode", "general_signal"),
+                "abroad_preferences_geo_match_ratio": abroad_preferences_profile.get("geo_match_ratio", 0),
+                "abroad_preferences_geo_match_count": abroad_preferences_profile.get("geo_match_count", 0),
+                "abroad_preferences_geo_pref_count": abroad_preferences_profile.get("geo_pref_count", 0),
+                "abroad_preferences_range_fit": abroad_preferences_profile.get("range_fit", 0),
                 "abroad_percentage": abroad_meta["percentage"],
                 "abroad_percentage_text": abroad_meta["percentage_text"],
                 "abroad_countries": abroad_meta["countries"],
@@ -4040,6 +4249,11 @@ def rank_and_filter_jobs(
                     "custom_abroad_max_percent": custom_abroad_max_percent,
                     "custom_abroad_percent": custom_abroad_percent,
                     "custom_abroad_percent_in_range": custom_abroad_percent_in_range,
+                    "career_sleeve_fit_score": career_sleeve_fit_score,
+                    "career_sleeve_fit_confidence": career_sleeve_fit_confidence,
+                    "career_sleeve_fit_confidence_pct": career_sleeve_fit_confidence_pct,
+                    "career_sleeve_fit_confidence_band": career_sleeve_fit_confidence_band,
+                    "abroad_preferences_fit_profile": abroad_preferences_profile,
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),

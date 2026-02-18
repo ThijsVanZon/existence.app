@@ -1156,6 +1156,8 @@
         return `${display}km from home`;
       }
 
+      const FIELD_SEPARATOR = " \u00B7 ";
+
       function formatAbroadSummary(job) {
         const scoreValue = Number(job && job.abroad_score);
         const scoreText = Number.isFinite(scoreValue)
@@ -1177,7 +1179,33 @@
         if (geo) {
           parts.push(`Geo ${geo}`);
         }
-        return parts.join(" · ");
+        return parts.join(FIELD_SEPARATOR);
+      }
+
+      function formatConfidenceSummary(job) {
+        const sleeveScoreValue = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_sleeve_score));
+        const sleeveScoreText = Number.isFinite(sleeveScoreValue) ? `${Math.round(sleeveScoreValue * 10) / 10}/5` : "0/5";
+        const sleevePct = Number(job && job.career_sleeve_fit_confidence_pct);
+        const sleeveBand = String((job && job.career_sleeve_fit_confidence_band) || "").trim().toLowerCase();
+        const sleeveMeta = [];
+        if (Number.isFinite(sleevePct)) sleeveMeta.push(`${Math.max(0, Math.min(100, Math.round(sleevePct))}%`);
+        if (sleeveBand) sleeveMeta.push(sleeveBand);
+
+        const abroadScoreValue = Number(job && job.abroad_preferences_fit_score);
+        const abroadScoreText = Number.isFinite(abroadScoreValue) ? `${Math.round(abroadScoreValue * 10) / 10}/5` : "0/5";
+        const abroadPct = Number(job && job.abroad_preferences_fit_confidence_pct);
+        const abroadBand = String((job && job.abroad_preferences_fit_confidence_band) || "").trim().toLowerCase();
+        const abroadModeRaw = String((job && job.abroad_preferences_fit_mode) || "").trim().toLowerCase();
+        const abroadMode = abroadModeRaw === "custom_preferences" ? "custom preferences" : (abroadModeRaw ? "general signal" : "");
+        const abroadMeta = [];
+        if (Number.isFinite(abroadPct)) abroadMeta.push(`${Math.max(0, Math.min(100, Math.round(abroadPct))}%`);
+        if (abroadBand) abroadMeta.push(abroadBand);
+        if (abroadMode) abroadMeta.push(abroadMode);
+
+        const parts = [];
+        parts.push(`Career Sleeve Fit ${sleeveScoreText}${sleeveMeta.length ? ` (${sleeveMeta.join(", ")})` : ""}`);
+        parts.push(`Abroad Preferences Fit ${abroadScoreText}${abroadMeta.length ? ` (${abroadMeta.join(", ")})` : ""}`);
+        return parts.join(FIELD_SEPARATOR);
       }
 
       function renderResults(jobs) {
@@ -1203,12 +1231,19 @@
             job.company || "Unknown company",
             job.location || job.main_location || "Unknown location",
             distanceLabel,
-          ].filter(Boolean).join(" · ");
+          ].filter(Boolean).join(FIELD_SEPARATOR);
           card.appendChild(company);
           const status = document.createElement("p");
           status.className = "synergy-job-meta";
-          status.textContent = `${job.decision || "UNKNOWN"} · Sleeve ${job.primary_sleeve_id || "?"} ${job.primary_sleeve_score || 0}/5`;
+          const careerSleeveId = job.career_sleeve_id || job.primary_sleeve_id || "?";
+          const careerSleeveScore = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_sleeve_score));
+          const careerSleeveScoreText = Number.isFinite(careerSleeveScore) ? `${Math.round(careerSleeveScore * 10) / 10}/5` : "0/5";
+          status.textContent = `${job.decision || "UNKNOWN"}${FIELD_SEPARATOR}Career Sleeve ${careerSleeveId} ${careerSleeveScoreText}`;
           card.appendChild(status);
+          const confidence = document.createElement("p");
+          confidence.className = "synergy-job-meta";
+          confidence.textContent = formatConfidenceSummary(job);
+          card.appendChild(confidence);
           const abroad = document.createElement("p");
           abroad.className = "synergy-job-meta";
           abroad.textContent = formatAbroadSummary(job);

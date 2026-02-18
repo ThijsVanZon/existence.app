@@ -132,6 +132,66 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("language_flags", item)
         self.assertIn("hard_reject_reason", item)
 
+    def test_output_contract_contains_career_sleeve_and_abroad_preferences_confidence(self):
+        jobs = [
+            self._job(
+                "ConfidenceCheck",
+                "Hybrid role with 40% international travel across EMEA, Germany and Spain.",
+                title="Festival Operations Lead",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="A",
+            min_target_score=3,
+            location_mode="global",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 1)
+        item = ranked[0]
+        self.assertIn("career_sleeve_id", item)
+        self.assertIn("career_sleeve_fit_score", item)
+        self.assertIn("career_sleeve_fit_confidence", item)
+        self.assertIn("career_sleeve_fit_confidence_pct", item)
+        self.assertIn("career_sleeve_fit_confidence_band", item)
+        self.assertIn("abroad_preferences_fit_score", item)
+        self.assertIn("abroad_preferences_fit_confidence", item)
+        self.assertIn("abroad_preferences_fit_confidence_pct", item)
+        self.assertIn("abroad_preferences_fit_confidence_band", item)
+        self.assertIn("abroad_preferences_fit_mode", item)
+        self.assertGreaterEqual(float(item["career_sleeve_fit_confidence"]), 0.0)
+        self.assertLessEqual(float(item["career_sleeve_fit_confidence"]), 1.0)
+        self.assertIn(item["career_sleeve_fit_confidence_band"], {"low", "medium", "high"})
+        self.assertGreaterEqual(float(item["abroad_preferences_fit_confidence"]), 0.0)
+        self.assertLessEqual(float(item["abroad_preferences_fit_confidence"]), 1.0)
+        self.assertIn(item["abroad_preferences_fit_confidence_band"], {"low", "medium", "high"})
+
+    def test_custom_mode_sets_abroad_preferences_mode_to_custom_preferences(self):
+        jobs = [
+            self._job(
+                "CustomAbroadPrefs",
+                "Role with 45% international travel across Germany, Spain and EMEA.",
+                title="Operations Analyst",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="E",
+            min_target_score=2,
+            location_mode="global",
+            strict_sleeve=False,
+            custom_mode=True,
+            custom_query_terms=["operations analyst"],
+            custom_location_preferences={
+                "countries": ["Germany"],
+                "regions": ["EMEA"],
+                "abroad_min_percent": 30,
+                "abroad_max_percent": 60,
+            },
+        )
+        self.assertEqual(len(ranked), 1)
+        self.assertEqual(ranked[0]["abroad_preferences_fit_mode"], "custom_preferences")
+
     def test_nl_only_filters_out_us_locations(self):
         jobs = [
             self._job(
