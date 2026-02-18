@@ -30,17 +30,17 @@
       border: none; border-radius: var(--synergy-inner-radius); padding: 8px 10px; color: var(--ink);
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.66));
     }
-    .synergy-term-box {
+    .synergy-query-box {
       border: none; border-radius: var(--synergy-inner-radius); padding: 10px; display: grid; gap: 8px;
       background: linear-gradient(140deg, rgba(var(--amethyst-rgb), 0.06), rgba(var(--white-rgb), 0.45));
     }
-    .synergy-term-chip {
+    .synergy-query-chip {
       display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
       padding: 4px 6px 4px 4px; background: rgba(var(--amethyst-rgb), 0.14); color: var(--synergy-amethyst-deep);
       font-size: 0.8rem; font-weight: 600; white-space: nowrap;
     }
-    .synergy-term-chip-label { margin-right: 0; padding-left: 6px; }
-    .synergy-term-chip button {
+    .synergy-query-chip-label { margin-right: 0; padding-left: 6px; }
+    .synergy-query-chip button {
       border: none; border-radius: 999px; width: 18px; height: 18px; min-width: 18px;
       padding: 0; margin: 0; font-size: 0.8rem; line-height: 1;
       background: rgba(var(--amethyst-rgb), 0.2); color: var(--synergy-amethyst-deep); opacity: 1;
@@ -51,7 +51,7 @@
       align-items: center;
       justify-content: center;
     }
-    .synergy-term-chip button:hover { transform: none; filter: none; background: rgba(var(--amethyst-rgb), 0.26); }
+    .synergy-query-chip button:hover { transform: none; filter: none; background: rgba(var(--amethyst-rgb), 0.26); }
     .synergy-progress, .synergy-results {
       border: none; border-radius: var(--synergy-inner-radius); padding: 12px; display: grid; gap: 10px;
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.76), rgba(var(--white-rgb), 0.52));
@@ -71,7 +71,12 @@
     .synergy-job-links { display: flex; flex-wrap: wrap; gap: 6px; }
     .synergy-link-btn {
       border: none; border-radius: 999px; padding: 6px 10px; font-size: 0.78rem; font-weight: 800; color: var(--white);
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      background: linear-gradient(
+        125deg,
+        rgb(var(--amethyst-rgb)) 0%,
+        rgba(var(--amethyst-rgb), 0.9) 14%,
+        rgba(var(--amethyst-rgb), 0.72) 100%
+      );
       opacity: 0.9; display: inline-flex; align-items: center; justify-content: center;
     }
     .synergy-link-btn:hover { filter: brightness(0.98); transform: translateY(-1px); opacity: 1; }
@@ -101,8 +106,19 @@
       background: linear-gradient(140deg, rgba(var(--white-rgb), 0.94), rgba(var(--white-rgb), 0.74));
       color: var(--ink);
     }
+    #dialogQueryInput,
+    .synergy-location-grid input,
+    .synergy-location-range input {
+      border: none;
+      border-radius: var(--synergy-inner-radius);
+      padding: 8px 10px;
+      color: var(--ink);
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.66));
+    }
     .synergy-dialog-search:focus,
-    #dialogTermInput:focus {
+    #dialogQueryInput:focus,
+    .synergy-location-grid input:focus,
+    .synergy-location-range input:focus {
       outline: none;
       box-shadow: inset 0 0 0 2px rgba(var(--amethyst-rgb), 0.22);
     }
@@ -170,7 +186,12 @@
       margin-left: -36px;
       padding-left: 46px;
       border-radius: 10px;
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      background: linear-gradient(
+        125deg,
+        rgb(var(--amethyst-rgb)) 0%,
+        rgba(var(--amethyst-rgb), 0.9) 14%,
+        rgba(var(--amethyst-rgb), 0.72) 100%
+      );
     }
     .synergy-dialog-inline-title-wrap {
       flex: 1 1 auto;
@@ -222,7 +243,12 @@
       color: rgb(var(--white-rgb));
       font-weight: 700;
       font-size: 0.88rem;
-      background: linear-gradient(125deg, rgba(var(--amethyst-rgb), 0.9), rgba(var(--amethyst-rgb), 0.72));
+      background: linear-gradient(
+        125deg,
+        rgb(var(--amethyst-rgb)) 0%,
+        rgba(var(--amethyst-rgb), 0.9) 14%,
+        rgba(var(--amethyst-rgb), 0.72) 100%
+      );
     }
     .synergy-dialog-inline-title-input::placeholder {
       color: rgba(var(--white-rgb), 0.62);
@@ -317,7 +343,7 @@
       color: var(--synergy-rubellite-deep);
       background: rgba(var(--rubellite-rgb), 0.18);
     }
-    .synergy-term-chip-list {
+    .synergy-query-chip-list {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
@@ -385,7 +411,8 @@
       gap: 8px;
       margin-top: 4px;
     }
-    .synergy-location-grid input {
+    .synergy-location-grid input,
+    .synergy-location-range input {
       width: 100%;
     }
     .synergy-location-range {
@@ -464,11 +491,17 @@
     </div>
     <div id="loadDialogList" class="synergy-dialog-list"></div>
     <section id="dialogEditorSection" class="synergy-dialog-inline-editor synergy-dialog-custom-create is-hidden">
-      <div class="synergy-term-box">
+      <div class="synergy-query-box">
         <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom sleeve.</div>
-        <div id="dialogTermChipList" class="synergy-term-chip-list"></div>
+        <div class="synergy-dialog-group-title">SEARCH QUERIES</div>
+        <div id="dialogQueryChipList" class="synergy-query-chip-list"></div>
         <div class="synergy-inline">
-          <input id="dialogTermInput" type="text" autocomplete="off" placeholder="Type term and press Enter">
+          <input id="dialogQueryInput" type="text" autocomplete="off" placeholder="Type search query and press Enter">
+        </div>
+        <div class="synergy-dialog-editor-actions">
+          <button id="dialogAddQueryBtn" type="button">Add query</button>
+          <button id="dialogGenerateQueriesBtn" type="button">Generate queries</button>
+          <button id="dialogClearQueriesBtn" type="button">Clear queries</button>
         </div>
         <div class="synergy-location-grid">
           <div class="synergy-field-stack">
@@ -490,11 +523,6 @@
             <input id="dialogAbroadMaxInput" type="number" min="0" max="100" step="1" placeholder="100">
           </div>
         </div>
-        <div class="synergy-dialog-editor-actions">
-          <button id="dialogAddTermBtn" type="button">Add term</button>
-          <button id="dialogGenerateTermsBtn" type="button">Generate terms</button>
-          <button id="dialogClearTermsBtn" type="button">Clear terms</button>
-        </div>
       </div>
     </section>
   </dialog>
@@ -506,14 +534,14 @@
         current: {
           letter: "",
           title: "",
-          terms: [],
+          queries: [],
           location_preferences: { countries: [], regions: [], abroad_min_percent: 0, abroad_max_percent: 100 },
         },
         editor: {
           mode: "add",
           letter: "",
           title: "",
-          terms: [],
+          queries: [],
           location_preferences: { countries: [], regions: [], abroad_min_percent: 0, abroad_max_percent: 100 },
           anchor: "",
         },
@@ -538,11 +566,11 @@
         loadDialogSearch: document.getElementById("loadDialogSearch"),
         dialogEditorSection: document.getElementById("dialogEditorSection"),
         closeLoadDialogBtn: document.getElementById("closeLoadDialogBtn"),
-        dialogTermChipList: document.getElementById("dialogTermChipList"),
-        dialogTermInput: document.getElementById("dialogTermInput"),
-        dialogAddTermBtn: document.getElementById("dialogAddTermBtn"),
-        dialogGenerateTermsBtn: document.getElementById("dialogGenerateTermsBtn"),
-        dialogClearTermsBtn: document.getElementById("dialogClearTermsBtn"),
+        dialogQueryChipList: document.getElementById("dialogQueryChipList"),
+        dialogQueryInput: document.getElementById("dialogQueryInput"),
+        dialogAddQueryBtn: document.getElementById("dialogAddQueryBtn"),
+        dialogGenerateQueriesBtn: document.getElementById("dialogGenerateQueriesBtn"),
+        dialogClearQueriesBtn: document.getElementById("dialogClearQueriesBtn"),
         dialogCustomNote: document.getElementById("dialogCustomNote"),
         dialogCountriesInput: document.getElementById("dialogCountriesInput"),
         dialogRegionsInput: document.getElementById("dialogRegionsInput"),
@@ -554,7 +582,7 @@
       const isFixedLetter = (l) => ["A", "B", "C", "D"].includes(l);
       const isCustomLetter = (l) => /^[A-Z]$/.test(l || "") && l >= "E";
       const LAST_SLEEVE_STORAGE_KEY = "existence.synergy.last_sleeve.v1";
-      const dedupeTerms = (arr) => {
+      const dedupeQueries = (arr) => {
         const seen = new Set();
         const out = [];
         (arr || []).forEach((raw) => {
@@ -568,7 +596,7 @@
         return out;
       };
       const parseCommaList = (value) =>
-        dedupeTerms(
+        dedupeQueries(
           String(value || "")
             .split(/[,;\n\r|]+/g)
             .map((part) => String(part || "").trim())
@@ -589,8 +617,8 @@
       const normalizeLocationPreferences = (raw) => {
         const source = raw && typeof raw === "object" ? raw : {};
         const normalized = defaultLocationPreferences();
-        normalized.countries = dedupeTerms(source.countries || []);
-        normalized.regions = dedupeTerms(source.regions || []);
+        normalized.countries = dedupeQueries(source.countries || []);
+        normalized.regions = dedupeQueries(source.regions || []);
         normalized.abroad_min_percent = clampPercent(source.abroad_min_percent, 0);
         normalized.abroad_max_percent = clampPercent(source.abroad_max_percent, 100);
         if (normalized.abroad_max_percent < normalized.abroad_min_percent) {
@@ -598,7 +626,7 @@
         }
         return normalized;
       };
-      const formatLocationList = (arr) => dedupeTerms(arr || []).join(", ");
+      const formatLocationList = (arr) => dedupeQueries(arr || []).join(", ");
       const persistLastLoadedSleeve = (letter) => {
         const normalized = normalizeLetter(letter);
         if (!normalized) return;
@@ -636,14 +664,14 @@
       const collectCurrent = () => ({
         letter: normalizeLetter(state.current.letter),
         title: String(state.current.title || "").trim(),
-        terms: dedupeTerms(state.current.terms),
+        queries: dedupeQueries(state.current.queries),
         location_preferences: normalizeLocationPreferences(state.current.location_preferences),
       });
       const collectEditor = () => ({
         mode: state.editor.mode === "edit" ? "edit" : "add",
         letter: normalizeLetter(state.editor.letter),
         title: String(state.editor.title || "").trim(),
-        terms: dedupeTerms(state.editor.terms),
+        queries: dedupeQueries(state.editor.queries),
         location_preferences: normalizeLocationPreferences(state.editor.location_preferences),
       });
 
@@ -729,34 +757,34 @@
         return btn;
       }
 
-      function renderDialogTerms() {
-        els.dialogTermChipList.innerHTML = "";
+      function renderDialogQueries() {
+        els.dialogQueryChipList.innerHTML = "";
         const editor = collectEditor();
-        if (!editor.terms.length) {
+        if (!editor.queries.length) {
           const empty = document.createElement("div");
           empty.className = "synergy-empty";
-          empty.textContent = "No terms configured.";
-          els.dialogTermChipList.appendChild(empty);
+          empty.textContent = "No search queries configured.";
+          els.dialogQueryChipList.appendChild(empty);
           return;
         }
-        editor.terms.forEach((term) => {
+        editor.queries.forEach((query) => {
           const chip = document.createElement("span");
-          chip.className = "synergy-term-chip";
+          chip.className = "synergy-query-chip";
           const label = document.createElement("span");
-          label.className = "synergy-term-chip-label";
-          label.textContent = term;
+          label.className = "synergy-query-chip-label";
+          label.textContent = query;
           chip.appendChild(label);
           const remove = document.createElement("button");
           remove.type = "button";
           remove.textContent = ICON_REMOVE;
-          remove.setAttribute("aria-label", `Remove ${term}`);
+          remove.setAttribute("aria-label", `Remove search query ${query}`);
           remove.addEventListener("click", () => {
-            state.editor.terms = state.editor.terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
-            renderDialogTerms();
-            setDialogNote(`Removed term "${term}".`, "info");
+            state.editor.queries = state.editor.queries.filter((q) => q.toLowerCase() !== query.toLowerCase());
+            renderDialogQueries();
+            setDialogNote(`Removed search query "${query}".`, "info");
           });
           chip.appendChild(remove);
-          els.dialogTermChipList.appendChild(chip);
+          els.dialogQueryChipList.appendChild(chip);
         });
       }
 
@@ -841,7 +869,7 @@
         if (!sleeve) return;
         state.current.letter = normalizeLetter(sleeve.letter || "");
         state.current.title = String(sleeve.title || "");
-        state.current.terms = dedupeTerms(sleeve.terms || []);
+        state.current.queries = dedupeQueries(sleeve.terms || []);
         state.current.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
         persistLastLoadedSleeve(state.current.letter);
         updateHeaderPreview();
@@ -852,7 +880,7 @@
         }
       }
 
-      function guessTermsFromTitle(title, letter) {
+      function guessQueriesFromTitle(title, letter) {
         const fixedByLetter = (state.catalog.fixed || []).find((entry) => entry.letter === letter);
         if (fixedByLetter && Array.isArray(fixedByLetter.terms) && fixedByLetter.terms.length) {
           return fixedByLetter.terms.slice(0, 8);
@@ -874,13 +902,13 @@
           {
             id: "music",
             keywords: ["music", "festival", "concert", "tour", "venue", "artist", "event", "live"],
-            baseTerms: [
+            baseQueries: [
               "music event operations",
               "festival producer",
               "concert production",
               "live production",
             ],
-            intentTerms: {
+            intentQueries: {
               creative: ["creative production", "artist liaison", "show design coordination"],
               operations: ["show operations", "stage operations", "tour logistics"],
               analyst: ["audience insights analyst", "event performance analysis", "ticketing analytics"],
@@ -891,13 +919,13 @@
           {
             id: "destinations",
             keywords: ["theme", "park", "attraction", "guest", "destination", "resort", "immersive", "ride"],
-            baseTerms: [
+            baseQueries: [
               "theme park operations",
               "attractions operations",
               "guest experience",
               "destination operations",
             ],
-            intentTerms: {
+            intentQueries: {
               creative: ["immersive experience design", "show quality creative", "guest journey design"],
               operations: ["ride operations", "park operations", "resort operations"],
               analyst: ["guest insights analyst", "queue analytics", "experience performance analysis"],
@@ -908,13 +936,13 @@
           {
             id: "datacenter",
             keywords: ["data", "center", "centre", "facility", "critical", "infrastructure", "commissioning", "uptime"],
-            baseTerms: [
+            baseQueries: [
               "data center operations",
               "critical facilities technician",
               "mission critical operations",
               "compute infrastructure operations",
             ],
-            intentTerms: {
+            intentQueries: {
               creative: ["technical storytelling infrastructure", "enablement content infrastructure"],
               operations: ["facility operations", "capacity expansion data center", "change management facilities"],
               analyst: ["capacity analyst data center", "infrastructure operations analyst", "reliability analytics"],
@@ -925,13 +953,13 @@
           {
             id: "supply",
             keywords: ["supply", "chain", "logistics", "vendor", "distribution", "ecosystem", "partner", "fulfillment"],
-            baseTerms: [
+            baseQueries: [
               "supply chain operations",
               "logistics operations",
               "vendor operations",
               "partner operations",
             ],
-            intentTerms: {
+            intentQueries: {
               creative: ["service design operations", "experience design logistics"],
               operations: ["distribution operations", "rollout operations", "implementation supply chain"],
               analyst: ["supply chain analyst", "logistics performance analyst", "demand planning analyst"],
@@ -942,13 +970,13 @@
           {
             id: "generic",
             keywords: [],
-            baseTerms: [
+            baseQueries: [
               "operations manager",
               "program manager",
               "delivery operations",
               "cross-functional execution",
             ],
-            intentTerms: {
+            intentQueries: {
               creative: ["creative producer", "experience design", "content operations"],
               operations: ["process improvement", "workflow operations", "implementation manager"],
               analyst: ["business analyst", "operations analyst", "data insights analyst"],
@@ -961,27 +989,27 @@
           {
             id: "creative",
             keywords: ["creative", "producer", "content", "brand", "experience", "story", "design"],
-            globalTerms: ["creative operations", "content delivery", "experience programming"],
+            globalQueries: ["creative operations", "content delivery", "experience programming"],
           },
           {
             id: "operations",
             keywords: ["operations", "ops", "coordinator", "manager", "execution", "delivery", "implementation"],
-            globalTerms: ["operations excellence", "cross-functional operations", "service delivery"],
+            globalQueries: ["operations excellence", "cross-functional operations", "service delivery"],
           },
           {
             id: "analyst",
             keywords: ["analyst", "analysis", "insights", "planning", "intelligence", "reporting"],
-            globalTerms: ["operations analytics", "performance insights", "data-driven decisions"],
+            globalQueries: ["operations analytics", "performance insights", "data-driven decisions"],
           },
           {
             id: "technical",
             keywords: ["engineer", "technical", "infrastructure", "systems", "commissioning", "reliability", "automation"],
-            globalTerms: ["technical operations", "systems reliability", "process automation"],
+            globalQueries: ["technical operations", "systems reliability", "process automation"],
           },
           {
             id: "strategy",
             keywords: ["strategy", "strategic", "program", "portfolio", "transformation", "growth", "lead"],
-            globalTerms: ["strategy and operations", "program governance", "portfolio execution"],
+            globalQueries: ["strategy and operations", "program governance", "portfolio execution"],
           },
         ];
 
@@ -1011,11 +1039,11 @@
           activeIntents.push({ id: "operations", score: 0, profile: defaultIntent });
         }
 
-        const generated = [...selectedDomain.baseTerms];
+        const generated = [...selectedDomain.baseQueries];
         for (const intent of activeIntents) {
-          const intentDomainTerms = (selectedDomain.intentTerms || {})[intent.id] || [];
-          generated.push(...intentDomainTerms);
-          generated.push(...(intent.profile.globalTerms || []));
+          const intentDomainQueries = (selectedDomain.intentQueries || {})[intent.id] || [];
+          generated.push(...intentDomainQueries);
+          generated.push(...(intent.profile.globalQueries || []));
         }
 
         const stopwords = new Set([
@@ -1042,26 +1070,26 @@
         generated.push(lowerTitle);
         generated.push(`cross-functional ${primaryIntentId}`);
         generated.push("stakeholder alignment");
-        return dedupeTerms(generated).slice(0, 12);
+        return dedupeQueries(generated).slice(0, 12);
       }
 
-      function generateTermsFromEditorTitle() {
+      function generateQueriesFromEditorTitle() {
         const editor = collectEditor();
         if (!editor.title) {
-          setStatus("Set a sleeve title first, then generate terms.", "error");
-          setDialogNote("Set a sleeve title first, then generate terms.", "error");
+          setStatus("Set a sleeve title first, then generate search queries.", "error");
+          setDialogNote("Set a sleeve title first, then generate search queries.", "error");
           return;
         }
-        const generated = guessTermsFromTitle(editor.title, editor.letter);
+        const generated = guessQueriesFromTitle(editor.title, editor.letter);
         if (!generated.length) {
-          setStatus("Could not generate terms from this title.", "error");
-          setDialogNote("Could not generate terms from this title.", "error");
+          setStatus("Could not generate search queries from this title.", "error");
+          setDialogNote("Could not generate search queries from this title.", "error");
           return;
         }
-        state.editor.terms = dedupeTerms([...(state.editor.terms || []), ...generated]);
-        renderDialogTerms();
-        setStatus(`Generated ${generated.length} terms locally (free, no paid API).`, "success");
-        setDialogNote(`Generated ${generated.length} terms. Review and save when ready.`, "success");
+        state.editor.queries = dedupeQueries([...(state.editor.queries || []), ...generated]);
+        renderDialogQueries();
+        setStatus(`Generated ${generated.length} search queries locally (free, no paid API).`, "success");
+        setDialogNote(`Generated ${generated.length} search queries. Review and save when ready.`, "success");
       }
 
       function renderMetrics(summary) {
@@ -1417,14 +1445,14 @@
           state.editor.mode = "edit";
           state.editor.letter = normalizeLetter(sleeve.letter || "");
           state.editor.title = String(sleeve.title || "");
-          state.editor.terms = dedupeTerms(sleeve.terms || []);
+          state.editor.queries = dedupeQueries(sleeve.terms || []);
           state.editor.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
           state.editor.anchor = `edit:${state.editor.letter}`;
         } else {
           state.editor.mode = "add";
           state.editor.letter = "";
           state.editor.title = "";
-          state.editor.terms = [];
+          state.editor.queries = [];
           state.editor.location_preferences = defaultLocationPreferences();
           state.editor.anchor = "add";
         }
@@ -1443,7 +1471,7 @@
         resetDialogEditor("edit", sleeve, true);
         renderLoadDialogList();
         setDialogNote(
-          `Editing Career Sleeve ${letter}. Update title and terms, then save your changes.`,
+          `Editing Career Sleeve ${letter}. Update title and search queries, then save your changes.`,
           "info"
         );
         setTimeout(() => {
@@ -1453,7 +1481,7 @@
       }
 
       function renderDialogEditor() {
-        renderDialogTerms();
+        renderDialogQueries();
         syncDialogLocationInputs();
         if (!state.editorVisible) {
           setDialogNote("Click + to add a custom sleeve.", "info");
@@ -1462,13 +1490,13 @@
         const editor = collectEditor();
         if (editor.mode === "edit" && editor.letter) {
           setDialogNote(
-            `Editing Career Sleeve ${editor.letter}. Update title and terms, then save your changes.`,
+            `Editing Career Sleeve ${editor.letter}. Update title and search queries, then save your changes.`,
             "info"
           );
           return;
         }
         setDialogNote(
-          `Adding a new custom sleeve. Next available letter: ${getNextCustomLetter()}. Add at least 1 search term, then save.`,
+          `Adding a new custom sleeve. Next available letter: ${getNextCustomLetter()}. Add at least 1 search query, then save.`,
           "info"
         );
       }
@@ -1484,17 +1512,17 @@
           }
           return null;
         }
-        if (!editor.terms.length) {
+        if (!editor.queries.length) {
           if (!silent) {
-            setStatus("Add at least one search term before saving.", "error");
-            setDialogNote("Add at least one search term before saving.", "error");
+            setStatus("Add at least one search query before saving.", "error");
+            setDialogNote("Add at least one search query before saving.", "error");
           }
           return null;
         }
 
         const payloadBody = {
           title: editor.title,
-          terms: editor.terms,
+          terms: editor.queries,
           location_preferences: editor.location_preferences,
         };
         if (editor.mode === "edit" && isCustomLetter(editor.letter)) {
@@ -1565,7 +1593,7 @@
           } else {
             state.current.letter = "";
             state.current.title = "";
-            state.current.terms = [];
+            state.current.queries = [];
             updateHeaderPreview();
           }
         }
@@ -1641,7 +1669,7 @@
         }
         const current = collectCurrent();
         if (!current.letter) return setStatus("Select or save a Career Sleeve before scraping.", "error", "scrape");
-        if (!current.terms.length) return setStatus("Add at least one search term before scraping.", "error", "scrape");
+        if (!current.queries.length) return setStatus("Add at least one search query before scraping.", "error", "scrape");
         const effectiveSleeve = isFixedLetter(current.letter) ? current.letter : "E";
         const runId = `synergy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         state.scrapeBusy = true;
@@ -1663,7 +1691,7 @@
         const params = new URLSearchParams({
           run_id: runId,
           sleeve: effectiveSleeve,
-          query_terms: current.terms.join(","),
+          search_queries: current.queries.join(","),
           strict: "0",
           max_results: "200",
           scrape_variant: scrapeVariant,
@@ -1712,24 +1740,24 @@
             renderLoadDialogList();
           });
         }
-        els.dialogAddTermBtn.addEventListener("click", () => {
-          const term = String(els.dialogTermInput.value || "").trim();
-          if (!term) return;
-          state.editor.terms = dedupeTerms([...(state.editor.terms || []), term]);
-          els.dialogTermInput.value = "";
-          renderDialogTerms();
-          setDialogNote(`Added term "${term}".`, "success");
+        els.dialogAddQueryBtn.addEventListener("click", () => {
+          const queryText = String(els.dialogQueryInput.value || "").trim();
+          if (!queryText) return;
+          state.editor.queries = dedupeQueries([...(state.editor.queries || []), queryText]);
+          els.dialogQueryInput.value = "";
+          renderDialogQueries();
+          setDialogNote(`Added search query "${queryText}".`, "success");
         });
-        els.dialogGenerateTermsBtn.addEventListener("click", () => {
-          generateTermsFromEditorTitle();
+        els.dialogGenerateQueriesBtn.addEventListener("click", () => {
+          generateQueriesFromEditorTitle();
         });
-        els.dialogTermInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") { event.preventDefault(); els.dialogAddTermBtn.click(); }
+        els.dialogQueryInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") { event.preventDefault(); els.dialogAddQueryBtn.click(); }
         });
-        els.dialogClearTermsBtn.addEventListener("click", () => {
-          state.editor.terms = [];
-          renderDialogTerms();
-          setDialogNote("Cleared all search terms for this editor.", "info");
+        els.dialogClearQueriesBtn.addEventListener("click", () => {
+          state.editor.queries = [];
+          renderDialogQueries();
+          setDialogNote("Cleared all search queries for this editor.", "info");
         });
         if (els.dialogCountriesInput) {
           els.dialogCountriesInput.addEventListener("input", () => {

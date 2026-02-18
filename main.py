@@ -5011,7 +5011,7 @@ def save_synergy_sleeve():
 
     terms = _parse_terms_for_storage(payload.get("terms"))
     if not terms:
-        return jsonify({"error": "At least one search term is required."}), 400
+        return jsonify({"error": "At least one search query is required."}), 400
     location_preferences = _parse_custom_location_preferences(payload.get("location_preferences"))
     allow_overwrite = bool(payload.get("allow_overwrite"))
 
@@ -5371,8 +5371,11 @@ def scrape():
         requests_per_second = max(requests_per_second, ULTRA_FAST_MIN_RPS)
         detail_rps = max(detail_rps, ULTRA_FAST_MIN_DETAIL_RPS)
         no_new_unique_pages = min(no_new_unique_pages, ULTRA_FAST_NO_NEW_UNIQUE_PAGES)
-    query_terms_param = request.args.get("query_terms", "")
-    query_terms = _parse_query_terms(query_terms_param)
+    search_queries_param = request.args.get("search_queries", "")
+    if not search_queries_param:
+        # Backwards-compatible alias; prefer `search_queries` going forward.
+        search_queries_param = request.args.get("query_terms", "")
+    search_queries = _parse_query_terms(search_queries_param)
     extra_terms_param = request.args.get("extra_terms", "")
     extra_terms = _parse_extra_terms(extra_terms_param)
     custom_mode = request.args.get("custom_mode", "0") == "1"
@@ -5416,8 +5419,8 @@ def scrape():
                     record.get("location_preferences")
                 )
                 break
-    if custom_mode and not query_terms:
-        return jsonify({"error": "Custom sleeve scraping requires at least one query term."}), 400
+    if custom_mode and not search_queries:
+        return jsonify({"error": "Custom sleeve scraping requires at least one search query."}), 400
     allow_failover = False
     force_source_retry = request.args.get("retry_source", "0") == "1"
 
@@ -5461,7 +5464,7 @@ def scrape():
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        query_terms=query_terms,
+        query_terms=search_queries,
         extra_terms=extra_terms,
         allow_failover=allow_failover,
         run_id=run_id,
@@ -5496,7 +5499,7 @@ def scrape():
         return_diagnostics=True,
         diagnostics=fetch_diagnostics,
         custom_mode=custom_mode,
-        custom_query_terms=query_terms,
+        custom_query_terms=search_queries,
         custom_location_preferences=custom_location_preferences,
     )
     candidate_items = ranking_result.get("jobs") or []
@@ -5523,7 +5526,8 @@ def scrape():
             "detail_requests_per_second": detail_rps,
             "no_new_unique_pages": no_new_unique_pages,
         },
-        "query_terms": query_terms,
+        "search_queries": search_queries,
+        "query_terms": search_queries,
         "custom_mode": bool(custom_mode),
         "custom_letter": custom_letter,
         "custom_location_preferences": custom_location_preferences,

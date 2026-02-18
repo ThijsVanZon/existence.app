@@ -488,7 +488,7 @@ class TestScrapeEndpoint(unittest.TestCase):
         response = self.client.get("/scrape?sleeve=E&custom_mode=1")
         self.assertEqual(response.status_code, 400)
         payload = response.get_json() or {}
-        self.assertIn("at least one query term", payload.get("error", "").lower())
+        self.assertIn("at least one search query", payload.get("error", "").lower())
 
     def test_scrape_returns_200_with_source_errors_when_all_sources_fail(self):
         original_fetch = main.fetch_jobs_from_sources
@@ -559,7 +559,7 @@ class TestScrapeEndpoint(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         payload = response.get_json()
-        self.assertIn("At least one search term", payload.get("error", ""))
+        self.assertIn("At least one search query", payload.get("error", ""))
 
     def test_synergy_sleeves_saves_and_deletes_custom_records(self):
         original_custom_state_path = main.CUSTOM_SLEEVES_STATE_PATH
