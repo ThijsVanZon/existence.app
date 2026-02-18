@@ -1188,7 +1188,7 @@
         const sleevePct = Number(job && job.career_sleeve_fit_confidence_pct);
         const sleeveBand = String((job && job.career_sleeve_fit_confidence_band) || "").trim().toLowerCase();
         const sleeveMeta = [];
-        if (Number.isFinite(sleevePct)) sleeveMeta.push(`${Math.max(0, Math.min(100, Math.round(sleevePct))}%`);
+        if (Number.isFinite(sleevePct)) sleeveMeta.push(`${Math.max(0, Math.min(100, Math.round(sleevePct)))}%`);
         if (sleeveBand) sleeveMeta.push(sleeveBand);
 
         const abroadScoreValue = Number(job && job.abroad_preferences_fit_score);
@@ -1198,7 +1198,7 @@
         const abroadModeRaw = String((job && job.abroad_preferences_fit_mode) || "").trim().toLowerCase();
         const abroadMode = abroadModeRaw === "custom_preferences" ? "custom preferences" : (abroadModeRaw ? "general signal" : "");
         const abroadMeta = [];
-        if (Number.isFinite(abroadPct)) abroadMeta.push(`${Math.max(0, Math.min(100, Math.round(abroadPct))}%`);
+        if (Number.isFinite(abroadPct)) abroadMeta.push(`${Math.max(0, Math.min(100, Math.round(abroadPct)))}%`);
         if (abroadBand) abroadMeta.push(abroadBand);
         if (abroadMode) abroadMeta.push(abroadMode);
 
