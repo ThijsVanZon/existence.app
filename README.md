@@ -52,12 +52,12 @@ Useful optional query params:
 - `incremental` = `1|0` return only unseen jobs from local state (default: `0`)
 - `state_window_days` = retention window for incremental seen-state (default: `14`)
 - `legacy` = `1|0` return legacy list-only payload (default: `0`)
-- `query_terms` = comma-separated custom terms; backend expands EN/NL variants for querying and matching
+- `search_queries` = comma-separated custom search queries; backend expands EN/NL variants for querying and matching (`query_terms` remains a backward-compatible alias)
 - abroad extraction/scoring uses EN/NL variants for travel context + geo; returned job openings include `abroad_identifiers` and `abroad_summary`
 
 Current MVP backend behavior:
 
-- `location_mode` is enforced to `nl_only`
+- `location_mode` is enforced to `nl_vn` (Netherlands + Vietnam abroad/local mix)
 - sources are enforced to `indeed_web` + `linkedin_web` + `nl_web_openings`
 
 ## Debugging & observability

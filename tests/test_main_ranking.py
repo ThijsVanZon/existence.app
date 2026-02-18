@@ -27,7 +27,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
@@ -46,7 +46,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
 
@@ -65,7 +65,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
 
@@ -102,7 +102,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
@@ -119,7 +119,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="B",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
 
@@ -144,7 +144,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
@@ -159,6 +159,9 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("abroad_preferences_fit_confidence_pct", item)
         self.assertIn("abroad_preferences_fit_confidence_band", item)
         self.assertIn("abroad_preferences_fit_mode", item)
+        self.assertIn("remote_flex_score", item)
+        self.assertIn("mobility_score", item)
+        self.assertIn("visa_score", item)
         self.assertGreaterEqual(float(item["career_sleeve_fit_confidence"]), 0.0)
         self.assertLessEqual(float(item["career_sleeve_fit_confidence"]), 1.0)
         self.assertIn(item["career_sleeve_fit_confidence_band"], {"low", "medium", "high"})
@@ -178,7 +181,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="E",
             min_target_score=2,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
             custom_mode=True,
             custom_query_terms=["operations analyst"],
@@ -192,7 +195,7 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(len(ranked), 1)
         self.assertEqual(ranked[0]["abroad_preferences_fit_mode"], "custom_preferences")
 
-    def test_nl_only_filters_out_us_locations(self):
+    def test_nl_vn_scope_filters_out_us_locations(self):
         jobs = [
             self._job(
                 "USRole",
@@ -205,15 +208,63 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="B",
             min_target_score=3,
-            location_mode="nl_only",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(ranked, [])
 
-    def test_nl_only_uses_nl_market_settings_for_sources(self):
+    def test_nl_vn_scope_accepts_vietnam_local_roles(self):
+        jobs = [
+            self._job(
+                "VNRole",
+                "On-site logistics operations role with procurement and warehouse execution.",
+                title="Logistics Operations Manager",
+                location="Ho Chi Minh City, Vietnam",
+            )
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="D",
+            min_target_score=2,
+            location_mode="nl_vn",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 1)
+        self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
+
+    def test_vietnamese_required_language_gets_penalized(self):
+        jobs = [
+            self._job(
+                "NoLanguagePenalty",
+                "Logistics operations role in Hanoi with visa sponsorship and relocation package.",
+                title="Logistics Operations Manager",
+                location="Hanoi, Vietnam",
+            ),
+            self._job(
+                "LanguagePenalty",
+                (
+                    "Logistics operations role in Hanoi with visa sponsorship. "
+                    "Vietnamese required. Must have fluent Vietnamese."
+                ),
+                title="Logistics Operations Manager",
+                location="Hanoi, Vietnam",
+            ),
+        ]
+        ranked = main.rank_and_filter_jobs(
+            jobs,
+            target_sleeve="D",
+            min_target_score=2,
+            location_mode="nl_vn",
+            strict_sleeve=False,
+        )
+        self.assertEqual(len(ranked), 2)
+        self.assertEqual(ranked[0]["company"], "NoLanguagePenalty")
+        self.assertEqual(ranked[1]["company"], "LanguagePenalty")
+
+    def test_nl_vn_uses_global_indeed_market_settings(self):
         self.assertEqual(
-            main._indeed_search_url_for_mode("nl_only"),
-            "https://nl.indeed.com/jobs",
+            main._indeed_search_url_for_mode("nl_vn"),
+            "https://www.indeed.com/jobs",
         )
 
     def test_extract_abroad_metadata_detects_percentage_and_geo(self):
@@ -262,7 +313,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
@@ -294,7 +345,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="A",
             min_target_score=3,
-            location_mode="nl_only",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 2)
@@ -317,7 +368,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="B",
             min_target_score=3,
-            location_mode="nl_only",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
@@ -368,7 +419,7 @@ class TestMainRanking(unittest.TestCase):
             config["defaults"]["sources"],
             ["indeed_web", "linkedin_web", "nl_web_openings"],
         )
-        self.assertEqual(config["defaults"]["location_mode"], "nl_only")
+        self.assertEqual(config["defaults"]["location_mode"], "nl_vn")
 
     def test_canonicalize_relative_url_returns_empty(self):
         self.assertEqual(main._canonicalize_url("/rc/clk?jk=abc123"), "")
@@ -413,7 +464,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="B",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertTrue(ranked)
@@ -441,7 +492,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="B",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
         )
         self.assertTrue(ranked)
@@ -501,7 +552,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="E",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
             custom_mode=True,
             custom_query_terms=[
@@ -526,7 +577,7 @@ class TestMainRanking(unittest.TestCase):
             jobs,
             target_sleeve="E",
             min_target_score=3,
-            location_mode="global",
+            location_mode="nl_vn",
             strict_sleeve=False,
             custom_mode=True,
             custom_query_terms=["operations analyst"],

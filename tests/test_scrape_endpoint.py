@@ -351,7 +351,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             seed_items, seed_error, _ = main._fetch_source_with_cache(
                 source_key,
                 sleeve_key="A",
-                location_mode="nl_only",
+                location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
                 target_raw=10,
@@ -363,7 +363,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             cache_key = main._cache_key_for(
                 source_key,
                 "A",
-                "nl_only",
+                main.MVP_LOCATION_MODE,
                 1,
                 10,
                 1,
@@ -381,7 +381,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             items, error, _ = main._fetch_source_with_cache(
                 source_key,
                 sleeve_key="A",
-                location_mode="nl_only",
+                location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
                 target_raw=10,
@@ -434,7 +434,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             seed_items, seed_error, _ = main._fetch_source_with_cache(
                 source_key,
                 sleeve_key="A",
-                location_mode="nl_only",
+                location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
                 target_raw=10,
@@ -446,7 +446,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             cache_key = main._cache_key_for(
                 source_key,
                 "A",
-                "nl_only",
+                main.MVP_LOCATION_MODE,
                 1,
                 10,
                 1,
@@ -464,7 +464,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             items, error, _ = main._fetch_source_with_cache(
                 source_key,
                 sleeve_key="A",
-                location_mode="nl_only",
+                location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
                 target_raw=10,
@@ -525,9 +525,9 @@ class TestScrapeEndpoint(unittest.TestCase):
             ["indeed_web", "linkedin_web", "nl_web_openings"],
         )
         self.assertEqual(config["profile"], "mvp")
-        self.assertEqual([mode["id"] for mode in config["location_modes"]], ["nl_only"])
+        self.assertEqual([mode["id"] for mode in config["location_modes"]], ["nl_vn"])
 
-    def test_scrape_forces_nl_only_and_failover_off_in_mvp(self):
+    def test_scrape_forces_nl_vn_and_failover_off_in_mvp(self):
         original_fetch = main.fetch_jobs_from_sources
         original_rank = main.rank_and_filter_jobs
         try:
@@ -564,7 +564,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             self.assertEqual(response.status_code, 200)
             self.assertFalse(captured["allow_failover"])
-            self.assertEqual(captured["location_mode"], "nl_only")
+            self.assertEqual(captured["location_mode"], "nl_vn")
         finally:
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
@@ -674,7 +674,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
-    def test_scrape_passes_query_terms(self):
+    def test_scrape_passes_search_queries(self):
         original_fetch = main.fetch_jobs_from_sources
         original_rank = main.rank_and_filter_jobs
         try:
@@ -705,7 +705,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.rank_and_filter_jobs = fake_rank
 
             response = self.client.get(
-                "/scrape?sleeve=A&query_terms=festival+producer,artist+liaison,festival+producer"
+                "/scrape?sleeve=A&search_queries=festival+producer,artist+liaison,festival+producer"
             )
 
             self.assertEqual(response.status_code, 200)

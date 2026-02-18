@@ -39,15 +39,20 @@ VALID_SLEEVES = {"A", "B", "C", "D", "E"}
 MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW = 3
 MIN_ABROAD_SCORE_TO_PASS = 1
 ABROAD_SCORE_CAP = 4
+REMOTE_FLEX_SCORE_CAP = 4
+MOBILITY_SCORE_CAP = 4
+VISA_SCORE_CAP = 4
 MIN_TOTAL_HITS_TO_SHOW = 2
 MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE = 2
 MIN_TOTAL_HITS_TO_MAYBE = 1
 
 RANKING_WEIGHTS = {
-    "abroad_score": 0.28,
-    "primary_sleeve_score": 0.47,
-    "synergy_score": 0.15,
-    "location_proximity_score": 0.10,
+    "visa_score": 0.30,
+    "mobility_score": 0.16,
+    "remote_flex_score": 0.06,
+    "primary_sleeve_score": 0.38,
+    "synergy_score": 0.05,
+    "location_proximity_score": 0.05,
 }
 
 SOFT_PENALTIES = [
@@ -97,85 +102,113 @@ HARD_REJECT_COLD_CALLING_CONTEXT = [
     "business development",
 ]
 
-ABROAD_SIGNALS = {
-    "remote_or_hybrid": {
-        "positive": [
-            "remote",
-            "hybrid",
-            "hybride",
-            "work from home",
-            "thuiswerk",
-            "op afstand",
-            "wfh",
-            "remote first",
-            "remote-first",
-            "distributed team",
-            "fully remote",
-        ],
-        "negative": [
-            "on-site only",
-            "on site only",
-            "100% on site",
-            "must be onsite",
-            "must be on site",
-            "no remote",
-            "office based",
-            "op locatie vereist",
-            "kantoorplicht",
-        ],
-        "score": {"positive_hit": 2, "negative_hit": -3},
-    },
-    "work_from_abroad_policy": {
-        "positive": [
-            "work from abroad",
-            "work from anywhere",
-            "work anywhere",
-            "workations",
-            "workation",
-            "remote abroad",
-            "werken vanuit buitenland",
-            "werk vanuit het buitenland",
-            "werken vanuit europa",
-            "remote within europe",
-            "anywhere in eu",
-            "eu remote",
-            "international remote",
-            "international mobility",
-            "digital nomad",
-        ],
-        "score": {"positive_hit": 2},
-    },
-    "travel_component": {
-        "positive": [
-            "travel",
-            "travelling",
-            "international travel",
-            "reisbereid",
-            "reizen",
-            "internationaal reizen",
-            "emea travel",
-            "site visits",
-            "site visit",
-            "client sites",
-            "client site",
-            "op locatie",
-            "on location",
-            "klantlocatie",
-            "klantbezoek",
-            "touring",
-            "events on location",
-            "multi-site",
-            "cross-site",
-            "field visits",
-        ],
-        "negative": [
-            "no travel required",
-            "geen reisbereidheid nodig",
-            "without travel",
-            "zonder reizen",
-        ],
-        "score": {"positive_hit": 1},
-    },
+REMOTE_FLEX_SIGNALS = {
+    "positive": [
+        "remote",
+        "hybrid",
+        "hybride",
+        "work from home",
+        "thuiswerk",
+        "op afstand",
+        "wfh",
+        "remote first",
+        "remote-first",
+        "distributed team",
+        "fully remote",
+    ],
+    "negative": [
+        "on-site only",
+        "on site only",
+        "100% on site",
+        "must be onsite",
+        "must be on site",
+        "no remote",
+        "office based",
+        "kantoorplicht",
+    ],
+    "score": {"positive_hit": 2, "negative_hit": -3},
+}
+
+MOBILITY_SIGNALS = {
+    "positive": [
+        "travel",
+        "travelling",
+        "international travel",
+        "reisbereid",
+        "reizen",
+        "internationaal reizen",
+        "emea travel",
+        "apac travel",
+        "asean travel",
+        "site visits",
+        "site visit",
+        "client sites",
+        "client site",
+        "on location",
+        "op locatie",
+        "klantlocatie",
+        "klantbezoek",
+        "multi-site",
+        "multisite",
+        "cross-site",
+        "field visits",
+        "rotations",
+        "travel rotations",
+        "relocation",
+        "relocate",
+        "relocating",
+    ],
+    "negative": [
+        "no travel required",
+        "geen reisbereidheid nodig",
+        "without travel",
+        "zonder reizen",
+    ],
+    "score": {"positive_hit": 1, "negative_hit": -1},
+}
+
+VISA_SIGNALS = {
+    "positive": [
+        "visa sponsorship",
+        "sponsorship available",
+        "work permit",
+        "work-permit",
+        "employment visa",
+        "relocation package",
+        "relocation assistance",
+        "international hire",
+        "expat package",
+        "global mobility",
+        "immigration support",
+        "sponsored relocation",
+        "employer of record",
+        "eor",
+        "giay phep lao dong",
+        "work permit vietnam",
+        "bao lanh visa",
+        "ho tro visa",
+        "ho tro giay phep",
+        "the tam tru",
+        "trc",
+        "temporary residence card",
+        "open to foreigners",
+        "foreign candidates",
+        "expatriate",
+        "expat",
+    ],
+    "negative": [
+        "no visa sponsorship",
+        "cannot sponsor",
+        "no sponsorship",
+        "must have work authorization",
+        "must be legally authorized",
+        "vietnamese citizens only",
+        "only local candidates",
+        "chi nhan nguoi viet",
+        "chi tuyen nguoi viet",
+        "quoc tich viet nam",
+    ],
+    "score": {"positive_hit": 3, "negative_hit": -6},
 }
 
 _ABROAD_BILINGUAL_TOKEN_GROUPS = [
@@ -465,6 +498,8 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
+            "min_anchor_hits": 1,
+            "anchor_cap_score": 2,
             "bonus_signals": [
                 "data center",
                 "critical facilities",
@@ -473,6 +508,14 @@ SLEEVE_CONFIG = {
                 "compute infrastructure",
             ],
         },
+        "anchors": [
+            "data center",
+            "data centre",
+            "mission critical",
+            "critical facilities",
+            "colocation",
+            "trung tam du lieu",
+        ],
         "keywords": {
             "title_positive": [
                 "data center operations",
@@ -490,6 +533,9 @@ SLEEVE_CONFIG = {
                 "operations program manager",
                 "vendor manager",
                 "site reliability engineer",
+                "mep engineer",
+                "electrical engineer data center",
+                "facilities engineer",
             ],
             "context_positive": [
                 "data center",
@@ -511,6 +557,21 @@ SLEEVE_CONFIG = {
                 "compute infrastructure",
                 "facility reliability",
                 "site visit",
+                "mep",
+                "electrical",
+                "hvac",
+                "bms",
+                "ups",
+                "generator",
+                "switchgear",
+                "chiller",
+                "mission critical facilities",
+                "site commissioning",
+                "facility management",
+                "trung tam du lieu",
+                "co dien",
+                "ky su van hanh",
+                "ha tang",
             ],
             "negative": [
                 "inside sales",
@@ -537,6 +598,8 @@ SLEEVE_CONFIG = {
         "must_haves": {
             "min_title_hits": 1,
             "min_total_hits": 2,
+            "min_anchor_hits": 1,
+            "anchor_cap_score": 2,
             "bonus_signals": [
                 "supply chain",
                 "vendor management",
@@ -545,6 +608,14 @@ SLEEVE_CONFIG = {
                 "implementation",
             ],
         },
+        "anchors": [
+            "supply chain",
+            "logistics",
+            "procurement",
+            "warehouse",
+            "3pl",
+            "chuoi cung ung",
+        ],
         "keywords": {
             "title_positive": [
                 "supply chain manager",
@@ -584,6 +655,21 @@ SLEEVE_CONFIG = {
                 "global trade",
                 "international suppliers",
                 "ecosystem",
+                "3pl",
+                "freight",
+                "freight forwarding",
+                "customs",
+                "import export",
+                "warehouse",
+                "wms",
+                "sap",
+                "oracle",
+                "procurement",
+                "sourcing",
+                "chuoi cung ung",
+                "van hanh kho",
+                "mua hang",
+                "cung ung",
             ],
             "negative": [
                 "inside sales",
@@ -663,7 +749,9 @@ SLEEVE_CONFIG = {
 }
 
 WEIGHT_KEYS = (
-    "abroad_score",
+    "visa_score",
+    "mobility_score",
+    "remote_flex_score",
     "primary_sleeve_score",
     "synergy_score",
     "location_proximity_score",
@@ -671,34 +759,44 @@ WEIGHT_KEYS = (
 
 SLEEVE_RANKING_WEIGHT_OVERRIDES = {
     "A": {
-        "abroad_score": 0.33,
-        "primary_sleeve_score": 0.45,
-        "synergy_score": 0.12,
-        "location_proximity_score": 0.10,
+        "visa_score": 0.30,
+        "mobility_score": 0.20,
+        "remote_flex_score": 0.05,
+        "primary_sleeve_score": 0.35,
+        "synergy_score": 0.05,
+        "location_proximity_score": 0.05,
     },
     "B": {
-        "abroad_score": 0.24,
-        "primary_sleeve_score": 0.48,
-        "synergy_score": 0.18,
-        "location_proximity_score": 0.10,
+        "visa_score": 0.30,
+        "mobility_score": 0.15,
+        "remote_flex_score": 0.05,
+        "primary_sleeve_score": 0.40,
+        "synergy_score": 0.05,
+        "location_proximity_score": 0.05,
     },
     "C": {
-        "abroad_score": 0.16,
-        "primary_sleeve_score": 0.56,
-        "synergy_score": 0.18,
-        "location_proximity_score": 0.10,
+        "visa_score": 0.35,
+        "mobility_score": 0.10,
+        "remote_flex_score": 0.05,
+        "primary_sleeve_score": 0.40,
+        "synergy_score": 0.05,
+        "location_proximity_score": 0.05,
     },
     "D": {
-        "abroad_score": 0.20,
-        "primary_sleeve_score": 0.50,
-        "synergy_score": 0.20,
-        "location_proximity_score": 0.10,
+        "visa_score": 0.30,
+        "mobility_score": 0.10,
+        "remote_flex_score": 0.05,
+        "primary_sleeve_score": 0.45,
+        "synergy_score": 0.05,
+        "location_proximity_score": 0.05,
     },
     "E": {
-        "abroad_score": 0.26,
-        "primary_sleeve_score": 0.44,
-        "synergy_score": 0.20,
-        "location_proximity_score": 0.10,
+        "visa_score": 0.24,
+        "mobility_score": 0.14,
+        "remote_flex_score": 0.07,
+        "primary_sleeve_score": 0.40,
+        "synergy_score": 0.10,
+        "location_proximity_score": 0.05,
     },
 }
 
@@ -867,19 +965,23 @@ SLEEVE_SEARCH_TERMS = {
 
 SEARCH_LOCATIONS = {
     "nl": ["Netherlands"],
-    "emea": ["Europe", "Amsterdam", "Berlin", "Barcelona", "Milan", "Warsaw"],
+    "vn": [
+        "Vietnam",
+        "Hanoi",
+        "Ho Chi Minh City",
+        "Da Nang",
+        "Hai Phong",
+        "Binh Duong",
+        "Bac Ninh",
+    ],
 }
 
 LOCATION_MODE_PASSES = {
-    "nl_only": ["nl"],
-    "nl_eu": ["nl", "emea"],
-    "global": ["nl", "emea"],
+    "nl_vn": ["nl", "vn"],
 }
 
 LOCATION_MODE_LABELS = {
-    "nl_only": "Netherlands focus",
-    "nl_eu": "Netherlands + EMEA",
-    "global": "Global (NL + EMEA discovery)",
+    "nl_vn": "Netherlands + Vietnam (abroad + local)",
 }
 
 BLOCKED_PAGE_HINTS = [
@@ -1280,28 +1382,79 @@ def detect_language_flags(raw_text):
     }, notes
 
 
-def score_abroad(raw_text):
+def _score_signal_bucket(prepared_text, signal_config, cap_max):
+    positive_terms = _expand_abroad_phrases_with_variants(signal_config.get("positive", []))
+    negative_terms = _expand_abroad_phrases_with_variants(signal_config.get("negative", []))
+    positive_hits = _find_hits(prepared_text, positive_terms)
+    negative_hits = _find_hits(prepared_text, negative_terms)
+    score_cfg = signal_config.get("score", {})
+    total = (
+        len(positive_hits) * int(score_cfg.get("positive_hit", 0))
+        + len(negative_hits) * int(score_cfg.get("negative_hit", 0))
+    )
+    score = max(0, min(int(cap_max), total))
+    return score, {
+        "positive_hits": sorted(positive_hits),
+        "negative_hits": sorted(negative_hits),
+        "raw_total": total,
+    }
+
+
+def score_abroad_components(raw_text):
     prepared_text = _prepare_text(raw_text)
-    total = 0
     badges = []
-    details = {}
+    details = {
+        "remote_flex": {},
+        "mobility": {},
+        "visa": {},
+    }
 
-    for signal_id, config in ABROAD_SIGNALS.items():
-        positive_terms = _expand_abroad_phrases_with_variants(config.get("positive", []))
-        negative_terms = _expand_abroad_phrases_with_variants(config.get("negative", []))
-        positive_hits = _find_hits(prepared_text, positive_terms)
-        negative_hits = _find_hits(prepared_text, negative_terms)
-        score_cfg = config.get("score", {})
-        total += len(positive_hits) * score_cfg.get("positive_hit", 0)
-        total += len(negative_hits) * score_cfg.get("negative_hit", 0)
-        if positive_hits:
-            badges.append(signal_id)
-        details[signal_id] = {
-            "positive_hits": sorted(positive_hits),
-            "negative_hits": sorted(negative_hits),
-        }
+    remote_flex_score, remote_flex_details = _score_signal_bucket(
+        prepared_text,
+        REMOTE_FLEX_SIGNALS,
+        REMOTE_FLEX_SCORE_CAP,
+    )
+    mobility_score, mobility_details = _score_signal_bucket(
+        prepared_text,
+        MOBILITY_SIGNALS,
+        MOBILITY_SCORE_CAP,
+    )
+    visa_score, visa_details = _score_signal_bucket(
+        prepared_text,
+        VISA_SIGNALS,
+        VISA_SCORE_CAP,
+    )
 
-    return max(0, min(ABROAD_SCORE_CAP, total)), badges, details
+    details["remote_flex"] = remote_flex_details
+    details["mobility"] = mobility_details
+    details["visa"] = visa_details
+
+    if remote_flex_score > 0:
+        badges.extend(["remote_flex", "remote_or_hybrid"])
+    if mobility_score > 0:
+        badges.extend(["mobility", "travel_component"])
+    if visa_score > 0:
+        badges.append("visa_support")
+
+    composite = (
+        (0.20 * float(remote_flex_score))
+        + (0.30 * float(mobility_score))
+        + (0.50 * float(visa_score))
+    )
+    abroad_score = max(0.0, min(float(ABROAD_SCORE_CAP), round(composite, 2)))
+    components = {
+        "remote_flex_score": float(remote_flex_score),
+        "mobility_score": float(mobility_score),
+        "visa_score": float(visa_score),
+        "abroad_score": float(abroad_score),
+    }
+    details["components"] = dict(components)
+    return components, sorted(set(badges)), details
+
+
+def score_abroad(raw_text):
+    components, badges, details = score_abroad_components(raw_text)
+    return float(components.get("abroad_score", 0.0)), badges, details
 
 
 def score_synergy(raw_text):
@@ -1313,6 +1466,7 @@ def score_synergy(raw_text):
 def score_sleeve(sleeve_id, raw_text, raw_title):
     config = SLEEVE_CONFIG[sleeve_id]
     keywords = config["keywords"]
+    anchors = config.get("anchors") or []
     must_haves = config["must_haves"]
     points = config["scoring"]["points"]
     cap = config["scoring"]["cap_max"]
@@ -1325,6 +1479,7 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     title_hits_in_text = _find_hits(prepared_text, keywords["title_positive"])
     context_hits = _find_hits(prepared_text, keywords["context_positive"])
     negative_hits = _find_hits(prepared_text, keywords["negative"])
+    anchor_hits = _find_hits(prepared_text, anchors)
     bonus_hits = _find_hits(prepared_text, must_haves.get("bonus_signals") or [])
     title_intent_hits = _find_hits(prepared_title, SLEEVE_TITLE_INTENT_TERMS.get(sleeve_id, []))
     total_positive_hits = len(title_hits_in_text.union(context_hits))
@@ -1356,11 +1511,20 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
         score += points.get("coverage_bonus", 0)
     score = max(0, min(cap, score))
 
+    min_anchor_hits = max(0, int(must_haves.get("min_anchor_hits", 0)))
+    anchor_cap_score = max(0, min(cap, int(must_haves.get("anchor_cap_score", cap))))
+    anchor_gate_met = len(anchor_hits) >= min_anchor_hits
+    if min_anchor_hits and not anchor_gate_met:
+        score = min(score, anchor_cap_score)
+
+    reason = "ok" if anchor_gate_met else "missing_domain_anchors"
+
     return score, {
-        "reason": "ok",
+        "reason": reason,
         "title_hits": sorted(title_hits_in_title),
         "context_hits": sorted(context_hits),
         "negative_hits": sorted(negative_hits),
+        "anchor_hits": sorted(anchor_hits),
         "bonus_hits": sorted(bonus_hits),
         "title_intent_hits": sorted(title_intent_hits),
         "title_intent_hit_count": len(title_intent_hits),
@@ -1368,6 +1532,10 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
         "context_density_met": context_density_met,
         "title_context_blend": title_context_blend,
         "title_hit_count": len(title_hits_in_title),
+        "anchor_hit_count": len(anchor_hits),
+        "min_anchor_hits": min_anchor_hits,
+        "anchor_gate_met": anchor_gate_met,
+        "anchor_cap_score": anchor_cap_score,
         "total_positive_hits": total_positive_hits,
         "min_title_hits": int(must_haves.get("min_title_hits", 0)),
         "min_total_hits": int(must_haves.get("min_total_hits", 0)),

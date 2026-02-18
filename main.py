@@ -86,9 +86,24 @@ NETHERLANDS_KEYWORDS = [
     "nijmegen", "haarlem", "leiden", "maastricht", "zwolle",
     "almere", "delft", "s-hertogenbosch", "den bosch", "enschede",
 ]
+VIETNAM_KEYWORDS = [
+    "vietnam",
+    "viet nam",
+    "hanoi",
+    "ha noi",
+    "ho chi minh",
+    "ho chi minh city",
+    "hcmc",
+    "saigon",
+    "da nang",
+    "danang",
+    "hai phong",
+    "binh duong",
+    "bac ninh",
+]
 OTHER_COUNTRY_KEYWORDS = [
     "usa", "united states", "canada", "australia", "new zealand",
-    "india", "singapore", "philippines",
+    "india", "singapore", "philippines", "vietnam", "viet nam",
     "germany", "deutschland", "berlin", "munich", "frankfurt",
     "belgium", "france", "spain", "portugal", "italy",
     "poland", "romania", "hungary", "czech republic",
@@ -97,18 +112,24 @@ OTHER_COUNTRY_KEYWORDS = [
 ]
 NON_EU_COUNTRY_KEYWORDS = [
     "usa", "united states", "canada", "australia", "new zealand",
-    "india", "singapore", "philippines", "mexico", "brazil",
+    "india", "singapore", "philippines", "vietnam", "viet nam", "mexico", "brazil",
     "argentina", "chile", "colombia", "japan", "china",
     "hong kong", "south korea", "korea", "uae", "saudi",
     "egypt", "south africa", "nigeria",
 ]
-EU_REMOTE_HINTS = [
-    "europe", "european", "eu", "european union", "emea",
-    "netherlands", "nederland", "belgium", "france", "spain", "italy",
-    "portugal", "ireland", "sweden", "denmark", "finland", "poland",
-    "romania", "czech", "austria", "switzerland",
+TARGET_REMOTE_HINTS = [
+    "international",
+    "global",
+    "worldwide",
+    "work from abroad",
+    "relocation",
+    "visa sponsorship",
+    "work permit",
+    "expat",
+    "apac",
+    "asean",
+    "vietnam",
 ]
-GLOBAL_REMOTE_HINTS = ["worldwide", "anywhere", "global"]
 ABROAD_PERCENT_CONTEXT_KEYWORDS = [
     "travel",
     "travelling",
@@ -148,6 +169,12 @@ ABROAD_CONTEXT_TERMS = [
     "op locatie",
     "klantlocatie",
     "emea",
+    "apac",
+    "asean",
+    "vietnam",
+    "visa sponsorship",
+    "work permit",
+    "relocation",
     "european union",
     "europe",
 ]
@@ -177,6 +204,7 @@ ABROAD_GEO_TERMS = {
         ("India", ["india"]),
         ("Singapore", ["singapore"]),
         ("Philippines", ["philippines", "filippijnen"]),
+        ("Vietnam", ["vietnam", "viet nam"]),
         ("Japan", ["japan"]),
         ("China", ["china"]),
         ("Hong Kong", ["hong kong", "hongkong"]),
@@ -196,6 +224,7 @@ ABROAD_GEO_TERMS = {
         ("DACH", ["dach"]),
         ("Nordics", ["nordics", "scandinavia", "scandinavie"]),
         ("APAC", ["apac", "asia pacific", "azie pacific"]),
+        ("ASEAN", ["asean"]),
         ("LATAM", ["latam", "latin america", "latijns amerika"]),
         ("Middle East", ["middle east", "mena", "midden oosten"]),
     ],
@@ -212,9 +241,7 @@ ABROAD_GEO_TERMS = {
 INDEED_SEARCH_URL = "https://www.indeed.com/jobs"
 INDEED_SEARCH_URL_NL = "https://nl.indeed.com/jobs"
 INDEED_SEARCH_URL_BY_MODE = {
-    "nl_only": INDEED_SEARCH_URL_NL,
-    "nl_eu": INDEED_SEARCH_URL_NL,
-    "global": INDEED_SEARCH_URL,
+    "nl_vn": INDEED_SEARCH_URL,
 }
 LINKEDIN_SEARCH_URL = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
 LINKEDIN_JOB_DETAIL_URL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
@@ -273,7 +300,7 @@ TRACKING_QUERY_PARAMS = {
 CANONICAL_QUERY_PARAMS = {"jk", "vjk", "jobId", "currentJobId", "id"}
 TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 MVP_SOURCE_IDS = ["indeed_web", "linkedin_web", "nl_web_openings"]
-MVP_LOCATION_MODE = "nl_only"
+MVP_LOCATION_MODE = "nl_vn"
 SCRAPE_MODE = "mvp"
 SCRAPE_VARIANT_DEFAULT = "default"
 SCRAPE_VARIANT_ULTRA_FAST = "ultra_fast"
@@ -352,10 +379,10 @@ def _clean_value(value, fallback="Unknown"):
 
 
 def _normalized_location_mode(location_mode):
-    mode = _clean_value(location_mode, "nl_only").lower()
-    if mode in {"nl_only", "nl_eu", "global"}:
-        return mode
-    return "nl_only"
+    mode = _clean_value(location_mode, MVP_LOCATION_MODE).lower()
+    if mode in {"nl_vn", "nl_only", "nl_eu", "global", "vn_only", "vn_plus_discovery"}:
+        return MVP_LOCATION_MODE
+    return MVP_LOCATION_MODE
 
 
 def _indeed_search_url_for_mode(location_mode):
@@ -1516,30 +1543,49 @@ def _extract_abroad_metadata(raw_text):
 
 
 def _passes_location_gate(text, location_mode):
+    _ = _normalized_location_mode(location_mode)
     normalized_text = _normalize_text(text).strip()
-    if location_mode == "global":
-        return True
     if not normalized_text:
         return True
 
-    has_non_eu_hint = any(keyword in normalized_text for keyword in NON_EU_COUNTRY_KEYWORDS)
     is_netherlands = _is_netherlands_job(normalized_text)
-    if location_mode == "nl_only":
-        return is_netherlands and not has_non_eu_hint
-
-    if is_netherlands:
+    is_vietnam = _is_vietnam_job(normalized_text)
+    if is_netherlands or is_vietnam:
         return True
 
-    is_remote_or_hybrid = "remote" in normalized_text or "hybrid" in normalized_text
-    has_eu_hint = any(keyword in normalized_text for keyword in EU_REMOTE_HINTS)
-    has_global_remote_hint = any(keyword in normalized_text for keyword in GLOBAL_REMOTE_HINTS)
-
-    if not is_remote_or_hybrid:
+    has_non_eu_hint = any(keyword in normalized_text for keyword in NON_EU_COUNTRY_KEYWORDS)
+    if has_non_eu_hint and not is_vietnam:
         return False
 
-    if location_mode == "nl_eu":
-        return (has_eu_hint or has_global_remote_hint) and not has_non_eu_hint
-
+    is_remote_or_hybrid = any(
+        marker in normalized_text
+        for marker in (
+            "remote",
+            "hybrid",
+            "hybride",
+            "wfh",
+            "work from home",
+            "thuiswerk",
+            "op afstand",
+        )
+    )
+    has_target_hint = any(marker in normalized_text for marker in TARGET_REMOTE_HINTS)
+    has_travel_or_visa_context = any(
+        marker in normalized_text
+        for marker in (
+            "travel",
+            "reizen",
+            "visa",
+            "work permit",
+            "relocation",
+            "international",
+            "global mobility",
+        )
+    )
+    if is_remote_or_hybrid and has_target_hint:
+        return True
+    if has_target_hint and has_travel_or_visa_context:
+        return True
     return False
 
 
@@ -1580,12 +1626,30 @@ def _is_netherlands_job(*parts):
     return False
 
 
+def _is_vietnam_job(*parts):
+    text = _normalize_text(*parts)
+    return any(keyword in text for keyword in VIETNAM_KEYWORDS)
+
+
 def _location_passes_for_mode(location_mode):
-    pass_ids = sleeves.LOCATION_MODE_PASSES.get(location_mode, ["nl"])
+    mode = _normalized_location_mode(location_mode)
+    pass_ids = sleeves.LOCATION_MODE_PASSES.get(
+        mode,
+        sleeves.LOCATION_MODE_PASSES.get(MVP_LOCATION_MODE, ["nl", "vn"]),
+    )
     locations = []
+    seen = set()
     for pass_id in pass_ids:
-        locations.extend(sleeves.SEARCH_LOCATIONS.get(pass_id, []))
-    return locations or ["Netherlands"]
+        for location in sleeves.SEARCH_LOCATIONS.get(pass_id, []):
+            cleaned = _clean_value(location, "")
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            locations.append(cleaned)
+    return locations or ["Netherlands", "Vietnam"]
 
 
 _BILINGUAL_TOKEN_GROUPS = [
@@ -1776,14 +1840,14 @@ def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
     return _prioritize_queries(sleeve, ordered_terms)
 
 
-def _source_headers(source_name, location_mode="nl_only", user_agent=""):
+def _source_headers(source_name, location_mode=MVP_LOCATION_MODE, user_agent=""):
     mode = _normalized_location_mode(location_mode)
     source_name_text = _clean_value(source_name, "").lower()
-    if mode in {"nl_only", "nl_eu"}:
-        accept_language = "nl-NL,nl;q=0.9,en-US;q=0.7,en;q=0.6"
-        referer = "https://www.google.nl/"
+    if mode == "nl_vn":
+        accept_language = "en-US,en;q=0.9,nl-NL;q=0.8,nl;q=0.7,vi;q=0.6"
+        referer = "https://www.google.com/"
     else:
-        accept_language = "en-US,en;q=0.9,nl;q=0.8"
+        accept_language = "en-US,en;q=0.9"
         referer = "https://www.google.com/"
     if "linkedin" in source_name_text:
         referer = "https://www.linkedin.com/jobs/"
@@ -1814,8 +1878,8 @@ def _configure_session_for_scrape(session):
 
 def _indeed_rss_url_for_mode(location_mode):
     mode = _normalized_location_mode(location_mode)
-    if mode in {"nl_only", "nl_eu"}:
-        return "https://nl.indeed.com/rss"
+    if mode == "nl_vn":
+        return "https://www.indeed.com/rss"
     return "https://www.indeed.com/rss"
 
 
@@ -1994,7 +2058,7 @@ def _warmup_indeed_session(
     requests_per_second,
     location_mode,
 ):
-    home_url = "https://nl.indeed.com/" if _normalized_location_mode(location_mode) in {"nl_only", "nl_eu"} else "https://www.indeed.com/"
+    home_url = "https://www.indeed.com/" if _normalized_location_mode(location_mode) == "nl_vn" else "https://www.indeed.com/"
     response, _ = _rate_limited_get(
         session,
         home_url,
@@ -2418,7 +2482,7 @@ def _fetch_detail_page_text(
     diagnostics,
     domain_state,
     detail_rps,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     request_headers=None,
 ):
     link = _clean_value(url, "")
@@ -2486,7 +2550,7 @@ def _fetch_detail_page_text(
 
 def _fetch_indeed_jobs_direct(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     diagnostics=None,
@@ -2920,7 +2984,7 @@ def _fetch_indeed_jobs_direct(
 
 def _fetch_linkedin_jobs_direct(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     diagnostics=None,
@@ -3224,7 +3288,7 @@ def _fetch_linkedin_jobs_direct(
 
 def _fetch_linkedin_web_jobs(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
@@ -3363,20 +3427,23 @@ def _parse_nl_web_search_results(selector, response_url):
 def _build_nl_web_search_query(query, location):
     query_text = _clean_value(query, "")
     location_text = _clean_value(location, "")
+    domain_hint = "site:.nl"
     if location_text.lower() in {"netherlands", "nederland"}:
         location_text = "Nederland"
+    elif _is_vietnam_job(location_text):
+        domain_hint = "(site:.vn OR site:.com.vn)"
     parts = [
         query_text,
         location_text,
         '(vacature OR "job opening" OR "werken bij")',
-        "site:.nl",
+        domain_hint,
     ]
     return " ".join(part for part in parts if part).strip()
 
 
 def _fetch_nl_web_openings_direct(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     diagnostics=None,
@@ -3570,7 +3637,7 @@ def _fetch_nl_web_openings_direct(
 
 def _fetch_nl_web_openings_jobs(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
@@ -3760,7 +3827,7 @@ def rank_and_filter_jobs(
     items,
     target_sleeve=None,
     min_target_score=4,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     strict_sleeve=True,
     include_fail=False,
     return_diagnostics=False,
@@ -3934,6 +4001,9 @@ def rank_and_filter_jobs(
         primary_score = sleeve_scores.get(scoring_sleeve, natural_primary_score)
         primary_sleeve_details = sleeve_details.get(scoring_sleeve, {})
         total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
+        missing_domain_anchors = (
+            _clean_value(primary_sleeve_details.get("reason"), "") == "missing_domain_anchors"
+        )
         custom_title_hits = []
         custom_text_hits = []
         custom_coverage_ratio = 0.0
@@ -3977,7 +4047,11 @@ def rank_and_filter_jobs(
             total_positive_hits = custom_hit_count
 
         hard_reject_reason = sleeves.detect_hard_reject(title, raw_text)
-        abroad_base_score, abroad_badges, _ = sleeves.score_abroad(raw_text)
+        abroad_components, abroad_badges, _ = sleeves.score_abroad_components(raw_text)
+        remote_flex_score = float(abroad_components.get("remote_flex_score", 0.0))
+        mobility_score = float(abroad_components.get("mobility_score", 0.0))
+        visa_score = float(abroad_components.get("visa_score", 0.0))
+        abroad_base_score = float(abroad_components.get("abroad_score", 0.0))
         abroad_meta = _extract_abroad_metadata(raw_text)
         custom_abroad_percent = abroad_meta.get("percentage")
         if custom_mode and normalized_custom_terms:
@@ -4006,6 +4080,12 @@ def rank_and_filter_jobs(
         abroad_score, abroad_badges = _enhance_abroad_score(
             abroad_base_score,
             abroad_badges,
+            abroad_meta,
+            raw_text,
+        )
+        mobility_score, _ = _enhance_abroad_score(
+            mobility_score,
+            [],
             abroad_meta,
             raw_text,
         )
@@ -4045,13 +4125,25 @@ def rank_and_filter_jobs(
         location_proximity_score = float(location_profile.get("score", 0))
         synergy_score, synergy_hits = sleeves.score_synergy(raw_text)
         penalty_points, penalty_reasons = sleeves.evaluate_soft_penalties(raw_text)
+        penalty_reasons = list(penalty_reasons or [])
+        required_languages = {
+            sleeves.normalize_for_match(lang)
+            for lang in (language_flags.get("extra_languages") or [])
+        }
+        if language_flags.get("extra_language_required") and {"vietnamese", "vietnamees"} & required_languages:
+            penalty_points += 6
+            penalty_reasons.append(
+                "Vietnamese language required; lower priority for visa-friendly international profile."
+            )
 
         weights = sleeves.ranking_weights_for_sleeve(scoring_sleeve)
         weighted_score = (
-            (abroad_score * weights.get("abroad_score", 0.30))
-            + (primary_score * weights.get("primary_sleeve_score", 0.50))
-            + (synergy_score * weights.get("synergy_score", 0.20))
-            + (location_proximity_score * weights.get("location_proximity_score", 0.0))
+            (visa_score * weights.get("visa_score", 0.30))
+            + (mobility_score * weights.get("mobility_score", 0.16))
+            + (remote_flex_score * weights.get("remote_flex_score", 0.06))
+            + (primary_score * weights.get("primary_sleeve_score", 0.38))
+            + (synergy_score * weights.get("synergy_score", 0.05))
+            + (location_proximity_score * weights.get("location_proximity_score", 0.05))
         )
         location_gate_text = _build_location_gate_text(
             location,
@@ -4082,7 +4174,8 @@ def rank_and_filter_jobs(
         abroad_identifier_text = ", ".join(abroad_identifiers) or "no explicit signal"
         abroad_summary = (
             f"Abroad score {abroad_score}/4 via {abroad_identifier_text} "
-            f"(travel share: {travel_share_text}; geo: {geo_scope_text})"
+            f"(visa: {visa_score}/4; mobility: {mobility_score}/4; remote flexibility: {remote_flex_score}/4; "
+            f"travel share: {travel_share_text}; geo: {geo_scope_text})"
         )
         reasons = [
             (
@@ -4133,6 +4226,8 @@ def rank_and_filter_jobs(
             reasons.append(language_notes[0])
         if penalty_reasons:
             reasons.append(penalty_reasons[0])
+        if missing_domain_anchors:
+            reasons.append("Domain anchors missing for this career sleeve; likely low relevance.")
         if not location_gate_match:
             reasons.append("Location outside preferred scope; ranked as lower priority.")
         reasons = reasons[:MAX_REASON_COUNT]
@@ -4166,6 +4261,9 @@ def rank_and_filter_jobs(
                 "career_sleeve_fit_confidence_pct": career_sleeve_fit_confidence_pct,
                 "career_sleeve_fit_confidence_band": career_sleeve_fit_confidence_band,
                 "abroad_score": abroad_score,
+                "remote_flex_score": remote_flex_score,
+                "mobility_score": mobility_score,
+                "visa_score": visa_score,
                 "abroad_badges": abroad_badges,
                 "abroad_identifiers": abroad_identifiers,
                 "abroad_summary": abroad_summary,
@@ -4223,6 +4321,10 @@ def rank_and_filter_jobs(
                     "total_positive_hits": total_positive_hits,
                     "location_gate_match": location_gate_match,
                     "location_proximity_score": location_proximity_score,
+                    "abroad_score": abroad_score,
+                    "remote_flex_score": remote_flex_score,
+                    "mobility_score": mobility_score,
+                    "visa_score": visa_score,
                     "custom_mode": bool(custom_mode),
                     "custom_term_count": len(normalized_custom_terms),
                     "custom_text_hits": custom_text_hits,
@@ -4245,14 +4347,17 @@ def rank_and_filter_jobs(
                     "strict_target_mismatch": bool(
                         strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
                     ),
+                    "missing_domain_anchors": bool(missing_domain_anchors),
                 },
                 "_fail_reason": "",
                 "_rank": (
                     round(rank_score, 4),
                     weighted_score,
                     primary_score,
+                    visa_score,
+                    mobility_score,
+                    remote_flex_score,
                     location_proximity_score,
-                    abroad_score,
                     synergy_score,
                 ),
             }
@@ -4350,17 +4455,23 @@ def rank_and_filter_jobs(
             total_hits = int(scored.get("_score_components", {}).get("total_positive_hits", 0))
             location_gate_match = bool(scored.get("_score_components", {}).get("location_gate_match", True))
             mismatch = scored.get("_score_components", {}).get("strict_target_mismatch", False)
+            missing_domain_anchors = bool(
+                scored.get("_score_components", {}).get("missing_domain_anchors", False)
+            )
             fail_reason = ""
 
             if hard_reject_reason:
                 decision = "FAIL"
                 fail_reason = hard_reject_reason
-            elif location_mode != "global" and not location_gate_match:
+            elif not location_gate_match:
                 decision = "FAIL"
                 fail_reason = "location_out_of_scope"
             elif mismatch:
                 decision = "FAIL"
                 fail_reason = "target_sleeve_mismatch"
+            elif missing_domain_anchors:
+                decision = "FAIL"
+                fail_reason = "missing_domain_anchors"
             elif custom_mode and not normalized_custom_terms:
                 decision = "FAIL"
                 fail_reason = "custom_terms_missing"
@@ -4516,7 +4627,7 @@ def fetch_comic(comic_id):
 
 def _fetch_indeed_web_jobs(
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
@@ -4923,7 +5034,7 @@ def _fetch_source_with_cache(
 def fetch_jobs_from_sources(
     selected_sources,
     sleeve_key,
-    location_mode="nl_only",
+    location_mode=MVP_LOCATION_MODE,
     force_refresh=False,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
@@ -5388,7 +5499,7 @@ def company_opening():
                 candidate,
                 timeout_seconds=10,
                 max_hops=5,
-                headers=_source_headers("Indeed", "nl_only"),
+                headers=_source_headers("Indeed", MVP_LOCATION_MODE),
             )
             if _is_external_company_url(resolved):
                 return resolved
@@ -5396,7 +5507,7 @@ def company_opening():
             try:
                 response = requests.get(
                     candidate,
-                    headers=_source_headers("LinkedIn", "nl_only"),
+                    headers=_source_headers("LinkedIn", MVP_LOCATION_MODE),
                     timeout=10,
                 )
                 if response.ok:
@@ -5719,7 +5830,6 @@ def scrape():
             "no_new_unique_pages": no_new_unique_pages,
         },
         "search_queries": search_queries,
-        "query_terms": search_queries,
         "custom_mode": bool(custom_mode),
         "custom_letter": custom_letter,
         "custom_location_preferences": custom_location_preferences,

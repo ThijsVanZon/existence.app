@@ -45,17 +45,21 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertIn("festival", details["context_hits"])
         self.assertEqual(details["reason"], "ok")
 
-    def test_abroad_score_caps_at_schema_limit(self):
-        score, badges, _ = sleeves.score_abroad(
+    def test_abroad_component_scoring_exposes_remote_mobility_and_visa(self):
+        components, badges, details = sleeves.score_abroad_components(
             (
-                "Remote hybrid fully remote distributed team work from home "
-                "work from abroad international remote travel site visits."
+                "Hybrid role with international travel, site visits, relocation package, "
+                "and visa sponsorship available."
             )
         )
-        self.assertEqual(score, sleeves.ABROAD_SCORE_CAP)
-        self.assertIn("remote_or_hybrid", badges)
-        self.assertIn("work_from_abroad_policy", badges)
-        self.assertIn("travel_component", badges)
+        self.assertGreater(components["remote_flex_score"], 0)
+        self.assertGreater(components["mobility_score"], 0)
+        self.assertGreater(components["visa_score"], 0)
+        self.assertLessEqual(components["abroad_score"], sleeves.ABROAD_SCORE_CAP)
+        self.assertIn("remote_flex", badges)
+        self.assertIn("mobility", badges)
+        self.assertIn("visa_support", badges)
+        self.assertIn("components", details)
 
     def test_hard_reject_detects_sales_titles(self):
         reason = sleeves.detect_hard_reject(
@@ -72,6 +76,18 @@ class TestCareerSleeves(unittest.TestCase):
         )
         self.assertGreaterEqual(score, 3)
         self.assertEqual(details["reason"], "ok")
+
+    def test_domain_anchor_gate_caps_career_sleeve_c_when_anchor_missing(self):
+        score, details = sleeves.score_sleeve(
+            "C",
+            "Commissioning engineer for HVAC reliability and electrical maintenance.",
+            "Commissioning Engineer",
+        )
+        self.assertEqual(details["reason"], "missing_domain_anchors")
+        self.assertLessEqual(
+            score,
+            int(sleeves.SLEEVE_CONFIG["C"]["must_haves"]["anchor_cap_score"]),
+        )
 
     def test_blocked_detection_requires_stronger_signal(self):
         self.assertFalse(

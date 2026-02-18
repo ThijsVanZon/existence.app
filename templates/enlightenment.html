@@ -24,14 +24,12 @@
 
   <section class="scrape-toolbar" hidden>
     <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
-    <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed + LinkedIn direct sources, NL focus).</p>
+    <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed + LinkedIn direct sources, NL + Vietnam focus).</p>
     <div class="toolbar-grid">
       <div class="toolbar-field">
         <label for="global-location">Location scope</label>
         <select id="global-location">
-          <option value="nl_only">Netherlands focus</option>
-          <option value="nl_eu">Netherlands + EU remote</option>
-          <option value="global">Global</option>
+          <option value="nl_vn">Netherlands + Vietnam (abroad + local)</option>
         </select>
       </div>
 
@@ -74,11 +72,11 @@
         <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
       <div class="terms-editor" data-sleeve="A">
-        <label class="terms-label" for="terms-input-A">Search terms</label>
+        <label class="terms-label" for="terms-input-A">Search queries</label>
         <div id="terms-chips-A" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type term and press Enter">
+        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type query and press Enter">
         <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('A')">Reset terms</button>
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('A')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="A" onclick="startScraping('A')">Scrape Career Sleeve A</button>
@@ -96,11 +94,11 @@
         <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
       <div class="terms-editor" data-sleeve="B">
-        <label class="terms-label" for="terms-input-B">Search terms</label>
+        <label class="terms-label" for="terms-input-B">Search queries</label>
         <div id="terms-chips-B" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type term and press Enter">
+        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type query and press Enter">
         <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('B')">Reset terms</button>
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('B')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="B" onclick="startScraping('B')">Scrape Career Sleeve B</button>
@@ -118,11 +116,11 @@
         <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
       <div class="terms-editor" data-sleeve="C">
-        <label class="terms-label" for="terms-input-C">Search terms</label>
+        <label class="terms-label" for="terms-input-C">Search queries</label>
         <div id="terms-chips-C" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type term and press Enter">
+        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type query and press Enter">
         <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('C')">Reset terms</button>
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('C')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="C" onclick="startScraping('C')">Scrape Career Sleeve C</button>
@@ -140,11 +138,11 @@
         <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
       <div class="terms-editor" data-sleeve="D">
-        <label class="terms-label" for="terms-input-D">Search terms</label>
+        <label class="terms-label" for="terms-input-D">Search queries</label>
         <div id="terms-chips-D" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type term and press Enter">
+        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type query and press Enter">
         <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('D')">Reset terms</button>
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('D')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="D" onclick="startScraping('D')">Scrape Career Sleeve D</button>
@@ -162,11 +160,11 @@
         <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
       <div class="terms-editor" data-sleeve="E">
-        <label class="terms-label" for="terms-input-E">Search terms</label>
+        <label class="terms-label" for="terms-input-E">Search queries</label>
         <div id="terms-chips-E" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type term and press Enter">
+        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type query and press Enter">
         <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('E')">Reset terms</button>
+          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('E')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="E" onclick="startScraping('E')">Scrape Career Sleeve E</button>
@@ -242,14 +240,14 @@
       },
       defaults: {
         sources: ['indeed_web', 'linkedin_web'],
-        location_mode: 'nl_only',
+        location_mode: 'nl_vn',
         strict: false,
         max_results: DEFAULT_FETCH_LIMIT,
         failover: false,
         use_cache: true
       },
       location_modes: [
-        { id: 'nl_only', label: 'Netherlands focus' },
+        { id: 'nl_vn', label: 'Netherlands + Vietnam (abroad + local)' },
       ],
     };
     let scrapeConfig = fallbackConfig;
@@ -343,7 +341,7 @@
       if (!terms.length) {
         const empty = document.createElement('span');
         empty.className = 'term-chip-empty';
-        empty.textContent = 'No terms configured. Add at least one term.';
+        empty.textContent = 'No queries configured. Add at least one search query.';
         chipsWrap.appendChild(empty);
         return;
       }
@@ -361,8 +359,8 @@
         remove.type = 'button';
         remove.className = 'term-chip-remove';
         remove.textContent = 'x';
-        remove.setAttribute('aria-label', `Remove term ${term}`);
-        remove.title = 'Remove term';
+        remove.setAttribute('aria-label', `Remove query ${term}`);
+        remove.title = 'Remove query';
         remove.addEventListener('click', () => removeSleeveTerm(sleeveKey, index));
         chip.appendChild(remove);
 
@@ -1102,13 +1100,11 @@
       const defaults = scrapeConfig.defaults || fallbackConfig.defaults;
       const profile = String(scrapeConfig.profile || 'mvp').toLowerCase();
       const locationModes = scrapeConfig.location_modes || [
-        { id: 'nl_only', label: 'Netherlands focus' },
-        { id: 'nl_eu', label: 'Netherlands + EU remote' },
-        { id: 'global', label: 'Global' }
+        { id: 'nl_vn', label: 'Netherlands + Vietnam (abroad + local)' }
       ];
       const profileHint = document.getElementById('profile-hint');
       profileHint.textContent = profile === 'mvp'
-        ? 'Active profile: MVP (Indeed + LinkedIn direct sources, NL focus).'
+        ? 'Active profile: MVP (Indeed + LinkedIn direct sources, NL + Vietnam focus).'
         : `Active profile: ${profile.toUpperCase()}.`;
 
       const locationSelect = document.getElementById('global-location');
@@ -1119,7 +1115,7 @@
         option.textContent = mode.label;
         locationSelect.appendChild(option);
       });
-      locationSelect.value = defaults.location_mode || 'nl_only';
+      locationSelect.value = defaults.location_mode || 'nl_vn';
       document.getElementById('global-strict').checked = defaults.strict !== false;
       document.getElementById('global-cache').checked = defaults.use_cache !== false;
       const failoverInput = document.getElementById('global-failover');
@@ -1218,19 +1214,19 @@
         : (hasIndeed
           ? Math.max(30, Math.min(90, maxResults * 2))
           : Math.max(40, Math.min(120, maxResults * 3)));
-      const queryTerms = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
-      if (!queryTerms.length) {
+      const searchQueries = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
+      if (!searchQueries.length) {
         setProgressOutcome(
           sleeveKey,
           'INPUT REQUIRED',
-          [`Add at least one search term before scraping Career Sleeve ${sleeveKey}.`],
+          [`Add at least one search query before scraping Career Sleeve ${sleeveKey}.`],
           'warn'
         );
         return '';
       }
       const params = new URLSearchParams();
       params.set('sleeve', sleeveKey);
-      params.set('location_mode', 'nl_only');
+      params.set('location_mode', 'nl_vn');
       params.set('strict', '0');
       params.set('max_results', String(maxResults));
       params.set('max_pages', String(tunedMaxPages));
@@ -1243,8 +1239,8 @@
       params.set('failover', '0');
       params.set('sources', sources.join(','));
       params.set('run_id', String(runId || ''));
-      if (queryTerms.length) {
-        params.set('query_terms', queryTerms.join(','));
+      if (searchQueries.length) {
+        params.set('search_queries', searchQueries.join(','));
       }
       return `/scrape?${params.toString()}`;
     }
@@ -1378,7 +1374,7 @@
               progressLines.push(`Top fail reason: ${firstReason.reason} (${firstReason.count}).`);
             } else {
               progressLines.push('No jobs matched this Career Sleeve with current filters.');
-              progressLines.push('Try broadening terms.');
+              progressLines.push('Try broadening your search queries.');
             }
             resultsDiv.textContent = '';
             setProgressOutcome(
