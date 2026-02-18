@@ -35,22 +35,22 @@ def _find_hits(prepared_text, phrases):
 
 SCHEMA_VERSION = "2.0"
 ALLOW_LANGUAGES = ["nl", "en"]
-VALID_SLEEVES = {"A", "B", "C", "D", "E"}
-MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW = 3
+VALID_CAREER_SLEEVES = {"A", "B", "C", "D", "E"}
+MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW = 3
 MIN_ABROAD_SCORE_TO_PASS = 1
 ABROAD_SCORE_CAP = 4
 REMOTE_FLEX_SCORE_CAP = 4
 MOBILITY_SCORE_CAP = 4
 VISA_SCORE_CAP = 4
 MIN_TOTAL_HITS_TO_SHOW = 2
-MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE = 2
+MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE = 2
 MIN_TOTAL_HITS_TO_MAYBE = 1
 
 RANKING_WEIGHTS = {
     "visa_score": 0.30,
     "mobility_score": 0.16,
     "remote_flex_score": 0.06,
-    "primary_sleeve_score": 0.38,
+    "primary_career_sleeve_score": 0.38,
     "synergy_score": 0.05,
     "location_proximity_score": 0.05,
 }
@@ -351,7 +351,7 @@ SYNERGY_SIGNALS = {
     "cap_max": 5,
 }
 
-SLEEVE_CONFIG = {
+CAREER_SLEEVE_CONFIG = {
     "A": {
         "name": "Music Events & Festivals",
         "tagline": "Creative + operations roles in international live music where shows, teams, and on-site delivery must align.",
@@ -691,8 +691,8 @@ SLEEVE_CONFIG = {
         },
     },
     "E": {
-        "name": "Custom / User-defined Sleeve",
-        "tagline": "User-configurable sleeve for custom role archetypes, keywords, exclusions, and locations.",
+        "name": "Custom / User-defined Career Sleeve",
+        "tagline": "User-configurable Career Sleeve for custom role archetypes, keywords, exclusions, and locations.",
         "must_haves": {
             "min_title_hits": 0,
             "min_total_hits": 1,
@@ -752,17 +752,17 @@ WEIGHT_KEYS = (
     "visa_score",
     "mobility_score",
     "remote_flex_score",
-    "primary_sleeve_score",
+    "primary_career_sleeve_score",
     "synergy_score",
     "location_proximity_score",
 )
 
-SLEEVE_RANKING_WEIGHT_OVERRIDES = {
+CAREER_SLEEVE_RANKING_WEIGHT_OVERRIDES = {
     "A": {
         "visa_score": 0.30,
         "mobility_score": 0.20,
         "remote_flex_score": 0.05,
-        "primary_sleeve_score": 0.35,
+        "primary_career_sleeve_score": 0.35,
         "synergy_score": 0.05,
         "location_proximity_score": 0.05,
     },
@@ -770,7 +770,7 @@ SLEEVE_RANKING_WEIGHT_OVERRIDES = {
         "visa_score": 0.30,
         "mobility_score": 0.15,
         "remote_flex_score": 0.05,
-        "primary_sleeve_score": 0.40,
+        "primary_career_sleeve_score": 0.40,
         "synergy_score": 0.05,
         "location_proximity_score": 0.05,
     },
@@ -778,7 +778,7 @@ SLEEVE_RANKING_WEIGHT_OVERRIDES = {
         "visa_score": 0.35,
         "mobility_score": 0.10,
         "remote_flex_score": 0.05,
-        "primary_sleeve_score": 0.40,
+        "primary_career_sleeve_score": 0.40,
         "synergy_score": 0.05,
         "location_proximity_score": 0.05,
     },
@@ -786,7 +786,7 @@ SLEEVE_RANKING_WEIGHT_OVERRIDES = {
         "visa_score": 0.30,
         "mobility_score": 0.10,
         "remote_flex_score": 0.05,
-        "primary_sleeve_score": 0.45,
+        "primary_career_sleeve_score": 0.45,
         "synergy_score": 0.05,
         "location_proximity_score": 0.05,
     },
@@ -794,13 +794,13 @@ SLEEVE_RANKING_WEIGHT_OVERRIDES = {
         "visa_score": 0.24,
         "mobility_score": 0.14,
         "remote_flex_score": 0.07,
-        "primary_sleeve_score": 0.40,
+        "primary_career_sleeve_score": 0.40,
         "synergy_score": 0.10,
         "location_proximity_score": 0.05,
     },
 }
 
-SLEEVE_DECISION_THRESHOLD_OVERRIDES = {
+CAREER_SLEEVE_DECISION_THRESHOLD_OVERRIDES = {
     "A": {
         "min_primary_score": 3,
         "min_total_hits": 2,
@@ -837,7 +837,7 @@ SLEEVE_DECISION_THRESHOLD_OVERRIDES = {
     },
 }
 
-SLEEVE_TITLE_INTENT_TERMS = {
+CAREER_SLEEVE_TITLE_INTENT_TERMS = {
     "A": [
         "producer",
         "creative",
@@ -884,7 +884,7 @@ SLEEVE_TITLE_INTENT_TERMS = {
     ],
 }
 
-SLEEVE_SCORE_TUNING = {
+CAREER_SLEEVE_SCORE_TUNING = {
     "A": {
         "title_intent_weight": 1,
         "context_density_threshold": 3,
@@ -917,49 +917,114 @@ SLEEVE_SCORE_TUNING = {
     },
 }
 
-SLEEVE_SEARCH_TERMS = {
+CAREER_SLEEVE_SEARCH_QUERIES = {
     "A": [
-        "music event operations",
-        "festival producer",
-        "tour",
-        "concert production",
-        "live production",
+        # EN
+        "festival operations",
+        "live event operations",
+        "concert production coordinator",
+        "tour manager",
+        "touring production manager",
+        "stage manager live",
         "artist liaison",
-        "show operations",
-        "event operations",
+        "venue operations manager",
+        "event production manager",
+        "production coordinator live events",
+        # NL
+        "festival operations manager",
+        "evenementen coordinator",
+        "live event productiemanager",
+        "podium manager live events",
+        "tour manager muziek",
+        # VN (ASCII + commonly used transliterations)
+        "quan ly su kien",
+        "dieu phoi su kien",
+        "van hanh su kien",
+        "quan ly san xuat su kien",
+        "le hoi am nhac",
     ],
     "B": [
+        # EN
         "theme park operations",
         "attractions operations",
-        "guest experience",
-        "show operations",
+        "entertainment operations manager",
+        "park operations supervisor",
+        "guest experience operations",
         "ride operations",
+        "duty manager theme park",
+        "show operations theme park",
         "destination operations",
+        "destination operations manager",
         "resort operations",
-        "immersive destination operations",
+        "visitor experience manager",
+        # NL
+        "operationeel manager pretpark",
+        "gastbeleving manager",
+        "operaties manager attractiepark",
+        "resort operations manager",
+        "bestemming operations manager",
+        # VN
+        "van hanh cong vien giai tri",
+        "quan ly van hanh",
+        "quan ly khu du lich",
+        "trai nghiem khach hang",
+        "van hanh khu vui choi",
     ],
     "C": [
+        # EN
         "data center operations",
         "critical facilities technician",
-        "facility operations",
+        "facility engineer data center",
         "commissioning engineer data center",
-        "mission critical operations",
-        "compute infrastructure operations",
-        "ai infrastructure operations",
-        "capacity expansion data center",
+        "mission critical facilities",
+        "mep engineer data center",
+        "facilities operations manager",
+        "bms operator data center",
+        "site reliability engineer infrastructure",
+        "colocation operations",
+        # NL
+        "datacenter operations",
+        "kritieke faciliteiten technicus",
+        "commissioning engineer datacenter",
+        "mep engineer datacenter",
+        "facilitair engineer datacenter",
+        # VN
+        "van hanh trung tam du lieu",
+        "trung tam du lieu",
+        "ky su van hanh",
+        "ky su co dien",
+        "ky thuat vien co dien",
+        "ha tang trung tam du lieu",
     ],
     "D": [
+        # EN
         "supply chain operations",
-        "logistics operations",
+        "logistics operations manager",
         "vendor operations",
         "partner operations",
-        "ecosystem operations",
+        "implementation manager supply chain",
         "rollout",
-        "implementation supply chain",
+        "rollout manager operations",
+        "procurement operations",
         "distribution operations",
+        "warehouse operations manager",
+        "service delivery operations",
+        # NL
+        "supply chain operations manager",
+        "logistiek operations manager",
+        "vendor manager operations",
+        "inkoop operations",
+        "warehouse operations manager",
+        # VN
+        "chuoi cung ung",
+        "van hanh chuoi cung ung",
+        "quan ly logistics",
+        "kho van",
+        "mua hang",
+        "dieu phoi van hanh",
     ],
     "E": [
-        # Intentionally empty: fully user-defined sleeve.
+        # Intentionally empty: fully user-defined Career Sleeve.
     ],
 }
 
@@ -1262,9 +1327,12 @@ def find_hits(prepared_text, phrases):
     return _find_hits(prepared_text, phrases)
 
 
-def ranking_weights_for_sleeve(sleeve_id):
+def ranking_weights_for_career_sleeve(career_sleeve_id):
     base = {key: float(RANKING_WEIGHTS.get(key, 0.0)) for key in WEIGHT_KEYS}
-    overrides = SLEEVE_RANKING_WEIGHT_OVERRIDES.get((sleeve_id or "").upper(), {})
+    overrides = CAREER_SLEEVE_RANKING_WEIGHT_OVERRIDES.get(
+        (career_sleeve_id or "").upper(),
+        {},
+    )
     for key in WEIGHT_KEYS:
         if key not in overrides:
             continue
@@ -1280,18 +1348,21 @@ def ranking_weights_for_sleeve(sleeve_id):
     return {key: base[key] / total for key in WEIGHT_KEYS}
 
 
-def decision_thresholds_for_sleeve(sleeve_id):
+def decision_thresholds_for_career_sleeve(career_sleeve_id):
     defaults = {
-        "min_primary_score": int(MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW),
+        "min_primary_score": int(MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW),
         "min_total_hits": int(MIN_TOTAL_HITS_TO_SHOW),
-        "min_maybe_primary_score": int(MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE),
+        "min_maybe_primary_score": int(MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE),
         "min_maybe_total_hits": int(MIN_TOTAL_HITS_TO_MAYBE),
         "custom_pass_score": 2,
         "custom_pass_hits": 1,
         "custom_maybe_score": 1,
         "custom_maybe_hits": 1,
     }
-    overrides = SLEEVE_DECISION_THRESHOLD_OVERRIDES.get((sleeve_id or "").upper(), {})
+    overrides = CAREER_SLEEVE_DECISION_THRESHOLD_OVERRIDES.get(
+        (career_sleeve_id or "").upper(),
+        {},
+    )
     for key, value in overrides.items():
         try:
             defaults[key] = int(value)
@@ -1463,14 +1534,14 @@ def score_synergy(raw_text):
     return min(SYNERGY_SIGNALS["cap_max"], len(hits)), sorted(hits)
 
 
-def score_sleeve(sleeve_id, raw_text, raw_title):
-    config = SLEEVE_CONFIG[sleeve_id]
+def score_career_sleeve(career_sleeve_id, raw_text, raw_title):
+    config = CAREER_SLEEVE_CONFIG[career_sleeve_id]
     keywords = config["keywords"]
     anchors = config.get("anchors") or []
     must_haves = config["must_haves"]
     points = config["scoring"]["points"]
     cap = config["scoring"]["cap_max"]
-    sleeve_tuning = SLEEVE_SCORE_TUNING.get(sleeve_id, {})
+    sleeve_tuning = CAREER_SLEEVE_SCORE_TUNING.get(career_sleeve_id, {})
 
     prepared_text = _prepare_text(raw_text)
     prepared_title = _prepare_text(raw_title)
@@ -1481,7 +1552,10 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     negative_hits = _find_hits(prepared_text, keywords["negative"])
     anchor_hits = _find_hits(prepared_text, anchors)
     bonus_hits = _find_hits(prepared_text, must_haves.get("bonus_signals") or [])
-    title_intent_hits = _find_hits(prepared_title, SLEEVE_TITLE_INTENT_TERMS.get(sleeve_id, []))
+    title_intent_hits = _find_hits(
+        prepared_title,
+        CAREER_SLEEVE_TITLE_INTENT_TERMS.get(career_sleeve_id, []),
+    )
     total_positive_hits = len(title_hits_in_text.union(context_hits))
 
     def _tuning_int(key, fallback=0):
@@ -1542,13 +1616,17 @@ def score_sleeve(sleeve_id, raw_text, raw_title):
     }
 
 
-def score_all_sleeves(raw_text, raw_title):
+def score_all_career_sleeves(raw_text, raw_title):
     scores = {}
     details = {}
-    for sleeve_id in sorted(SLEEVE_CONFIG):
-        sleeve_score, sleeve_details = score_sleeve(sleeve_id, raw_text, raw_title)
-        scores[sleeve_id] = sleeve_score
-        details[sleeve_id] = sleeve_details
+    for career_sleeve_id in sorted(CAREER_SLEEVE_CONFIG):
+        sleeve_score, sleeve_details = score_career_sleeve(
+            career_sleeve_id,
+            raw_text,
+            raw_title,
+        )
+        scores[career_sleeve_id] = sleeve_score
+        details[career_sleeve_id] = sleeve_details
     return scores, details
 
 

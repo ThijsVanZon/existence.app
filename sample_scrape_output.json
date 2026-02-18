@@ -11,17 +11,17 @@
       "full_description": "You will own implementation workflows, API integrations and process improvements.",
       "raw_text": "Implementation Consultant Example Labs Amsterdam, Netherlands Drive workflow automation and integrations with enterprise clients. You will own implementation workflows, API integrations and process improvements.",
       "prepared_text": "implementation consultant example labs amsterdam netherlands drive workflow automation and integrations with enterprise clients you will own implementation workflows api integrations and process improvements",
-      "primary_sleeve_id": "B",
-      "primary_sleeve_name": "Workflow Ops & Automation",
-      "primary_sleeve_tagline": "Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).",
-      "sleeve_scores": {
+      "primary_career_sleeve_id": "B",
+      "primary_career_sleeve_name": "Workflow Ops & Automation",
+      "primary_career_sleeve_tagline": "Tech/software ops: tooling, automation, enablement (remote/hybrid ideaal).",
+      "career_sleeve_scores": {
         "A": 0,
         "B": 5,
         "C": 0,
         "D": 1,
         "E": 0
       },
-      "primary_sleeve_score": 5,
+      "primary_career_sleeve_score": 5,
       "abroad_score": 2,
       "abroad_badges": [
         "remote_or_hybrid"
@@ -54,7 +54,7 @@
       "link": "https://www.indeed.com/viewjob?jk=abc123",
       "date": "2 days ago",
       "salary": "Not listed",
-      "primary_sleeve": "B",
+      "primary_career_sleeve": "B",
       "why_relevant": [
         "Sleeve B fit 5/5 (A:0 B:5 C:0 D:1 E:0)",
         "Abroad score 2/4 via remote_or_hybrid",
@@ -78,7 +78,7 @@
     "fail_count": 91,
     "top_fail_reasons": [
       {
-        "reason": "primary_sleeve_score_too_low",
+        "reason": "primary_career_sleeve_score_too_low",
         "count": 55
       },
       {
@@ -153,7 +153,7 @@
       "fail_count": 91,
       "top_fail_reasons": [
         {
-          "reason": "primary_sleeve_score_too_low",
+          "reason": "primary_career_sleeve_score_too_low",
           "count": 55
         }
       ]
@@ -162,7 +162,7 @@
       "fallback:min_total_hits-1"
     ],
     "fail_reasons": {
-      "primary_sleeve_score_too_low": 55,
+      "primary_career_sleeve_score_too_low": 55,
       "insufficient_keyword_hits": 31
     },
     "dedupe_ratio_by_source": {
@@ -182,3 +182,4 @@
   },
   "errors": []
 }
+

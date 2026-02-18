@@ -23,7 +23,7 @@
   </nav>
 
   <section class="scrape-toolbar" hidden>
-    <p class="toolbar-hint">Run any sleeve with one shared filter setup. This keeps comparisons fair across sleeves and avoids repetitive toggling.</p>
+    <p class="toolbar-hint">Run any Career Sleeve with one shared filter setup. This keeps comparisons fair across Career Sleeves and avoids repetitive toggling.</p>
     <p class="toolbar-hint" id="profile-hint">Active profile: MVP (Indeed + LinkedIn direct sources, NL + Vietnam focus).</p>
     <div class="toolbar-grid">
       <div class="toolbar-field">
@@ -35,13 +35,13 @@
 
       <div class="toolbar-field">
         <label>Results view</label>
-        <p class="toolbar-static">10 per page. Use Next/Previous per sleeve to browse all results.</p>
+        <p class="toolbar-static">10 per page. Use Next/Previous per Career Sleeve to browse all results.</p>
       </div>
 
       <div class="toolbar-field toolbar-checks">
         <label class="control-inline">
           <input type="checkbox" id="global-strict" checked>
-          Strict sleeve matching
+          Strict Career Sleeve matching
         </label>
         <label class="control-inline">
           <input type="checkbox" id="global-cache" checked>
@@ -71,12 +71,12 @@
         <span class="sleeve-header-name">Music Events & Festivals</span>
         <span class="sleeve-header-code">Career Sleeve A</span>
       </h3>
-      <div class="terms-editor" data-sleeve="A">
-        <label class="terms-label" for="terms-input-A">Search queries</label>
-        <div id="terms-chips-A" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-A" class="terms-input" type="text" placeholder="Type query and press Enter">
-        <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('A')">Reset queries</button>
+      <div class="queries-editor" data-sleeve="A">
+        <label class="queries-label" for="queries-input-A">Search queries</label>
+        <div id="queries-chips-A" class="queries-chip-list" aria-live="polite"></div>
+        <input id="queries-input-A" class="queries-input" type="text" placeholder="Type query and press Enter">
+        <div class="queries-actions">
+          <button type="button" class="queries-reset-btn" onclick="resetCareerSleeveQueries('A')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="A" onclick="startScraping('A')">Scrape Career Sleeve A</button>
@@ -93,12 +93,12 @@
         <span class="sleeve-header-name">Theme Parks & Destinations</span>
         <span class="sleeve-header-code">Career Sleeve B</span>
       </h3>
-      <div class="terms-editor" data-sleeve="B">
-        <label class="terms-label" for="terms-input-B">Search queries</label>
-        <div id="terms-chips-B" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-B" class="terms-input" type="text" placeholder="Type query and press Enter">
-        <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('B')">Reset queries</button>
+      <div class="queries-editor" data-sleeve="B">
+        <label class="queries-label" for="queries-input-B">Search queries</label>
+        <div id="queries-chips-B" class="queries-chip-list" aria-live="polite"></div>
+        <input id="queries-input-B" class="queries-input" type="text" placeholder="Type query and press Enter">
+        <div class="queries-actions">
+          <button type="button" class="queries-reset-btn" onclick="resetCareerSleeveQueries('B')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="B" onclick="startScraping('B')">Scrape Career Sleeve B</button>
@@ -115,12 +115,12 @@
         <span class="sleeve-header-name">Data Centers & Facilities</span>
         <span class="sleeve-header-code">Career Sleeve C</span>
       </h3>
-      <div class="terms-editor" data-sleeve="C">
-        <label class="terms-label" for="terms-input-C">Search queries</label>
-        <div id="terms-chips-C" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-C" class="terms-input" type="text" placeholder="Type query and press Enter">
-        <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('C')">Reset queries</button>
+      <div class="queries-editor" data-sleeve="C">
+        <label class="queries-label" for="queries-input-C">Search queries</label>
+        <div id="queries-chips-C" class="queries-chip-list" aria-live="polite"></div>
+        <input id="queries-input-C" class="queries-input" type="text" placeholder="Type query and press Enter">
+        <div class="queries-actions">
+          <button type="button" class="queries-reset-btn" onclick="resetCareerSleeveQueries('C')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="C" onclick="startScraping('C')">Scrape Career Sleeve C</button>
@@ -137,12 +137,12 @@
         <span class="sleeve-header-name">Value Chains & Ecosystems</span>
         <span class="sleeve-header-code">Career Sleeve D</span>
       </h3>
-      <div class="terms-editor" data-sleeve="D">
-        <label class="terms-label" for="terms-input-D">Search queries</label>
-        <div id="terms-chips-D" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-D" class="terms-input" type="text" placeholder="Type query and press Enter">
-        <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('D')">Reset queries</button>
+      <div class="queries-editor" data-sleeve="D">
+        <label class="queries-label" for="queries-input-D">Search queries</label>
+        <div id="queries-chips-D" class="queries-chip-list" aria-live="polite"></div>
+        <input id="queries-input-D" class="queries-input" type="text" placeholder="Type query and press Enter">
+        <div class="queries-actions">
+          <button type="button" class="queries-reset-btn" onclick="resetCareerSleeveQueries('D')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="D" onclick="startScraping('D')">Scrape Career Sleeve D</button>
@@ -156,15 +156,15 @@
 
     <section class="sleeve-panel" id="panel-E">
       <h3>
-        <span class="sleeve-header-name">Custom / User-defined Sleeve</span>
+        <span class="sleeve-header-name">Custom / User-defined Career Sleeve</span>
         <span class="sleeve-header-code">Career Sleeve E</span>
       </h3>
-      <div class="terms-editor" data-sleeve="E">
-        <label class="terms-label" for="terms-input-E">Search queries</label>
-        <div id="terms-chips-E" class="terms-chip-list" aria-live="polite"></div>
-        <input id="terms-input-E" class="terms-input" type="text" placeholder="Type query and press Enter">
-        <div class="terms-actions">
-          <button type="button" class="terms-reset-btn" onclick="resetSleeveTerms('E')">Reset queries</button>
+      <div class="queries-editor" data-sleeve="E">
+        <label class="queries-label" for="queries-input-E">Search queries</label>
+        <div id="queries-chips-E" class="queries-chip-list" aria-live="polite"></div>
+        <input id="queries-input-E" class="queries-input" type="text" placeholder="Type query and press Enter">
+        <div class="queries-actions">
+          <button type="button" class="queries-reset-btn" onclick="resetCareerSleeveQueries('E')">Reset queries</button>
         </div>
       </div>
       <button type="button" class="scrape-btn" data-sleeve="E" onclick="startScraping('E')">Scrape Career Sleeve E</button>
@@ -181,11 +181,11 @@
     const sleeveKeys = ['A', 'B', 'C', 'D', 'E'];
     const RESULTS_PER_PAGE = 10;
     const DEFAULT_FETCH_LIMIT = 200;
-    const TERMS_STORAGE_PREFIX = 'existence.sleeve_terms.v2.';
+    const SEARCH_QUERIES_STORAGE_PREFIX = 'existence.career_sleeve_queries.v1.';
     const sleeveControllers = {};
     const sleeveProgressPollers = {};
     const sourceHealthTimers = {};
-    const sleeveTermState = {};
+    const careerSleeveQueryState = {};
     let activeScrapeSleeve = '';
     const fallbackConfig = {
       profile: 'mvp',
@@ -193,7 +193,7 @@
         { id: 'indeed_web', label: 'Indeed (direct scraping)', available: true, default_enabled: true, reason: '' },
         { id: 'linkedin_web', label: 'LinkedIn (direct scraping)', available: true, default_enabled: true, reason: '' },
       ],
-      sleeve_terms_defaults: {
+      career_sleeve_search_queries_defaults: {
         A: [
           'music event operations',
           'festival producer',
@@ -235,7 +235,7 @@
           'distribution operations'
         ],
         E: [
-          // Intentionally empty: fully user-defined sleeve.
+          // Intentionally empty: fully user-defined Career Sleeve.
         ]
       },
       defaults: {
@@ -263,19 +263,19 @@
       return mapping;
     }
 
-    function normalizeTermToken(value) {
+    function normalizeQueryToken(value) {
       return String(value || '').trim().toLowerCase();
     }
 
-    function dedupeTerms(terms) {
+    function dedupeQueries(queries) {
       const ordered = [];
       const seen = new Set();
-      (terms || []).forEach(term => {
-        const cleaned = String(term || '').trim();
+      (queries || []).forEach(query => {
+        const cleaned = String(query || '').trim();
         if (cleaned.length < 2) {
           return;
         }
-        const normalized = normalizeTermToken(cleaned);
+        const normalized = normalizeQueryToken(cleaned);
         if (!normalized || seen.has(normalized)) {
           return;
         }
@@ -285,19 +285,19 @@
       return ordered;
     }
 
-    function termStorageKey(sleeveKey) {
-      return `${TERMS_STORAGE_PREFIX}${sleeveKey}`;
+    function queryStorageKey(sleeveKey) {
+      return `${SEARCH_QUERIES_STORAGE_PREFIX}${sleeveKey}`;
     }
 
-    function getDefaultTermsForSleeve(sleeveKey) {
-      const defaults = scrapeConfig.sleeve_terms_defaults || {};
-      return dedupeTerms(Array.isArray(defaults[sleeveKey]) ? defaults[sleeveKey] : []);
+    function getDefaultQueriesForCareerSleeve(sleeveKey) {
+      const defaults = scrapeConfig.career_sleeve_search_queries_defaults || {};
+      return dedupeQueries(Array.isArray(defaults[sleeveKey]) ? defaults[sleeveKey] : []);
     }
 
-    function loadPersistedSleeveTerms(sleeveKey) {
-      const defaults = getDefaultTermsForSleeve(sleeveKey);
+    function loadPersistedCareerSleeveQueries(sleeveKey) {
+      const defaults = getDefaultQueriesForCareerSleeve(sleeveKey);
       try {
-        const stored = localStorage.getItem(termStorageKey(sleeveKey));
+        const stored = localStorage.getItem(queryStorageKey(sleeveKey));
         if (!stored) {
           return defaults;
         }
@@ -305,71 +305,71 @@
         if (!Array.isArray(parsed)) {
           return defaults;
         }
-        const merged = dedupeTerms(parsed);
+        const merged = dedupeQueries(parsed);
         return merged.length ? merged : defaults;
       } catch (_error) {
         return defaults;
       }
     }
 
-    function persistSleeveTerms(sleeveKey) {
+    function persistCareerSleeveQueries(sleeveKey) {
       try {
-        localStorage.setItem(termStorageKey(sleeveKey), JSON.stringify(sleeveTermState[sleeveKey] || []));
+        localStorage.setItem(queryStorageKey(sleeveKey), JSON.stringify(careerSleeveQueryState[sleeveKey] || []));
       } catch (_error) {
       }
     }
 
-    function removeSleeveTerm(sleeveKey, index) {
-      const current = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
+    function removeCareerSleeveQuery(sleeveKey, index) {
+      const current = Array.isArray(careerSleeveQueryState[sleeveKey]) ? careerSleeveQueryState[sleeveKey] : [];
       if (index < 0 || index >= current.length) {
         return;
       }
       current.splice(index, 1);
-      sleeveTermState[sleeveKey] = current;
-      persistSleeveTerms(sleeveKey);
-      renderSleeveTerms(sleeveKey);
+      careerSleeveQueryState[sleeveKey] = current;
+      persistCareerSleeveQueries(sleeveKey);
+      renderCareerSleeveQueries(sleeveKey);
     }
 
-    function renderSleeveTerms(sleeveKey) {
-      const chipsWrap = document.getElementById(`terms-chips-${sleeveKey}`);
+    function renderCareerSleeveQueries(sleeveKey) {
+      const chipsWrap = document.getElementById(`queries-chips-${sleeveKey}`);
       if (!chipsWrap) {
         return;
       }
-      const terms = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
+      const queries = Array.isArray(careerSleeveQueryState[sleeveKey]) ? careerSleeveQueryState[sleeveKey] : [];
       chipsWrap.innerHTML = '';
 
-      if (!terms.length) {
+      if (!queries.length) {
         const empty = document.createElement('span');
-        empty.className = 'term-chip-empty';
+        empty.className = 'query-chip-empty';
         empty.textContent = 'No queries configured. Add at least one search query.';
         chipsWrap.appendChild(empty);
         return;
       }
 
-      terms.forEach((term, index) => {
+      queries.forEach((query, index) => {
         const chip = document.createElement('span');
-        chip.className = 'term-chip';
+        chip.className = 'query-chip';
 
         const label = document.createElement('span');
-        label.className = 'term-chip-label';
-        label.textContent = term;
+        label.className = 'query-chip-label';
+        label.textContent = query;
         chip.appendChild(label);
 
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.className = 'term-chip-remove';
+        remove.className = 'query-chip-remove';
         remove.textContent = 'x';
-        remove.setAttribute('aria-label', `Remove query ${term}`);
+        remove.setAttribute('aria-label', `Remove query ${query}`);
         remove.title = 'Remove query';
-        remove.addEventListener('click', () => removeSleeveTerm(sleeveKey, index));
+        remove.addEventListener('click', () => removeCareerSleeveQuery(sleeveKey, index));
         chip.appendChild(remove);
 
         chipsWrap.appendChild(chip);
       });
     }
 
-    function addSleeveTermsFromInput(sleeveKey) {
-      const input = document.getElementById(`terms-input-${sleeveKey}`);
+    function addCareerSleeveQueriesFromInput(sleeveKey) {
+      const input = document.getElementById(`queries-input-${sleeveKey}`);
       if (!input) {
         return;
       }
@@ -382,22 +382,22 @@
         input.value = '';
         return;
       }
-      const current = Array.isArray(sleeveTermState[sleeveKey]) ? sleeveTermState[sleeveKey] : [];
-      sleeveTermState[sleeveKey] = dedupeTerms(current.concat(chunks));
+      const current = Array.isArray(careerSleeveQueryState[sleeveKey]) ? careerSleeveQueryState[sleeveKey] : [];
+      careerSleeveQueryState[sleeveKey] = dedupeQueries(current.concat(chunks));
       input.value = '';
-      persistSleeveTerms(sleeveKey);
-      renderSleeveTerms(sleeveKey);
+      persistCareerSleeveQueries(sleeveKey);
+      renderCareerSleeveQueries(sleeveKey);
     }
 
-    function resetSleeveTerms(sleeveKey) {
-      sleeveTermState[sleeveKey] = getDefaultTermsForSleeve(sleeveKey);
-      persistSleeveTerms(sleeveKey);
-      renderSleeveTerms(sleeveKey);
+    function resetCareerSleeveQueries(sleeveKey) {
+      careerSleeveQueryState[sleeveKey] = getDefaultQueriesForCareerSleeve(sleeveKey);
+      persistCareerSleeveQueries(sleeveKey);
+      renderCareerSleeveQueries(sleeveKey);
     }
 
-    function initializeTermEditors() {
+    function initializeCareerQueryEditors() {
       sleeveKeys.forEach((sleeveKey) => {
-        const input = document.getElementById(`terms-input-${sleeveKey}`);
+        const input = document.getElementById(`queries-input-${sleeveKey}`);
         if (!input) {
           return;
         }
@@ -405,13 +405,13 @@
           input.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              addSleeveTermsFromInput(sleeveKey);
+              addCareerSleeveQueriesFromInput(sleeveKey);
             }
           });
           input.dataset.bound = '1';
         }
-        sleeveTermState[sleeveKey] = loadPersistedSleeveTerms(sleeveKey);
-        renderSleeveTerms(sleeveKey);
+        careerSleeveQueryState[sleeveKey] = loadPersistedCareerSleeveQueries(sleeveKey);
+        renderCareerSleeveQueries(sleeveKey);
       });
     }
 
@@ -931,7 +931,7 @@
 
       const sourceLabels = sourceLabelMap();
       const decision = (job.decision || 'PASS').toUpperCase();
-      const sleeveId = job.primary_sleeve_id || job.primary_sleeve || '-';
+      const sleeveId = job.primary_career_sleeve_id || job.primary_career_sleeve || '-';
       const mode = resolveWorkMode(job);
       const abroadScore = Number.isFinite(job.abroad_score) ? Number(job.abroad_score) : 0;
       const abroadPctText = String(job.abroad_percentage_text || '').trim();
@@ -996,7 +996,7 @@
         ? 'decision-badge decision-pass'
         : (decision === 'MAYBE' ? 'decision-badge decision-maybe' : 'decision-badge decision-fail');
       badges.appendChild(createBadge(decisionClass, decision));
-      badges.appendChild(createBadge('decision-badge decision-neutral', `Career Sleeve ${sleeveId} ${job.primary_sleeve_score || 0}/5`));
+      badges.appendChild(createBadge('decision-badge decision-neutral', `Career Sleeve ${sleeveId} ${job.primary_career_sleeve_score || 0}/5`));
       badges.appendChild(
         createBadge(
           'decision-badge decision-abroad',
@@ -1175,7 +1175,7 @@
           .join(', ') || availableSources[0].label}`;
       }
 
-      initializeTermEditors();
+      initializeCareerQueryEditors();
       setScrapeButtonsLocked(activeScrapeSleeve);
     }
 
@@ -1214,7 +1214,7 @@
         : (hasIndeed
           ? Math.max(30, Math.min(90, maxResults * 2))
           : Math.max(40, Math.min(120, maxResults * 3)));
-      const searchQueries = dedupeTerms(sleeveTermState[sleeveKey] || getDefaultTermsForSleeve(sleeveKey));
+      const searchQueries = dedupeQueries(careerSleeveQueryState[sleeveKey] || getDefaultQueriesForCareerSleeve(sleeveKey));
       if (!searchQueries.length) {
         setProgressOutcome(
           sleeveKey,
@@ -1225,7 +1225,7 @@
         return '';
       }
       const params = new URLSearchParams();
-      params.set('sleeve', sleeveKey);
+      params.set('career_sleeve', sleeveKey);
       params.set('location_mode', 'nl_vn');
       params.set('strict', '0');
       params.set('max_results', String(maxResults));
@@ -1251,7 +1251,7 @@
       const summaryDiv = document.getElementById(`summary-${sleeveKey}`);
       const panel = document.getElementById(`panel-${sleeveKey}`);
       const runId = `${sleeveKey}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-      addSleeveTermsFromInput(sleeveKey);
+      addCareerSleeveQueriesFromInput(sleeveKey);
 
       if (activeScrapeSleeve && activeScrapeSleeve !== sleeveKey) {
         setProgressOutcome(
@@ -1431,4 +1431,7 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+
+
+
 

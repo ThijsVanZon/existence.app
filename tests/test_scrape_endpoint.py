@@ -88,9 +88,9 @@ class TestScrapeEndpoint(unittest.TestCase):
                             "language_notes": [],
                             "reasons": [],
                             "hard_reject_reason": None,
-                            "sleeve_scores": {"A": 5, "B": 0, "C": 0, "D": 0, "E": 0},
-                            "primary_sleeve_id": "A",
-                            "primary_sleeve_score": 5,
+                            "career_sleeve_scores": {"A": 5, "B": 0, "C": 0, "D": 0, "E": 0},
+                            "primary_career_sleeve_id": "A",
+                            "primary_career_sleeve_score": 5,
                             "abroad_score": 2,
                             "abroad_badges": [],
                             "raw_text": "",
@@ -117,7 +117,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            response = self.client.get("/scrape?sleeve=A&target_raw=150")
+            response = self.client.get("/scrape?career_sleeve=A&target_raw=150")
             self.assertEqual(response.status_code, 200)
             payload = response.get_json()
             summary = payload["summary"]
@@ -159,7 +159,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
                 ["indeed_web", "linkedin_web", "serpapi"],
-                sleeve_key="A",
+                career_sleeve_key="A",
                 target_raw=10,
                 allow_failover=True,
             )
@@ -205,7 +205,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             items, errors, used_sources, diagnostics = main.fetch_jobs_from_sources(
                 ["linkedin_web"],
-                sleeve_key="A",
+                career_sleeve_key="A",
                 target_raw=10,
                 allow_failover=True,
             )
@@ -350,7 +350,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             seed_items, seed_error, _ = main._fetch_source_with_cache(
                 source_key,
-                sleeve_key="A",
+                career_sleeve_key="A",
                 location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
@@ -367,8 +367,8 @@ class TestScrapeEndpoint(unittest.TestCase):
                 1,
                 10,
                 1,
-                query_terms=None,
-                extra_terms=None,
+                search_queries=None,
+                extra_queries=None,
             )
             with main.source_cache_lock:
                 main.source_cache[cache_key]["fetched_at"] = time.time() - 120
@@ -380,7 +380,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             items, error, _ = main._fetch_source_with_cache(
                 source_key,
-                sleeve_key="A",
+                career_sleeve_key="A",
                 location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
@@ -433,7 +433,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             seed_items, seed_error, _ = main._fetch_source_with_cache(
                 source_key,
-                sleeve_key="A",
+                career_sleeve_key="A",
                 location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
@@ -450,8 +450,8 @@ class TestScrapeEndpoint(unittest.TestCase):
                 1,
                 10,
                 1,
-                query_terms=None,
-                extra_terms=None,
+                search_queries=None,
+                extra_queries=None,
             )
             with main.source_cache_lock:
                 main.source_cache[cache_key]["fetched_at"] = time.time() - 5
@@ -463,7 +463,7 @@ class TestScrapeEndpoint(unittest.TestCase):
 
             items, error, _ = main._fetch_source_with_cache(
                 source_key,
-                sleeve_key="A",
+                career_sleeve_key="A",
                 location_mode=main.MVP_LOCATION_MODE,
                 force_refresh=True,
                 max_pages=1,
@@ -509,7 +509,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            response = self.client.get("/scrape?sleeve=A&sources=serpapi")
+            response = self.client.get("/scrape?career_sleeve=A&sources=serpapi")
             self.assertEqual(response.status_code, 200)
             self.assertFalse(captured["allow_failover"])
         finally:
@@ -559,7 +559,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.rank_and_filter_jobs = fake_rank
 
             response = self.client.get(
-                "/scrape?sleeve=A&sources=indeed_web&location_mode=global&failover=1"
+                "/scrape?career_sleeve=A&sources=indeed_web&location_mode=global&failover=1"
             )
 
             self.assertEqual(response.status_code, 200)
@@ -605,7 +605,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            response = self.client.get("/scrape?sleeve=A")
+            response = self.client.get("/scrape?career_sleeve=A")
             self.assertEqual(response.status_code, 200)
             payload = response.get_json() or {}
             summary = payload.get("summary") or {}
@@ -660,7 +660,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            response = self.client.get("/scrape?sleeve=A&scrape_variant=ultra_fast&max_pages=8&target_raw=200")
+            response = self.client.get("/scrape?career_sleeve=A&scrape_variant=ultra_fast&max_pages=8&target_raw=200")
             self.assertEqual(response.status_code, 200)
             payload = response.get_json() or {}
             summary = payload.get("summary") or {}
@@ -678,10 +678,10 @@ class TestScrapeEndpoint(unittest.TestCase):
         original_fetch = main.fetch_jobs_from_sources
         original_rank = main.rank_and_filter_jobs
         try:
-            captured = {"query_terms": None}
+            captured = {"search_queries": None}
 
             def fake_fetch(*args, **kwargs):
-                captured["query_terms"] = kwargs.get("query_terms")
+                captured["search_queries"] = kwargs.get("search_queries")
                 return [], [], ["indeed_web"], main._new_diagnostics()
 
             def fake_rank(*args, **kwargs):
@@ -705,17 +705,17 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.rank_and_filter_jobs = fake_rank
 
             response = self.client.get(
-                "/scrape?sleeve=A&search_queries=festival+producer,artist+liaison,festival+producer"
+                "/scrape?career_sleeve=A&search_queries=festival+producer,artist+liaison,festival+producer"
             )
 
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(captured["query_terms"], ["festival producer", "artist liaison"])
+            self.assertEqual(captured["search_queries"], ["festival producer", "artist liaison"])
         finally:
             main.fetch_jobs_from_sources = original_fetch
             main.rank_and_filter_jobs = original_rank
 
-    def test_scrape_rejects_custom_mode_without_terms(self):
-        response = self.client.get("/scrape?sleeve=E&custom_mode=1")
+    def test_scrape_rejects_custom_mode_without_queries(self):
+        response = self.client.get("/scrape?career_sleeve=E&custom_mode=1")
         self.assertEqual(response.status_code, 400)
         payload = response.get_json() or {}
         self.assertIn("at least one search query", payload.get("error", "").lower())
@@ -747,7 +747,7 @@ class TestScrapeEndpoint(unittest.TestCase):
             main.fetch_jobs_from_sources = fake_fetch
             main.rank_and_filter_jobs = fake_rank
 
-            response = self.client.get("/scrape?sleeve=A")
+            response = self.client.get("/scrape?career_sleeve=A")
             self.assertEqual(response.status_code, 200)
             payload = response.get_json()
             self.assertIn("summary", payload)
@@ -772,19 +772,19 @@ class TestScrapeEndpoint(unittest.TestCase):
             json={
                 "letter": "A",
                 "title": "Attempt overwrite",
-                "terms": ["festival producer"],
+                "queries": ["festival producer"],
             },
         )
         self.assertEqual(response.status_code, 409)
         payload = response.get_json()
         self.assertIn("cannot be overwritten", payload.get("error", ""))
 
-    def test_synergy_sleeves_requires_minimum_one_term(self):
+    def test_synergy_sleeves_requires_minimum_one_query(self):
         response = self.client.post(
             "/synergy-sleeves",
             json={
-                "title": "Custom Without Terms",
-                "terms": [],
+                "title": "Custom Without Queries",
+                "queries": [],
             },
         )
         self.assertEqual(response.status_code, 400)
@@ -802,7 +802,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     json={
                         "letter": "E",
                         "title": "Custom Pipeline Sleeve",
-                        "terms": ["workflow operations", "delivery operations"],
+                        "queries": ["workflow operations", "delivery operations"],
                     },
                 )
                 self.assertEqual(create_response.status_code, 200)
@@ -817,7 +817,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                 self.assertEqual(custom_entries[0].get("letter"), "E")
                 self.assertEqual(custom_entries[0].get("title"), "Custom Pipeline Sleeve")
                 self.assertEqual(
-                    custom_entries[0].get("terms"),
+                    custom_entries[0].get("queries"),
                     ["workflow operations", "delivery operations"],
                 )
 
@@ -843,7 +843,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     "/synergy-sleeves",
                     json={
                         "title": "Auto Custom One",
-                        "terms": ["custom one term"],
+                        "queries": ["custom one term"],
                     },
                 )
                 self.assertEqual(first_response.status_code, 200)
@@ -854,7 +854,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     "/synergy-sleeves",
                     json={
                         "title": "Auto Custom Two",
-                        "terms": ["custom two term"],
+                        "queries": ["custom two term"],
                     },
                 )
                 self.assertEqual(second_response.status_code, 200)
@@ -866,7 +866,7 @@ class TestScrapeEndpoint(unittest.TestCase):
                     json={
                         "letter": "E",
                         "title": "Should Not Overwrite",
-                        "terms": ["duplicate custom term"],
+                        "queries": ["duplicate custom term"],
                     },
                 )
                 self.assertEqual(duplicate_response.status_code, 409)
@@ -876,3 +876,6 @@ class TestScrapeEndpoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

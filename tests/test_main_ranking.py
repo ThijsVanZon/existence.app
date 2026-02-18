@@ -25,10 +25,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
         self.assertEqual(ranked[0]["decision"], "PASS")
@@ -44,17 +44,17 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
 
         self.assertEqual(len(ranked), 2)
         self.assertEqual(ranked[0]["company"], "NoPenalty")
         self.assertEqual(ranked[1]["company"], "WithPenalty")
 
-    def test_output_contains_sleeve_name_and_tagline(self):
+    def test_output_contains_career_sleeve_name_and_tagline(self):
         jobs = [
             self._job(
                 "MetaCheck",
@@ -63,18 +63,18 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
 
         self.assertEqual(len(ranked), 1)
         item = ranked[0]
-        self.assertIn("primary_sleeve_name", item)
-        self.assertIn("primary_sleeve_tagline", item)
-        self.assertTrue(item["primary_sleeve_name"])
-        self.assertTrue(item["primary_sleeve_tagline"])
+        self.assertIn("primary_career_sleeve_name", item)
+        self.assertIn("primary_career_sleeve_tagline", item)
+        self.assertTrue(item["primary_career_sleeve_name"])
+        self.assertTrue(item["primary_career_sleeve_tagline"])
         self.assertLessEqual(len(item.get("reasons") or []), 3)
 
     def test_dedupe_by_title_company_and_canonical_url(self):
@@ -100,10 +100,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
 
@@ -117,10 +117,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="B",
+            target_career_sleeve="B",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
 
         self.assertEqual(len(ranked), 1)
@@ -142,10 +142,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
         item = ranked[0]
@@ -179,12 +179,12 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="E",
+            target_career_sleeve="E",
             min_target_score=2,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
             custom_mode=True,
-            custom_query_terms=["operations analyst"],
+            custom_search_queries=["operations analyst"],
             custom_location_preferences={
                 "countries": ["Germany"],
                 "regions": ["EMEA"],
@@ -206,10 +206,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="B",
+            target_career_sleeve="B",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(ranked, [])
 
@@ -224,10 +224,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="D",
+            target_career_sleeve="D",
             min_target_score=2,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
         self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
@@ -252,10 +252,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="D",
+            target_career_sleeve="D",
             min_target_score=2,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 2)
         self.assertEqual(ranked[0]["company"], "NoLanguagePenalty")
@@ -311,10 +311,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
         self.assertIn("abroad_identifiers", ranked[0])
@@ -343,10 +343,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="A",
+            target_career_sleeve="A",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 2)
         self.assertEqual(ranked[0]["company"], "Near")
@@ -366,10 +366,10 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="B",
+            target_career_sleeve="B",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertEqual(len(ranked), 1)
         item = ranked[0]
@@ -388,7 +388,7 @@ class TestMainRanking(unittest.TestCase):
         self.assertIn("travel_percentage", badges)
         self.assertIn("geo_scope", badges)
 
-    def test_infer_work_mode_supports_dutch_terms(self):
+    def test_infer_work_mode_supports_dutch_keywords(self):
         self.assertEqual(main._infer_work_mode("Hybride werken in Amsterdam"), "Hybrid")
         self.assertEqual(main._infer_work_mode("Op afstand in Nederland"), "Remote")
         self.assertEqual(main._infer_work_mode("Op locatie in Utrecht"), "On-site")
@@ -462,10 +462,10 @@ class TestMainRanking(unittest.TestCase):
         jobs[0]["source"] = "Indeed"
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="B",
+            target_career_sleeve="B",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertTrue(ranked)
         self.assertEqual(
@@ -490,10 +490,10 @@ class TestMainRanking(unittest.TestCase):
         jobs[0]["company_url"] = "https://nl.indeed.com/rc/clk?jk=abc123"
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="B",
+            target_career_sleeve="B",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
         )
         self.assertTrue(ranked)
         self.assertEqual(ranked[0]["company_url"], "")
@@ -531,16 +531,7 @@ class TestMainRanking(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "https://company.example/careers/42")
 
-    def test_company_posting_alias_route_still_works(self):
-        with main.app.test_client() as client:
-            response = client.get(
-                "/company-posting",
-                query_string={"company_url": "https://company.example/jobs/42"},
-            )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers.get("Location"), "https://company.example/jobs/42")
-
-    def test_custom_mode_uses_query_terms_for_generic_ranking(self):
+    def test_custom_mode_uses_search_queries_for_generic_ranking(self):
         jobs = [
             self._job(
                 "CustomFit",
@@ -550,12 +541,12 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="E",
+            target_career_sleeve="E",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
             custom_mode=True,
-            custom_query_terms=[
+            custom_search_queries=[
                 "ecosystem operations",
                 "vendor rollout",
                 "workflow",
@@ -563,7 +554,7 @@ class TestMainRanking(unittest.TestCase):
         )
         self.assertEqual(len(ranked), 1)
         self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
-        self.assertGreaterEqual(ranked[0]["primary_sleeve_score"], 1)
+        self.assertGreaterEqual(ranked[0]["primary_career_sleeve_score"], 1)
 
     def test_custom_mode_matches_dutch_variant_for_english_term(self):
         jobs = [
@@ -575,22 +566,25 @@ class TestMainRanking(unittest.TestCase):
         ]
         ranked = main.rank_and_filter_jobs(
             jobs,
-            target_sleeve="E",
+            target_career_sleeve="E",
             min_target_score=3,
             location_mode="nl_vn",
-            strict_sleeve=False,
+            strict_career_sleeve=False,
             custom_mode=True,
-            custom_query_terms=["operations analyst"],
+            custom_search_queries=["operations analyst"],
         )
         self.assertEqual(len(ranked), 1)
         self.assertIn(ranked[0]["decision"], {"PASS", "MAYBE"})
-        self.assertGreaterEqual(ranked[0]["primary_sleeve_score"], 1)
+        self.assertGreaterEqual(ranked[0]["primary_career_sleeve_score"], 1)
 
-    def test_query_bundle_expands_terms_with_bilingual_variants(self):
-        queries = main._query_bundle_for_sleeve("E", query_terms=["operations analyst"])
+    def test_query_bundle_expands_queries_with_bilingual_variants(self):
+        queries = main._search_query_bundle_for_career_sleeve("E", search_queries=["operations analyst"])
         self.assertIn("operations analyst", queries)
         self.assertIn("operaties analist", queries)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+

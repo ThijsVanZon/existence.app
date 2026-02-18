@@ -35,7 +35,7 @@ Do not track `passenger_wsgi.py` in this repository. cPanel can manage that file
 
 Required query params:
 
-- `sleeve` = `A|B|C|D|E`
+- `career_sleeve` = `A|B|C|D|E`
 
 Useful optional query params:
 
@@ -45,14 +45,13 @@ Useful optional query params:
 - `rps` = list-page request rate per domain (default: `0.45`)
 - `detail_rps` = detail-page request rate per domain (default: `0.25`)
 - `no_new_unique_pages` = stop after N pages without new unique jobs (default: `2`)
-- `strict` = `1|0` target sleeve strictness (default: `0`)
+- `strict` = `1|0` target Career Sleeve strictness (default: `0`)
 - `refresh` = `1|0` bypass source cache (default: `0`)
 - `failover` = `1|0` allow backend to add fallback sources on low yield/blocking (default: currently disabled in MVP flow)
 - `include_fail` = `1|0` include FAIL records in returned `jobs` (default: `0`)
 - `incremental` = `1|0` return only unseen jobs from local state (default: `0`)
 - `state_window_days` = retention window for incremental seen-state (default: `14`)
-- `legacy` = `1|0` return legacy list-only payload (default: `0`)
-- `search_queries` = comma-separated custom search queries; backend expands EN/NL variants for querying and matching (`query_terms` remains a backward-compatible alias)
+- `search_queries` = comma-separated custom search queries; backend expands EN/NL variants for querying and matching
 - abroad extraction/scoring uses EN/NL variants for travel context + geo; returned job openings include `abroad_identifiers` and `abroad_summary`
 
 Current MVP backend behavior:
@@ -102,3 +101,4 @@ Main knobs are in `main.py`:
 - `DEFAULT_DETAIL_RATE_LIMIT_RPS`
 - `DEFAULT_HTTP_RETRIES`
 - `SNAPSHOT_DIR`
+

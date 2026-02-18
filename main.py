@@ -588,42 +588,42 @@ def _save_json_file(path, payload):
         return False
 
 
-def _normalize_sleeve_letter(value):
+def _normalize_career_sleeve_letter(value):
     cleaned = _clean_value(value, "").strip().upper()
     if len(cleaned) != 1 or not cleaned.isalpha():
         return ""
     return cleaned
 
 
-def _is_fixed_synergy_letter(letter):
+def _is_fixed_career_sleeve_letter(letter):
     return letter in FIXED_SYNERGY_SLEEVE_LETTERS
 
 
-def _is_custom_synergy_letter(letter):
+def _is_custom_career_sleeve_letter(letter):
     if not letter or len(letter) != 1:
         return False
     if not letter.isalpha():
         return False
-    if _is_fixed_synergy_letter(letter):
+    if _is_fixed_career_sleeve_letter(letter):
         return False
     return ord(CUSTOM_SYNERGY_MIN_LETTER) <= ord(letter) <= ord(CUSTOM_SYNERGY_MAX_LETTER)
 
 
-def _parse_terms_for_storage(raw_terms):
-    if isinstance(raw_terms, str):
-        parsed = _parse_query_terms(raw_terms)
-    elif isinstance(raw_terms, list):
-        parsed = _dedupe_terms(raw_terms)
+def _parse_queries_for_storage(raw_queries):
+    if isinstance(raw_queries, str):
+        parsed = _parse_search_queries(raw_queries)
+    elif isinstance(raw_queries, list):
+        parsed = _dedupe_queries(raw_queries)
     else:
         parsed = []
 
-    normalized_terms = []
-    for term in parsed:
-        cleaned = _clean_value(term, "")
+    normalized_queries = []
+    for query in parsed:
+        cleaned = _clean_value(query, "")
         if len(cleaned) < 2:
             continue
-        normalized_terms.append(cleaned[:96])
-    return _dedupe_terms(normalized_terms)[:80]
+        normalized_queries.append(cleaned[:96])
+    return _dedupe_queries(normalized_queries)[:80]
 
 
 def _default_custom_location_preferences():
@@ -635,8 +635,8 @@ def _default_custom_location_preferences():
     }
 
 
-def _parse_geo_preferences_for_storage(raw_terms, limit=24):
-    parsed = _parse_terms_for_storage(raw_terms)
+def _parse_geo_preferences_for_storage(raw_queries, limit=24):
+    parsed = _parse_queries_for_storage(raw_queries)
     return parsed[: max(1, int(limit))]
 
 
@@ -674,13 +674,13 @@ def _parse_custom_location_preferences(raw_payload):
     }
 
 
-def _next_available_custom_synergy_letter(records):
+def _next_available_custom_career_sleeve_letter(records):
     used_letters = set()
     for entry in records or []:
         if not isinstance(entry, dict):
             continue
-        letter = _normalize_sleeve_letter(entry.get("letter"))
-        if _is_custom_synergy_letter(letter):
+        letter = _normalize_career_sleeve_letter(entry.get("letter"))
+        if _is_custom_career_sleeve_letter(letter):
             used_letters.add(letter)
 
     for code in range(ord(CUSTOM_SYNERGY_MIN_LETTER), ord(CUSTOM_SYNERGY_MAX_LETTER) + 1):
@@ -690,15 +690,15 @@ def _next_available_custom_synergy_letter(records):
     return ""
 
 
-def _fixed_synergy_sleeves():
+def _fixed_career_sleeves():
     records = []
     for letter in FIXED_SYNERGY_SLEEVE_LETTERS:
-        config = sleeves.SLEEVE_CONFIG.get(letter, {})
+        config = sleeves.CAREER_SLEEVE_CONFIG.get(letter, {})
         records.append(
             {
                 "letter": letter,
                 "title": _clean_value(config.get("name"), f"Career Sleeve {letter}"),
-                "terms": _dedupe_terms(sleeves.SLEEVE_SEARCH_TERMS.get(letter, [])),
+                "queries": _dedupe_queries(sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(letter, [])),
                 "location_preferences": _default_custom_location_preferences(),
                 "locked": True,
                 "scope": "fixed",
@@ -708,7 +708,7 @@ def _fixed_synergy_sleeves():
     return records
 
 
-def _load_custom_synergy_sleeves():
+def _load_custom_career_sleeves():
     payload = _load_json_file(CUSTOM_SLEEVES_STATE_PATH, {"version": "1.0", "custom_sleeves": []})
     raw_entries = payload.get("custom_sleeves") if isinstance(payload, dict) else []
     if not isinstance(raw_entries, list):
@@ -718,18 +718,18 @@ def _load_custom_synergy_sleeves():
     for entry in raw_entries:
         if not isinstance(entry, dict):
             continue
-        letter = _normalize_sleeve_letter(entry.get("letter"))
-        if not _is_custom_synergy_letter(letter):
+        letter = _normalize_career_sleeve_letter(entry.get("letter"))
+        if not _is_custom_career_sleeve_letter(letter):
             continue
         title = _clean_value(entry.get("title"), "")[:120]
-        terms = _parse_terms_for_storage(entry.get("terms"))
+        queries = _parse_queries_for_storage(entry.get("queries"))
         location_preferences = _parse_custom_location_preferences(entry.get("location_preferences"))
         if not title:
             continue
         by_letter[letter] = {
             "letter": letter,
             "title": title,
-            "terms": terms,
+            "queries": queries,
             "location_preferences": location_preferences,
             "locked": False,
             "scope": "custom",
@@ -739,16 +739,16 @@ def _load_custom_synergy_sleeves():
     return [by_letter[key] for key in sorted(by_letter)]
 
 
-def _save_custom_synergy_sleeves(records):
+def _save_custom_career_sleeves(records):
     serializable = []
     for entry in records or []:
         if not isinstance(entry, dict):
             continue
-        letter = _normalize_sleeve_letter(entry.get("letter"))
-        if not _is_custom_synergy_letter(letter):
+        letter = _normalize_career_sleeve_letter(entry.get("letter"))
+        if not _is_custom_career_sleeve_letter(letter):
             continue
         title = _clean_value(entry.get("title"), "")[:120]
-        terms = _parse_terms_for_storage(entry.get("terms"))
+        queries = _parse_queries_for_storage(entry.get("queries"))
         location_preferences = _parse_custom_location_preferences(entry.get("location_preferences"))
         if not title:
             continue
@@ -756,7 +756,7 @@ def _save_custom_synergy_sleeves(records):
             {
                 "letter": letter,
                 "title": title,
-                "terms": terms,
+                "queries": queries,
                 "location_preferences": location_preferences,
                 "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
             }
@@ -771,9 +771,9 @@ def _save_custom_synergy_sleeves(records):
     return _save_json_file(CUSTOM_SLEEVES_STATE_PATH, payload)
 
 
-def _synergy_sleeve_catalog():
-    fixed = _fixed_synergy_sleeves()
-    custom = _load_custom_synergy_sleeves()
+def _career_sleeve_catalog():
+    fixed = _fixed_career_sleeves()
+    custom = _load_custom_career_sleeves()
     all_entries = list(fixed) + list(custom)
     return {
         "fixed": fixed,
@@ -790,9 +790,9 @@ def _load_runtime_config():
         "config_version": "1.0",
         "query_overrides": {},
         "threshold_overrides": {
-            "min_primary_score": sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
+            "min_primary_score": sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
             "min_total_hits": sleeves.MIN_TOTAL_HITS_TO_SHOW,
-            "min_maybe_primary_score": sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE,
+            "min_maybe_primary_score": sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
             "min_maybe_total_hits": sleeves.MIN_TOTAL_HITS_TO_MAYBE,
         },
         "detail_fetch": {
@@ -983,9 +983,9 @@ def _save_query_performance_state(state):
     return _save_json_file(QUERY_PERFORMANCE_STATE_PATH, state)
 
 
-def _prioritize_queries(sleeve_key, queries):
+def _prioritize_queries(career_sleeve_key, queries):
     state = _load_query_performance_state()
-    sleeve_state = state.get((sleeve_key or "").upper(), {})
+    career_sleeve_state = state.get((career_sleeve_key or "").upper(), {})
     qp_cfg = RUNTIME_CONFIG.get("query_performance", {})
     min_runs = int(qp_cfg.get("min_runs_before_prune", 3))
     min_avg = float(qp_cfg.get("min_avg_parsed_per_page", 0.5))
@@ -993,7 +993,7 @@ def _prioritize_queries(sleeve_key, queries):
 
     scored = []
     for query in queries:
-        q_state = sleeve_state.get(query, {})
+        q_state = career_sleeve_state.get(query, {})
         runs = int(q_state.get("runs", 0))
         parsed_total = int(q_state.get("parsed_total", 0))
         pages_total = int(q_state.get("pages_total", 0))
@@ -1011,15 +1011,15 @@ def _prioritize_queries(sleeve_key, queries):
     return kept or queries
 
 
-def _update_query_performance_from_diagnostics(diagnostics, sleeve_key):
+def _update_query_performance_from_diagnostics(diagnostics, career_sleeve_key):
     state = _load_query_performance_state()
-    sleeve = (sleeve_key or "").upper()
-    sleeve_state = state.setdefault(sleeve, {})
+    career_sleeve = (career_sleeve_key or "").upper()
+    career_sleeve_state = state.setdefault(career_sleeve, {})
     for entry in (diagnostics.get("source_query_summary") or {}).values():
         query = _clean_value(entry.get("query"), "")
         if not query:
             continue
-        q_state = sleeve_state.setdefault(
+        q_state = career_sleeve_state.setdefault(
             query,
             {
                 "runs": 0,
@@ -1739,7 +1739,7 @@ _BILINGUAL_TOKEN_LOOKUP = _build_bilingual_lookup(_BILINGUAL_TOKEN_GROUPS)
 _BILINGUAL_PHRASE_LOOKUP = _build_bilingual_lookup(_BILINGUAL_PHRASE_GROUPS)
 
 
-def _bilingual_term_variants(term, max_variants=24):
+def _bilingual_query_variants(term, max_variants=24):
     normalized_term = sleeves.normalize_for_match(term)
     if not normalized_term:
         return []
@@ -1775,26 +1775,26 @@ def _bilingual_term_variants(term, max_variants=24):
     return sorted(variants)
 
 
-def _expand_terms_with_bilingual_variants(terms):
+def _expand_terms_with_bilingual_variants(queries):
     expanded = []
-    for term in terms or []:
-        normalized_term = sleeves.normalize_for_match(term)
+    for query in queries or []:
+        normalized_term = sleeves.normalize_for_match(query)
         if not normalized_term:
             continue
         expanded.append(normalized_term)
-        for variant in _bilingual_term_variants(normalized_term):
+        for variant in _bilingual_query_variants(normalized_term):
             if variant == normalized_term:
                 continue
             expanded.append(variant)
-    return _dedupe_terms(expanded)
+    return _dedupe_queries(expanded)
 
 
-def _parse_query_terms(raw_value):
+def _parse_search_queries(raw_value):
     raw_text = str(raw_value or "")
     if not raw_text.strip():
         return []
     parts = re.split(r"[,;\n\r|]+", raw_text)
-    parsed_terms = []
+    parsed_queries = []
     seen = set()
     for part in parts:
         cleaned = _clean_value(part, "")
@@ -1804,20 +1804,19 @@ def _parse_query_terms(raw_value):
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
-        parsed_terms.append(cleaned)
-    return parsed_terms
+        parsed_queries.append(cleaned)
+    return parsed_queries
 
 
-def _parse_extra_terms(raw_value):
-    # Backward-compatible alias for older request/query handling.
-    return _parse_query_terms(raw_value)
+def _parse_extra_queries(raw_value):
+    return _parse_search_queries(raw_value)
 
 
-def _dedupe_terms(terms):
+def _dedupe_queries(queries):
     ordered = []
     seen = set()
-    for term in terms or []:
-        cleaned = _clean_value(term, "")
+    for query in queries or []:
+        cleaned = _clean_value(query, "")
         if len(cleaned) < 2:
             continue
         normalized = sleeves.normalize_for_match(cleaned)
@@ -1828,16 +1827,20 @@ def _dedupe_terms(terms):
     return ordered
 
 
-def _query_bundle_for_sleeve(sleeve_key, query_terms=None, extra_terms=None):
-    sleeve = (sleeve_key or "").upper()
-    overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(sleeve, [])
-    base_terms = overrides if isinstance(overrides, list) and overrides else sleeves.SLEEVE_SEARCH_TERMS.get(sleeve, [])
-    ordered_terms = _dedupe_terms(query_terms if query_terms else base_terms)
-    ordered_terms = _expand_terms_with_bilingual_variants(ordered_terms)
-    if extra_terms:
-        ordered_terms = _dedupe_terms(ordered_terms + list(extra_terms))
-        ordered_terms = _expand_terms_with_bilingual_variants(ordered_terms)
-    return _prioritize_queries(sleeve, ordered_terms)
+def _search_query_bundle_for_career_sleeve(career_sleeve_key, search_queries=None, extra_queries=None):
+    career_sleeve = (career_sleeve_key or "").upper()
+    overrides = (RUNTIME_CONFIG.get("query_overrides") or {}).get(career_sleeve, [])
+    base_queries = (
+        overrides
+        if isinstance(overrides, list) and overrides
+        else sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(career_sleeve, [])
+    )
+    ordered_queries = _dedupe_queries(search_queries if search_queries else base_queries)
+    ordered_queries = _expand_terms_with_bilingual_variants(ordered_queries)
+    if extra_queries:
+        ordered_queries = _dedupe_queries(ordered_queries + list(extra_queries))
+        ordered_queries = _expand_terms_with_bilingual_variants(ordered_queries)
+    return _prioritize_queries(career_sleeve, ordered_queries)
 
 
 def _source_headers(source_name, location_mode=MVP_LOCATION_MODE, user_agent=""):
@@ -2549,7 +2552,7 @@ def _fetch_detail_page_text(
 
 
 def _fetch_indeed_jobs_direct(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
@@ -2557,18 +2560,18 @@ def _fetch_indeed_jobs_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     search_url = _indeed_search_url_for_mode(location_mode)
     jobs = []
     seen_unique = set()
     domain_state = {}
-    queries = _query_bundle_for_sleeve(
-        sleeve_key,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+    queries = _search_query_bundle_for_career_sleeve(
+        career_sleeve_key,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
@@ -2983,7 +2986,7 @@ def _fetch_indeed_jobs_direct(
 
 
 def _fetch_linkedin_jobs_direct(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
@@ -2991,17 +2994,17 @@ def _fetch_linkedin_jobs_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     jobs = []
     seen_unique = set()
     domain_state = {}
-    queries = _query_bundle_for_sleeve(
-        sleeve_key,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+    queries = _search_query_bundle_for_career_sleeve(
+        career_sleeve_key,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
@@ -3287,20 +3290,20 @@ def _fetch_linkedin_jobs_direct(
 
 
 def _fetch_linkedin_web_jobs(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
     diagnostics=None,
     **_kwargs,
 ):
     return _fetch_linkedin_jobs_direct(
-        sleeve_key,
+        career_sleeve_key,
         location_mode=location_mode,
         max_pages=max_pages,
         target_raw=target_raw,
@@ -3308,8 +3311,8 @@ def _fetch_linkedin_web_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
 
 
@@ -3442,7 +3445,7 @@ def _build_nl_web_search_query(query, location):
 
 
 def _fetch_nl_web_openings_direct(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
@@ -3450,17 +3453,17 @@ def _fetch_nl_web_openings_direct(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
     jobs = []
     seen_unique = set()
     domain_state = {}
-    queries = _query_bundle_for_sleeve(
-        sleeve_key,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+    queries = _search_query_bundle_for_career_sleeve(
+        career_sleeve_key,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
     locations = _location_passes_for_mode(location_mode)
     session = requests.Session()
@@ -3636,20 +3639,20 @@ def _fetch_nl_web_openings_direct(
 
 
 def _fetch_nl_web_openings_jobs(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
     diagnostics=None,
     **_kwargs,
 ):
     return _fetch_nl_web_openings_direct(
-        sleeve_key,
+        career_sleeve_key,
         location_mode=location_mode,
         max_pages=max_pages,
         target_raw=target_raw,
@@ -3657,8 +3660,8 @@ def _fetch_nl_web_openings_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
 
 
@@ -3695,9 +3698,9 @@ def _text_evidence_confidence(full_description, raw_text):
     return 0.46
 
 
-def _sleeve_fit_confidence(
+def _career_sleeve_fit_confidence(
     primary_score,
-    sleeve_scores,
+    career_sleeve_scores,
     total_positive_hits,
     full_description,
     raw_text,
@@ -3721,7 +3724,7 @@ def _sleeve_fit_confidence(
         return _clamp01(confidence)
 
     score_values = sorted(
-        [float(value or 0) for value in (sleeve_scores or {}).values()],
+        [float(value or 0) for value in (career_sleeve_scores or {}).values()],
         reverse=True,
     )
     top_score = score_values[0] if score_values else 0.0
@@ -3751,7 +3754,7 @@ def _abroad_range_fit(min_percent, max_percent, observed_percent):
 
 def _abroad_preferences_fit_profile(
     custom_mode,
-    normalized_custom_geo_terms,
+    normalized_custom_geo_queries,
     custom_geo_matches,
     custom_abroad_range_active,
     custom_abroad_min_percent,
@@ -3762,7 +3765,7 @@ def _abroad_preferences_fit_profile(
     abroad_meta,
 ):
     signal_norm = _clamp01(float(abroad_score or 0) / 4.0)
-    geo_pref_count = len(normalized_custom_geo_terms or [])
+    geo_pref_count = len(normalized_custom_geo_queries or [])
     geo_match_count = len(custom_geo_matches or [])
     geo_requested = geo_pref_count > 0
     range_requested = bool(custom_abroad_range_active)
@@ -3825,41 +3828,41 @@ def _abroad_preferences_fit_profile(
 
 def rank_and_filter_jobs(
     items,
-    target_sleeve=None,
+    target_career_sleeve=None,
     min_target_score=4,
     location_mode=MVP_LOCATION_MODE,
-    strict_sleeve=True,
+    strict_career_sleeve=True,
     include_fail=False,
     return_diagnostics=False,
     diagnostics=None,
     custom_mode=False,
-    custom_query_terms=None,
+    custom_search_queries=None,
     custom_location_preferences=None,
 ):
     diagnostics = diagnostics or _new_diagnostics()
-    normalized_custom_terms = []
+    normalized_custom_queries = []
     custom_term_variant_map = {}
     normalized_custom_location_preferences = _default_custom_location_preferences()
-    normalized_custom_geo_terms = []
+    normalized_custom_geo_queries = []
     custom_abroad_min_percent = 0
     custom_abroad_max_percent = 100
     custom_abroad_range_active = False
     if custom_mode:
-        normalized_custom_terms = _dedupe_terms(
+        normalized_custom_queries = _dedupe_queries(
             [
                 sleeves.normalize_for_match(term)
-                for term in (custom_query_terms or [])
+                for term in (custom_search_queries or [])
                 if term
             ]
         )
         custom_term_variant_map = {
-            term: _bilingual_term_variants(term)
-            for term in normalized_custom_terms
+            term: _bilingual_query_variants(term)
+            for term in normalized_custom_queries
         }
         normalized_custom_location_preferences = _parse_custom_location_preferences(
             custom_location_preferences
         )
-        normalized_custom_geo_terms = _dedupe_terms(
+        normalized_custom_geo_queries = _dedupe_queries(
             [
                 sleeves.normalize_for_match(term)
                 for term in (
@@ -3991,49 +3994,53 @@ def rank_and_filter_jobs(
         )
 
         language_flags, language_notes = sleeves.detect_language_flags(raw_text)
-        sleeve_scores, sleeve_details = sleeves.score_all_sleeves(raw_text, title_text)
-        primary_sleeve, natural_primary_score = max(
-            sleeve_scores.items(),
+        career_sleeve_scores, career_sleeve_details = sleeves.score_all_career_sleeves(raw_text, title_text)
+        primary_career_sleeve, natural_primary_score = max(
+            career_sleeve_scores.items(),
             key=lambda pair: pair[1],
         )
 
-        scoring_sleeve = target_sleeve if target_sleeve in sleeves.VALID_SLEEVES else primary_sleeve
-        primary_score = sleeve_scores.get(scoring_sleeve, natural_primary_score)
-        primary_sleeve_details = sleeve_details.get(scoring_sleeve, {})
-        total_positive_hits = int(primary_sleeve_details.get("total_positive_hits", 0))
+        scoring_career_sleeve = (
+            target_career_sleeve
+            if target_career_sleeve in sleeves.VALID_CAREER_SLEEVES
+            else primary_career_sleeve
+        )
+        primary_score = career_sleeve_scores.get(scoring_career_sleeve, natural_primary_score)
+        primary_career_sleeve_details = career_sleeve_details.get(scoring_career_sleeve, {})
+        total_positive_hits = int(primary_career_sleeve_details.get("total_positive_hits", 0))
         missing_domain_anchors = (
-            _clean_value(primary_sleeve_details.get("reason"), "") == "missing_domain_anchors"
+            _clean_value(primary_career_sleeve_details.get("reason"), "") == "missing_domain_anchors"
         )
         custom_title_hits = []
         custom_text_hits = []
         custom_coverage_ratio = 0.0
-        custom_missing_terms = []
+        custom_missing_queries = []
         custom_geo_matches = []
         custom_pref_bonus = 0
         custom_abroad_percent = None
         custom_abroad_percent_in_range = None
-        if custom_mode and normalized_custom_terms:
+        if custom_mode and normalized_custom_queries:
             prepared_title = sleeves.prepare_text(title_text)
-            found_terms = set()
-            for term in normalized_custom_terms:
-                term_variants = custom_term_variant_map.get(term) or [term]
-                text_variant_hits = sleeves.find_hits(prepared_text, term_variants)
-                title_variant_hits = sleeves.find_hits(prepared_title, term_variants)
+            found_queries = set()
+            for term in normalized_custom_queries:
+                query_variants = custom_term_variant_map.get(term) or [term]
+                text_variant_hits = sleeves.find_hits(prepared_text, query_variants)
+                title_variant_hits = sleeves.find_hits(prepared_title, query_variants)
                 if text_variant_hits:
                     custom_text_hits.append(term)
-                    found_terms.add(term)
+                    found_queries.add(term)
                 if title_variant_hits:
                     custom_title_hits.append(term)
-                    found_terms.add(term)
+                    found_queries.add(term)
             custom_text_hits = sorted(set(custom_text_hits))
             custom_title_hits = sorted(set(custom_title_hits))
-            custom_hit_count = len(found_terms)
-            custom_missing_terms = sorted(
-                [term for term in normalized_custom_terms if term not in found_terms]
+            custom_hit_count = len(found_queries)
+            custom_missing_queries = sorted(
+                [term for term in normalized_custom_queries if term not in found_queries]
             )
             custom_coverage_ratio = (
-                custom_hit_count / len(normalized_custom_terms)
-                if normalized_custom_terms
+                custom_hit_count / len(normalized_custom_queries)
+                if normalized_custom_queries
                 else 0.0
             )
             coverage_bonus = 1 if custom_hit_count >= 2 and custom_coverage_ratio >= 0.6 else 0
@@ -4054,9 +4061,9 @@ def rank_and_filter_jobs(
         abroad_base_score = float(abroad_components.get("abroad_score", 0.0))
         abroad_meta = _extract_abroad_metadata(raw_text)
         custom_abroad_percent = abroad_meta.get("percentage")
-        if custom_mode and normalized_custom_terms:
-            if normalized_custom_geo_terms:
-                geo_candidates = _expand_terms_with_bilingual_variants(normalized_custom_geo_terms)
+        if custom_mode and normalized_custom_queries:
+            if normalized_custom_geo_queries:
+                geo_candidates = _expand_terms_with_bilingual_variants(normalized_custom_geo_queries)
                 custom_geo_matches = sorted(
                     {
                         sleeves.normalize_for_match(hit)
@@ -4095,9 +4102,9 @@ def rank_and_filter_jobs(
             raw_text,
             badges=abroad_badges,
         )
-        career_sleeve_fit_confidence = _sleeve_fit_confidence(
+        career_sleeve_fit_confidence = _career_sleeve_fit_confidence(
             primary_score=primary_score,
-            sleeve_scores=sleeve_scores,
+            career_sleeve_scores=career_sleeve_scores,
             total_positive_hits=total_positive_hits,
             full_description=full_description,
             raw_text=raw_text,
@@ -4111,7 +4118,7 @@ def rank_and_filter_jobs(
         career_sleeve_fit_confidence_band = _confidence_band(career_sleeve_fit_confidence)
         abroad_preferences_profile = _abroad_preferences_fit_profile(
             custom_mode=bool(custom_mode),
-            normalized_custom_geo_terms=normalized_custom_geo_terms,
+            normalized_custom_geo_queries=normalized_custom_geo_queries,
             custom_geo_matches=custom_geo_matches,
             custom_abroad_range_active=custom_abroad_range_active,
             custom_abroad_min_percent=custom_abroad_min_percent,
@@ -4136,12 +4143,12 @@ def rank_and_filter_jobs(
                 "Vietnamese language required; lower priority for visa-friendly international profile."
             )
 
-        weights = sleeves.ranking_weights_for_sleeve(scoring_sleeve)
+        weights = sleeves.ranking_weights_for_career_sleeve(scoring_career_sleeve)
         weighted_score = (
             (visa_score * weights.get("visa_score", 0.30))
             + (mobility_score * weights.get("mobility_score", 0.16))
             + (remote_flex_score * weights.get("remote_flex_score", 0.06))
-            + (primary_score * weights.get("primary_sleeve_score", 0.38))
+            + (primary_score * weights.get("primary_career_sleeve_score", 0.38))
             + (synergy_score * weights.get("synergy_score", 0.05))
             + (location_proximity_score * weights.get("location_proximity_score", 0.05))
         )
@@ -4155,7 +4162,7 @@ def rank_and_filter_jobs(
         location_penalty = 0 if location_gate_match else 4
         rank_score = (weighted_score * 20) - penalty_points - location_penalty
 
-        primary_sleeve_config = sleeves.SLEEVE_CONFIG[scoring_sleeve]
+        primary_career_sleeve_config = sleeves.CAREER_SLEEVE_CONFIG[scoring_career_sleeve]
         distance_km = location_profile.get("distance_km")
         if distance_km is None:
             proximity_reason = (
@@ -4179,25 +4186,25 @@ def rank_and_filter_jobs(
         )
         reasons = [
             (
-                f"Career Sleeve {scoring_sleeve} fit {primary_score}/5 "
-                f"(A:{sleeve_scores['A']} B:{sleeve_scores['B']} "
-                f"C:{sleeve_scores['C']} D:{sleeve_scores['D']} E:{sleeve_scores['E']})"
+                f"Career Sleeve {scoring_career_sleeve} fit {primary_score}/5 "
+                f"(A:{career_sleeve_scores['A']} B:{career_sleeve_scores['B']} "
+                f"C:{career_sleeve_scores['C']} D:{career_sleeve_scores['D']} E:{career_sleeve_scores['E']})"
             ),
             proximity_reason,
             abroad_summary,
-            f"Keyword coverage {total_positive_hits} hits for career sleeve {scoring_sleeve}",
+            f"Keyword coverage {total_positive_hits} hits for Career Sleeve {scoring_career_sleeve}",
         ]
         if custom_mode:
             coverage_pct = int(round(custom_coverage_ratio * 100))
             reasons[0] = (
-                f"Custom career sleeve relevance {primary_score}/5 "
-                f"(matched {total_positive_hits} of {len(normalized_custom_terms)} custom terms; "
+                f"Custom Career Sleeve relevance {primary_score}/5 "
+                f"(matched {total_positive_hits} of {len(normalized_custom_queries)} custom queries; "
                 f"coverage {coverage_pct}%)"
             )
             custom_pref_parts = []
-            if normalized_custom_geo_terms:
+            if normalized_custom_geo_queries:
                 custom_pref_parts.append(
-                    f"geo matches {len(custom_geo_matches)}/{len(normalized_custom_geo_terms)}"
+                    f"geo matches {len(custom_geo_matches)}/{len(normalized_custom_geo_queries)}"
                 )
             if custom_abroad_range_active:
                 if custom_abroad_percent is None:
@@ -4227,7 +4234,7 @@ def rank_and_filter_jobs(
         if penalty_reasons:
             reasons.append(penalty_reasons[0])
         if missing_domain_anchors:
-            reasons.append("Domain anchors missing for this career sleeve; likely low relevance.")
+            reasons.append("Domain anchors missing for this Career Sleeve; likely low relevance.")
         if not location_gate_match:
             reasons.append("Location outside preferred scope; ranked as lower priority.")
         reasons = reasons[:MAX_REASON_COUNT]
@@ -4248,14 +4255,14 @@ def rank_and_filter_jobs(
                 "linkedin_url": linkedin_url,
                 "raw_text": raw_text,
                 "prepared_text": prepared_text.strip(),
-                "primary_sleeve_id": scoring_sleeve,
-                "primary_sleeve_name": primary_sleeve_config.get("name", ""),
-                "primary_sleeve_tagline": primary_sleeve_config.get("tagline", ""),
-                "career_sleeve_id": scoring_sleeve,
-                "career_sleeve_name": primary_sleeve_config.get("name", ""),
-                "career_sleeve_tagline": primary_sleeve_config.get("tagline", ""),
-                "sleeve_scores": sleeve_scores,
-                "primary_sleeve_score": primary_score,
+                "primary_career_sleeve_id": scoring_career_sleeve,
+                "primary_career_sleeve_name": primary_career_sleeve_config.get("name", ""),
+                "primary_career_sleeve_tagline": primary_career_sleeve_config.get("tagline", ""),
+                "career_sleeve_id": scoring_career_sleeve,
+                "career_sleeve_name": primary_career_sleeve_config.get("name", ""),
+                "career_sleeve_tagline": primary_career_sleeve_config.get("tagline", ""),
+                "career_sleeve_scores": career_sleeve_scores,
+                "primary_career_sleeve_score": primary_score,
                 "career_sleeve_fit_score": career_sleeve_fit_score,
                 "career_sleeve_fit_confidence": career_sleeve_fit_confidence,
                 "career_sleeve_fit_confidence_pct": career_sleeve_fit_confidence_pct,
@@ -4307,7 +4314,7 @@ def rank_and_filter_jobs(
                 "link": link,
                 "date": date_posted,
                 "salary": salary,
-                "primary_sleeve": scoring_sleeve,
+                "primary_career_sleeve": scoring_career_sleeve,
                 "why_relevant": reasons,
                 "custom_location_preferences": (
                     normalized_custom_location_preferences if custom_mode else _default_custom_location_preferences()
@@ -4326,12 +4333,12 @@ def rank_and_filter_jobs(
                     "mobility_score": mobility_score,
                     "visa_score": visa_score,
                     "custom_mode": bool(custom_mode),
-                    "custom_term_count": len(normalized_custom_terms),
+                    "custom_query_count": len(normalized_custom_queries),
                     "custom_text_hits": custom_text_hits,
                     "custom_title_hits": custom_title_hits,
-                    "custom_missing_terms": custom_missing_terms,
+                    "custom_missing_queries": custom_missing_queries,
                     "custom_coverage_ratio": round(custom_coverage_ratio, 4),
-                    "custom_geo_terms": normalized_custom_geo_terms,
+                    "custom_geo_queries": normalized_custom_geo_queries,
                     "custom_geo_matches": custom_geo_matches,
                     "custom_pref_bonus": custom_pref_bonus,
                     "custom_abroad_range_active": custom_abroad_range_active,
@@ -4345,7 +4352,7 @@ def rank_and_filter_jobs(
                     "career_sleeve_fit_confidence_band": career_sleeve_fit_confidence_band,
                     "abroad_preferences_fit_profile": abroad_preferences_profile,
                     "strict_target_mismatch": bool(
-                        strict_sleeve and target_sleeve and primary_sleeve != target_sleeve
+                        strict_career_sleeve and target_career_sleeve and primary_career_sleeve != target_career_sleeve
                     ),
                     "missing_domain_anchors": bool(missing_domain_anchors),
                 },
@@ -4364,53 +4371,59 @@ def rank_and_filter_jobs(
         )
 
     threshold_cfg = RUNTIME_CONFIG.get("threshold_overrides", {})
-    threshold_sleeve = target_sleeve if target_sleeve in sleeves.VALID_SLEEVES else ""
-    if not threshold_sleeve and scored_jobs:
-        threshold_sleeve = _clean_value(scored_jobs[0].get("primary_sleeve_id"), "").upper()
-    sleeve_threshold_defaults = sleeves.decision_thresholds_for_sleeve(threshold_sleeve or "E")
+    threshold_career_sleeve = (
+        target_career_sleeve
+        if target_career_sleeve in sleeves.VALID_CAREER_SLEEVES
+        else ""
+    )
+    if not threshold_career_sleeve and scored_jobs:
+        threshold_career_sleeve = _clean_value(scored_jobs[0].get("primary_career_sleeve_id"), "").upper()
+    career_sleeve_threshold_defaults = sleeves.decision_thresholds_for_career_sleeve(
+        threshold_career_sleeve or "E"
+    )
 
     base_min_total_hits = int(
         threshold_cfg.get(
             "min_total_hits",
-            sleeve_threshold_defaults.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW),
+            career_sleeve_threshold_defaults.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW),
         )
     )
     base_min_primary = int(
         threshold_cfg.get(
             "min_primary_score",
-            sleeve_threshold_defaults.get("min_primary_score", min_target_score),
+            career_sleeve_threshold_defaults.get("min_primary_score", min_target_score),
         )
     )
     base_min_maybe_total = int(
         threshold_cfg.get(
             "min_maybe_total_hits",
-            sleeve_threshold_defaults.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE),
+            career_sleeve_threshold_defaults.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE),
         )
     )
     base_min_maybe_primary = int(
         threshold_cfg.get(
             "min_maybe_primary_score",
-            sleeve_threshold_defaults.get(
+            career_sleeve_threshold_defaults.get(
                 "min_maybe_primary_score",
-                sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_MAYBE,
+                sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
             ),
         )
     )
     custom_pass_score = max(
         1,
-        int(threshold_cfg.get("custom_pass_score", sleeve_threshold_defaults.get("custom_pass_score", 2))),
+        int(threshold_cfg.get("custom_pass_score", career_sleeve_threshold_defaults.get("custom_pass_score", 2))),
     )
     custom_pass_hits = max(
         1,
-        int(threshold_cfg.get("custom_pass_hits", sleeve_threshold_defaults.get("custom_pass_hits", 1))),
+        int(threshold_cfg.get("custom_pass_hits", career_sleeve_threshold_defaults.get("custom_pass_hits", 1))),
     )
     custom_maybe_score = max(
         1,
-        int(threshold_cfg.get("custom_maybe_score", sleeve_threshold_defaults.get("custom_maybe_score", 1))),
+        int(threshold_cfg.get("custom_maybe_score", career_sleeve_threshold_defaults.get("custom_maybe_score", 1))),
     )
     custom_maybe_hits = max(
         1,
-        int(threshold_cfg.get("custom_maybe_hits", sleeve_threshold_defaults.get("custom_maybe_hits", 1))),
+        int(threshold_cfg.get("custom_maybe_hits", career_sleeve_threshold_defaults.get("custom_maybe_hits", 1))),
     )
 
     threshold_profiles = [
@@ -4429,7 +4442,7 @@ def rank_and_filter_jobs(
             "min_maybe_primary_score": base_min_maybe_primary,
         },
         {
-            "name": "fallback:min_primary_sleeve_score-1",
+            "name": "fallback:min_primary_career_sleeve_score-1",
             "min_total_hits": max(1, base_min_total_hits - 1),
             "min_primary_score": max(1, base_min_primary - 1),
             "min_maybe_total_hits": 1,
@@ -4451,7 +4464,7 @@ def rank_and_filter_jobs(
         for scored in scored_jobs:
             scored["reasons"] = list(scored.get("_base_reasons") or [])
             hard_reject_reason = scored.get("hard_reject_reason")
-            primary_score = float(scored.get("primary_sleeve_score", 0))
+            primary_score = float(scored.get("primary_career_sleeve_score", 0))
             total_hits = int(scored.get("_score_components", {}).get("total_positive_hits", 0))
             location_gate_match = bool(scored.get("_score_components", {}).get("location_gate_match", True))
             mismatch = scored.get("_score_components", {}).get("strict_target_mismatch", False)
@@ -4468,13 +4481,13 @@ def rank_and_filter_jobs(
                 fail_reason = "location_out_of_scope"
             elif mismatch:
                 decision = "FAIL"
-                fail_reason = "target_sleeve_mismatch"
+                fail_reason = "target_career_sleeve_mismatch"
             elif missing_domain_anchors:
                 decision = "FAIL"
                 fail_reason = "missing_domain_anchors"
-            elif custom_mode and not normalized_custom_terms:
+            elif custom_mode and not normalized_custom_queries:
                 decision = "FAIL"
-                fail_reason = "custom_terms_missing"
+                fail_reason = "custom_queries_missing"
             elif custom_mode:
                 if total_hits >= custom_pass_hits and primary_score >= custom_pass_score:
                     decision = "PASS"
@@ -4482,7 +4495,7 @@ def rank_and_filter_jobs(
                     decision = "MAYBE"
                 else:
                     decision = "FAIL"
-                    fail_reason = "custom_terms_no_match"
+                    fail_reason = "custom_queries_no_match"
             elif primary_score >= profile["min_primary_score"] and total_hits >= profile["min_total_hits"]:
                 decision = "PASS"
             elif (
@@ -4493,7 +4506,7 @@ def rank_and_filter_jobs(
             else:
                 decision = "FAIL"
                 if primary_score < profile["min_maybe_primary_score"]:
-                    fail_reason = "primary_sleeve_score_too_low"
+                    fail_reason = "primary_career_sleeve_score_too_low"
                 else:
                     fail_reason = "insufficient_keyword_hits"
 
@@ -4626,20 +4639,20 @@ def fetch_comic(comic_id):
 
 
 def _fetch_indeed_web_jobs(
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     max_pages=DEFAULT_MAX_PAGES,
     target_raw=DEFAULT_TARGET_RAW_PER_SLEEVE,
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
     diagnostics=None,
     **_kwargs,
 ):
     return _fetch_indeed_jobs_direct(
-        sleeve_key,
+        career_sleeve_key,
         location_mode=location_mode,
         max_pages=max_pages,
         target_raw=target_raw,
@@ -4647,8 +4660,8 @@ def _fetch_indeed_web_jobs(
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
 
 
@@ -4853,29 +4866,29 @@ def _normalize_scrape_variant(value):
 
 def _cache_key_for(
     source_key,
-    sleeve_key,
+    career_sleeve_key,
     location_mode,
     max_pages,
     target_raw,
     no_new_unique_pages,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
 ):
     config = SOURCE_REGISTRY[source_key]
     query_key = ""
-    if query_terms:
-        normalized_query_terms = [sleeves.normalize_for_match(term) for term in query_terms if term]
-        normalized_query_terms = [term for term in normalized_query_terms if term]
-        if normalized_query_terms:
-            query_key = f":q{','.join(sorted(set(normalized_query_terms)))}"
+    if search_queries:
+        normalized_search_queries = [sleeves.normalize_for_match(term) for term in search_queries if term]
+        normalized_search_queries = [term for term in normalized_search_queries if term]
+        if normalized_search_queries:
+            query_key = f":q{','.join(sorted(set(normalized_search_queries)))}"
     extra_key = ""
-    if extra_terms:
-        normalized_terms = [sleeves.normalize_for_match(term) for term in extra_terms if term]
-        normalized_terms = [term for term in normalized_terms if term]
-        if normalized_terms:
-            extra_key = f":x{','.join(sorted(set(normalized_terms)))}"
+    if extra_queries:
+        normalized_extra_queries = [sleeves.normalize_for_match(query) for query in extra_queries if query]
+        normalized_extra_queries = [query for query in normalized_extra_queries if query]
+        if normalized_extra_queries:
+            extra_key = f":x{','.join(sorted(set(normalized_extra_queries)))}"
     if config["query_based"] and config.get("cache_by_sleeve", True):
-        return f"{source_key}:{sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{query_key}{extra_key}"
+        return f"{source_key}:{career_sleeve_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{query_key}{extra_key}"
     if config["query_based"]:
         return f"{source_key}:{location_mode}:p{max_pages}:t{target_raw}:n{no_new_unique_pages}{query_key}{extra_key}"
     return source_key
@@ -4897,7 +4910,7 @@ def _derive_source_fetch_error(items, diagnostics):
 
 def _fetch_source_with_cache(
     source_key,
-    sleeve_key,
+    career_sleeve_key,
     location_mode,
     force_refresh=False,
     max_pages=DEFAULT_MAX_PAGES,
@@ -4905,19 +4918,19 @@ def _fetch_source_with_cache(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
     run_id="",
 ):
     cache_key = _cache_key_for(
         source_key,
-        sleeve_key,
+        career_sleeve_key,
         location_mode,
         max_pages,
         target_raw,
         no_new_unique_pages,
-        query_terms=query_terms,
-        extra_terms=extra_terms,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
     )
     now = time.time()
     with source_cache_lock:
@@ -4951,15 +4964,15 @@ def _fetch_source_with_cache(
     try:
         if query_based:
             result = fetcher(
-                sleeve_key,
+                career_sleeve_key,
                 location_mode=location_mode,
                 max_pages=max_pages,
                 target_raw=target_raw,
                 requests_per_second=requests_per_second,
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
-                query_terms=query_terms,
-                extra_terms=extra_terms,
+                search_queries=search_queries,
+                extra_queries=extra_queries,
                 diagnostics=source_diag,
             )
         else:
@@ -5033,7 +5046,7 @@ def _fetch_source_with_cache(
 
 def fetch_jobs_from_sources(
     selected_sources,
-    sleeve_key,
+    career_sleeve_key,
     location_mode=MVP_LOCATION_MODE,
     force_refresh=False,
     max_pages=DEFAULT_MAX_PAGES,
@@ -5041,8 +5054,8 @@ def fetch_jobs_from_sources(
     requests_per_second=DEFAULT_RATE_LIMIT_RPS,
     detail_rps=DEFAULT_DETAIL_RATE_LIMIT_RPS,
     no_new_unique_pages=DEFAULT_NO_NEW_UNIQUE_PAGES,
-    query_terms=None,
-    extra_terms=None,
+    search_queries=None,
+    extra_queries=None,
     allow_failover=True,
     run_id="",
     force_source_retry=False,
@@ -5153,7 +5166,7 @@ def fetch_jobs_from_sources(
                 future = executor.submit(
                     _fetch_source_with_cache,
                     source_key,
-                    sleeve_key,
+                    career_sleeve_key,
                     location_mode,
                     force_refresh=force_refresh,
                     max_pages=max_pages,
@@ -5161,8 +5174,8 @@ def fetch_jobs_from_sources(
                     requests_per_second=requests_per_second,
                     detail_rps=detail_rps,
                     no_new_unique_pages=no_new_unique_pages,
-                    query_terms=query_terms,
-                    extra_terms=extra_terms,
+                    search_queries=search_queries,
+                    extra_queries=extra_queries,
                     run_id=run_id,
                 )
                 future_map[future] = (source_key, source_label)
@@ -5194,7 +5207,7 @@ def fetch_jobs_from_sources(
             )
             source_items, source_error, source_diag = _fetch_source_with_cache(
                 source_key,
-                sleeve_key,
+                career_sleeve_key,
                 location_mode,
                 force_refresh=force_refresh,
                 max_pages=max_pages,
@@ -5202,8 +5215,8 @@ def fetch_jobs_from_sources(
                 requests_per_second=requests_per_second,
                 detail_rps=detail_rps,
                 no_new_unique_pages=no_new_unique_pages,
-                query_terms=query_terms,
-                extra_terms=extra_terms,
+                search_queries=search_queries,
+                extra_queries=extra_queries,
                 run_id=run_id,
             )
             _consume_source_result(
@@ -5214,7 +5227,7 @@ def fetch_jobs_from_sources(
                 source_diag,
             )
 
-    _update_query_performance_from_diagnostics(diagnostics, sleeve_key)
+    _update_query_performance_from_diagnostics(diagnostics, career_sleeve_key)
 
     return items, errors, usable_sources, diagnostics
 
@@ -5256,10 +5269,10 @@ def _public_scrape_config():
         "sources": sources,
         "source_health": source_health_payload,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
-        "sleeve_terms_defaults": {
+        "career_sleeve_search_queries_defaults": {
             key: list(value)
-            for key, value in (sleeves.SLEEVE_SEARCH_TERMS or {}).items()
-            if key in sleeves.VALID_SLEEVES
+            for key, value in (sleeves.CAREER_SLEEVE_SEARCH_QUERIES or {}).items()
+            if key in sleeves.VALID_CAREER_SLEEVES
         },
         "defaults": {
             "sources": [source.get("id") for source in sources if source.get("available")],
@@ -5321,86 +5334,86 @@ def show_synergy():
 @app.route('/synergy-sleeves', methods=['GET'])
 def synergy_sleeves():
     with custom_sleeves_lock:
-        payload = _synergy_sleeve_catalog()
+        payload = _career_sleeve_catalog()
     return jsonify(payload)
 
 
 @app.route('/synergy-sleeves', methods=['POST'])
 def save_synergy_sleeve():
     payload = request.get_json(silent=True) or {}
-    requested_letter = _normalize_sleeve_letter(payload.get("letter"))
-    if requested_letter and _is_fixed_synergy_letter(requested_letter):
+    requested_letter = _normalize_career_sleeve_letter(payload.get("letter"))
+    if requested_letter and _is_fixed_career_sleeve_letter(requested_letter):
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be overwritten."}), 409
-    if requested_letter and not _is_custom_synergy_letter(requested_letter):
-        return jsonify({"error": "Only letters E-Z can be saved as custom sleeves."}), 400
+    if requested_letter and not _is_custom_career_sleeve_letter(requested_letter):
+        return jsonify({"error": "Only letters E-Z can be saved as custom Career Sleeves."}), 400
 
     title = _clean_value(payload.get("title"), "")[:120]
     if not title:
         return jsonify({"error": "Title is required."}), 400
 
-    terms = _parse_terms_for_storage(payload.get("terms"))
-    if not terms:
+    queries = _parse_queries_for_storage(payload.get("queries"))
+    if not queries:
         return jsonify({"error": "At least one search query is required."}), 400
     location_preferences = _parse_custom_location_preferences(payload.get("location_preferences"))
     allow_overwrite = bool(payload.get("allow_overwrite"))
 
     with custom_sleeves_lock:
-        existing = _load_custom_synergy_sleeves()
+        existing = _load_custom_career_sleeves()
         existing_map = {
-            _normalize_sleeve_letter(entry.get("letter")): entry
+            _normalize_career_sleeve_letter(entry.get("letter")): entry
             for entry in existing
             if isinstance(entry, dict)
         }
         if requested_letter:
             letter = requested_letter
         else:
-            letter = _next_available_custom_synergy_letter(existing)
+            letter = _next_available_custom_career_sleeve_letter(existing)
             if not letter:
-                return jsonify({"error": "No custom sleeve letters available (E-Z are all in use)."}), 409
+                return jsonify({"error": "No custom Career Sleeve letters available (E-Z are all in use)."}), 409
 
         if letter in existing_map and not allow_overwrite:
-            return jsonify({"error": f"Custom sleeve {letter} already exists. Use another letter."}), 409
+            return jsonify({"error": f"Custom Career Sleeve {letter} already exists. Use another letter."}), 409
 
         record = {
             "letter": letter,
             "title": title,
-            "terms": terms,
+            "queries": queries,
             "location_preferences": location_preferences,
             "locked": False,
             "scope": "custom",
             "updated_at": _now_utc_stamp(),
         }
-        filtered = [entry for entry in existing if _normalize_sleeve_letter(entry.get("letter")) != letter]
+        filtered = [entry for entry in existing if _normalize_career_sleeve_letter(entry.get("letter")) != letter]
         filtered.append(record)
         filtered.sort(key=lambda entry: entry.get("letter", ""))
-        if not _save_custom_synergy_sleeves(filtered):
-            return jsonify({"error": "Could not persist custom sleeve state."}), 500
-        catalog = _synergy_sleeve_catalog()
+        if not _save_custom_career_sleeves(filtered):
+            return jsonify({"error": "Could not persist custom Career Sleeve state."}), 500
+        catalog = _career_sleeve_catalog()
 
     return jsonify({"ok": True, "saved": record, "catalog": catalog})
 
 
 @app.route('/synergy-sleeves/<letter>', methods=['DELETE'])
 def delete_synergy_sleeve(letter):
-    normalized_letter = _normalize_sleeve_letter(letter)
+    normalized_letter = _normalize_career_sleeve_letter(letter)
     if not normalized_letter:
-        return jsonify({"error": "Invalid sleeve letter."}), 400
-    if _is_fixed_synergy_letter(normalized_letter):
+        return jsonify({"error": "Invalid Career Sleeve letter."}), 400
+    if _is_fixed_career_sleeve_letter(normalized_letter):
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be deleted."}), 409
-    if not _is_custom_synergy_letter(normalized_letter):
-        return jsonify({"error": "Only letters E-Z can be deleted as custom sleeves."}), 400
+    if not _is_custom_career_sleeve_letter(normalized_letter):
+        return jsonify({"error": "Only letters E-Z can be deleted as custom Career Sleeves."}), 400
 
     with custom_sleeves_lock:
-        existing = _load_custom_synergy_sleeves()
+        existing = _load_custom_career_sleeves()
         filtered = [
             entry for entry in existing
-            if _normalize_sleeve_letter(entry.get("letter")) != normalized_letter
+            if _normalize_career_sleeve_letter(entry.get("letter")) != normalized_letter
         ]
         if len(filtered) == len(existing):
-            return jsonify({"error": f"Custom sleeve {normalized_letter} was not found."}), 404
-        if not _save_custom_synergy_sleeves(filtered):
-            return jsonify({"error": "Could not persist custom sleeve state."}), 500
-        catalog = _synergy_sleeve_catalog()
+            return jsonify({"error": f"Custom Career Sleeve {normalized_letter} was not found."}), 404
+        if not _save_custom_career_sleeves(filtered):
+            return jsonify({"error": "Could not persist custom Career Sleeve state."}), 500
+        catalog = _career_sleeve_catalog()
 
     return jsonify({"ok": True, "deleted": normalized_letter, "catalog": catalog})
 
@@ -5479,7 +5492,6 @@ def scrape_progress(run_id):
 
 
 @app.route('/company-opening')
-@app.route('/company-posting')
 def company_opening():
     def _is_external_company_url(url):
         return _is_public_destination_url(url) and not _is_platform_job_host(url)
@@ -5594,17 +5606,16 @@ def company_opening():
 def scrape():
     run_id = _clean_value(request.args.get("run_id"), "") or uuid.uuid4().hex[:12]
     profile = SCRAPE_MODE
-    sleeve_key = request.args.get("sleeve", "").upper().strip()
-    if sleeve_key not in sleeves.VALID_SLEEVES:
-        allowed = ", ".join(sorted(sleeves.VALID_SLEEVES))
-        return jsonify({"error": f"Invalid sleeve. Use one of: {allowed}."}), 400
+    career_sleeve_key = request.args.get("career_sleeve", "").upper().strip()
+    if career_sleeve_key not in sleeves.VALID_CAREER_SLEEVES:
+        allowed = ", ".join(sorted(sleeves.VALID_CAREER_SLEEVES))
+        return jsonify({"error": f"Invalid Career Sleeve. Use one of: {allowed}."}), 400
 
     location_mode = MVP_LOCATION_MODE
 
-    strict_sleeve = request.args.get("strict", "0") == "1"
+    strict_career_sleeve = request.args.get("strict", "0") == "1"
     force_refresh = request.args.get("refresh", "0") == "1"
     include_fail = request.args.get("include_fail", "0") == "1"
-    use_legacy_response = request.args.get("legacy", "0") == "1"
 
     max_results_raw = request.args.get("max_results", "200")
     try:
@@ -5675,14 +5686,11 @@ def scrape():
         detail_rps = max(detail_rps, ULTRA_FAST_MIN_DETAIL_RPS)
         no_new_unique_pages = min(no_new_unique_pages, ULTRA_FAST_NO_NEW_UNIQUE_PAGES)
     search_queries_param = request.args.get("search_queries", "")
-    if not search_queries_param:
-        # Backwards-compatible alias; prefer `search_queries` going forward.
-        search_queries_param = request.args.get("query_terms", "")
-    search_queries = _parse_query_terms(search_queries_param)
-    extra_terms_param = request.args.get("extra_terms", "")
-    extra_terms = _parse_extra_terms(extra_terms_param)
+    search_queries = _parse_search_queries(search_queries_param)
+    extra_queries_param = request.args.get("extra_queries", "")
+    extra_queries = _parse_extra_queries(extra_queries_param)
     custom_mode = request.args.get("custom_mode", "0") == "1"
-    custom_letter = _normalize_sleeve_letter(request.args.get("custom_letter", ""))
+    custom_letter = _normalize_career_sleeve_letter(request.args.get("custom_letter", ""))
     custom_geo_countries = _parse_geo_preferences_for_storage(
         request.args.get("custom_geo_countries", "")
     )
@@ -5715,39 +5723,39 @@ def scrape():
     )
     if custom_mode and custom_letter and not custom_pref_requested:
         with custom_sleeves_lock:
-            for record in _load_custom_synergy_sleeves():
-                if _normalize_sleeve_letter(record.get("letter")) != custom_letter:
+            for record in _load_custom_career_sleeves():
+                if _normalize_career_sleeve_letter(record.get("letter")) != custom_letter:
                     continue
                 custom_location_preferences = _parse_custom_location_preferences(
                     record.get("location_preferences")
                 )
                 break
     if custom_mode and not search_queries:
-        return jsonify({"error": "Custom sleeve scraping requires at least one search query."}), 400
+        return jsonify({"error": "Custom Career Sleeve scraping requires at least one search query."}), 400
     allow_failover = False
     force_source_retry = request.args.get("retry_source", "0") == "1"
 
     _progress_start(
         run_id,
         profile=profile,
-        sleeve=sleeve_key,
+        career_sleeve=career_sleeve_key,
         location_mode=location_mode,
     )
     _progress_update(
         run_id,
         "start",
         (
-            f"Scrape started for Career Sleeve {sleeve_key} "
+            f"Scrape started for Career Sleeve {career_sleeve_key} "
             f"({location_mode}, profile {profile}, variant {scrape_variant})"
         ),
-        sleeve=sleeve_key,
+        career_sleeve=career_sleeve_key,
         location_mode=location_mode,
         scrape_variant=scrape_variant,
         selected_sources=selected_sources,
         requested_sources=requested_sources,
         enforce_mvp_bundle=bool(enforce_mvp_bundle),
         parallel_fetch=bool(parallel_fetch),
-        strict_sleeve=strict_sleeve,
+        strict_career_sleeve=strict_career_sleeve,
         force_refresh=force_refresh,
         max_pages=max_pages,
         target_raw=target_raw,
@@ -5759,7 +5767,7 @@ def scrape():
 
     items, fetch_errors, used_sources, fetch_diagnostics = fetch_jobs_from_sources(
         selected_sources,
-        sleeve_key,
+        career_sleeve_key,
         location_mode=location_mode,
         force_refresh=force_refresh,
         max_pages=max_pages,
@@ -5767,8 +5775,8 @@ def scrape():
         requests_per_second=requests_per_second,
         detail_rps=detail_rps,
         no_new_unique_pages=no_new_unique_pages,
-        query_terms=search_queries,
-        extra_terms=extra_terms,
+        search_queries=search_queries,
+        extra_queries=extra_queries,
         allow_failover=allow_failover,
         run_id=run_id,
         force_source_retry=force_source_retry,
@@ -5794,15 +5802,15 @@ def scrape():
     _progress_update(run_id, "ranking-start", "Ranking and filtering started")
     ranking_result = rank_and_filter_jobs(
         items,
-        target_sleeve=sleeve_key,
-        min_target_score=sleeves.MIN_PRIMARY_SLEEVE_SCORE_TO_SHOW,
+        target_career_sleeve=career_sleeve_key,
+        min_target_score=sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
         location_mode=location_mode,
-        strict_sleeve=strict_sleeve,
+        strict_career_sleeve=strict_career_sleeve,
         include_fail=include_fail,
         return_diagnostics=True,
         diagnostics=fetch_diagnostics,
         custom_mode=custom_mode,
-        custom_query_terms=search_queries,
+        custom_search_queries=search_queries,
         custom_location_preferences=custom_location_preferences,
     )
     candidate_items = ranking_result.get("jobs") or []
@@ -5815,7 +5823,7 @@ def scrape():
         "run_id": run_id,
         "profile": profile,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
-        "sleeve": sleeve_key,
+        "career_sleeve": career_sleeve_key,
         "location_mode": location_mode,
         "scrape_variant": scrape_variant,
         "requested_sources": requested_sources,
@@ -5833,7 +5841,7 @@ def scrape():
         "custom_mode": bool(custom_mode),
         "custom_letter": custom_letter,
         "custom_location_preferences": custom_location_preferences,
-        "extra_terms": extra_terms,
+        "extra_queries": extra_queries,
         "sources_used": used_sources,
         "sources_used_labels": [
             SOURCE_REGISTRY.get(source_key, {}).get("label", source_key)
@@ -5885,7 +5893,7 @@ def scrape():
     _log_event(
         "scrape_summary",
         run_id=run_id,
-        sleeve=sleeve_key,
+        career_sleeve=career_sleeve_key,
         location_mode=location_mode,
         raw=summary["raw_count"],
         deduped=summary["deduped_count"],
@@ -5909,16 +5917,6 @@ def scrape():
             blocked_detected=entry.get("blocked_detected"),
         )
 
-    if use_legacy_response:
-        _progress_finish(
-            run_id,
-            status="done",
-            summary=summary,
-        )
-        response = jsonify(response_items)
-        response.headers["X-Sources-Used"] = ",".join(used_sources)
-        return response
-
     _progress_finish(
         run_id,
         status="done",
@@ -5939,5 +5937,12 @@ def scrape():
 if __name__ == '__main__':
     port = int(os.getenv("PORT", "8080"))
     app.run(host='0.0.0.0', port=port, threaded=True)
+
+
+
+
+
+
+
 
 

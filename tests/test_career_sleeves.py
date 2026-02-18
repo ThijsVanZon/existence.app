@@ -4,8 +4,8 @@ import career_sleeves as sleeves
 
 
 class TestCareerSleeves(unittest.TestCase):
-    def test_every_sleeve_has_tagline(self):
-        for sleeve_id, config in sleeves.SLEEVE_CONFIG.items():
+    def test_every_career_sleeve_has_tagline(self):
+        for sleeve_id, config in sleeves.CAREER_SLEEVE_CONFIG.items():
             self.assertTrue(config.get("name"), f"missing name for {sleeve_id}")
             self.assertTrue(config.get("tagline"), f"missing tagline for {sleeve_id}")
 
@@ -33,7 +33,7 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertTrue(flags["extra_language_preferred"])
 
     def test_plural_matching_improves_keyword_detection(self):
-        score, details = sleeves.score_sleeve(
+        score, details = sleeves.score_career_sleeve(
             "A",
             (
                 "Event producer role across festivals and concerts with "
@@ -69,7 +69,7 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertTrue(reason.startswith("hard_reject_title"))
 
     def test_workflow_role_scores_without_hard_must_have_gate(self):
-        score, details = sleeves.score_sleeve(
+        score, details = sleeves.score_career_sleeve(
             "D",
             "Implementation manager for supply chain workflow and vendor coordination.",
             "Implementation Manager",
@@ -78,7 +78,7 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertEqual(details["reason"], "ok")
 
     def test_domain_anchor_gate_caps_career_sleeve_c_when_anchor_missing(self):
-        score, details = sleeves.score_sleeve(
+        score, details = sleeves.score_career_sleeve(
             "C",
             "Commissioning engineer for HVAC reliability and electrical maintenance.",
             "Commissioning Engineer",
@@ -86,7 +86,7 @@ class TestCareerSleeves(unittest.TestCase):
         self.assertEqual(details["reason"], "missing_domain_anchors")
         self.assertLessEqual(
             score,
-            int(sleeves.SLEEVE_CONFIG["C"]["must_haves"]["anchor_cap_score"]),
+            int(sleeves.CAREER_SLEEVE_CONFIG["C"]["must_haves"]["anchor_cap_score"]),
         )
 
     def test_blocked_detection_requires_stronger_signal(self):

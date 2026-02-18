@@ -452,7 +452,7 @@
         class="synergy-sleeve-header"
         aria-label="Active career sleeve"
       >
-        <span id="headerName" class="sleeve-header-name">No sleeve selected</span>
+        <span id="headerName" class="sleeve-header-name">No Career Sleeve selected</span>
         <span id="headerCode" class="sleeve-header-code">Career Sleeve ?</span>
       </header>
 
@@ -482,14 +482,14 @@
         id="closeLoadDialogBtn"
         class="synergy-dialog-icon-trigger synergy-dialog-close-trigger"
         type="button"
-        aria-label="Close sleeve editor"
+        aria-label="Close Career Sleeve editor"
         title="Close"
       >&times;</button>
     </div>
     <div id="loadDialogList" class="synergy-dialog-list"></div>
     <section id="dialogEditorSection" class="synergy-dialog-inline-editor synergy-dialog-custom-create is-hidden">
       <div class="synergy-query-box">
-        <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom sleeve.</div>
+        <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom Career Sleeve.</div>
         <div class="synergy-query-section-title">SEARCH QUERIES</div>
         <div id="dialogQueryChipList" class="synergy-query-chip-list"></div>
         <div class="synergy-inline">
@@ -746,7 +746,7 @@
 
         const title = document.createElement("span");
         title.className = "synergy-dialog-option-split-title";
-        title.textContent = String(titleValue || "").trim() || "Untitled sleeve";
+        title.textContent = String(titleValue || "").trim() || "Untitled Career Sleeve";
 
         btn.appendChild(letter);
         btn.appendChild(title);
@@ -850,14 +850,14 @@
         els.dialogEditorSection.classList.toggle("is-hidden", !state.editorVisible);
         els.dialogEditorSection.classList.toggle("is-open", state.editorVisible);
         if (!state.editorVisible) {
-          setDialogNote("Click + to add a custom sleeve.", "info");
+          setDialogNote("Click + to add a custom Career Sleeve.", "info");
         }
       }
 
       function updateHeaderPreview() {
         const letter = normalizeLetter(state.current.letter);
         const inputTitle = String(state.current.title || "").trim();
-        const title = inputTitle || "No sleeve selected";
+        const title = inputTitle || "No Career Sleeve selected";
         els.headerName.textContent = title;
         els.headerCode.textContent = letter ? `Career Sleeve ${letter}` : "Career Sleeve ?";
       }
@@ -866,21 +866,21 @@
         if (!sleeve) return;
         state.current.letter = normalizeLetter(sleeve.letter || "");
         state.current.title = String(sleeve.title || "");
-        state.current.queries = dedupeQueries(sleeve.terms || []);
+        state.current.queries = dedupeQueries(sleeve.queries || []);
         state.current.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
         persistLastLoadedSleeve(state.current.letter);
         updateHeaderPreview();
         if (!options.silent) {
           const suffix = sleeve.locked ? "(fixed)" : "(custom)";
-          setStatus(`Loaded sleeve ${sleeve.letter} ${suffix}.`, "success");
+          setStatus(`Loaded Career Sleeve ${sleeve.letter} ${suffix}.`, "success");
           setDialogNote(`Loaded Career Sleeve ${sleeve.letter} ${suffix}.`, "success");
         }
       }
 
       function guessQueriesFromTitle(title, letter) {
         const fixedByLetter = (state.catalog.fixed || []).find((entry) => entry.letter === letter);
-        if (fixedByLetter && Array.isArray(fixedByLetter.terms) && fixedByLetter.terms.length) {
-          return fixedByLetter.terms.slice(0, 8);
+        if (fixedByLetter && Array.isArray(fixedByLetter.queries) && fixedByLetter.queries.length) {
+          return fixedByLetter.queries.slice(0, 8);
         }
 
         const lowerTitle = String(title || "").toLowerCase().trim();
@@ -1073,8 +1073,8 @@
       function generateQueriesFromEditorTitle() {
         const editor = collectEditor();
         if (!editor.title) {
-          setStatus("Set a sleeve title first, then generate search queries.", "error");
-          setDialogNote("Set a sleeve title first, then generate search queries.", "error");
+          setStatus("Set a Career Sleeve title first, then generate search queries.", "error");
+          setDialogNote("Set a Career Sleeve title first, then generate search queries.", "error");
           return;
         }
         const generated = guessQueriesFromTitle(editor.title, editor.letter);
@@ -1183,7 +1183,7 @@
       }
 
       function formatConfidenceSummary(job) {
-        const sleeveScoreValue = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_sleeve_score));
+        const sleeveScoreValue = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_career_sleeve_score));
         const sleeveScoreText = Number.isFinite(sleeveScoreValue) ? `${Math.round(sleeveScoreValue * 10) / 10}/5` : "0/5";
         const sleevePct = Number(job && job.career_sleeve_fit_confidence_pct);
         const sleeveBand = String((job && job.career_sleeve_fit_confidence_band) || "").trim().toLowerCase();
@@ -1235,8 +1235,8 @@
           card.appendChild(company);
           const status = document.createElement("p");
           status.className = "synergy-job-meta";
-          const careerSleeveId = job.career_sleeve_id || job.primary_sleeve_id || "?";
-          const careerSleeveScore = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_sleeve_score));
+          const careerSleeveId = job.career_sleeve_id || job.primary_career_sleeve_id || "?";
+          const careerSleeveScore = Number((job && job.career_sleeve_fit_score) ?? (job && job.primary_career_sleeve_score));
           const careerSleeveScoreText = Number.isFinite(careerSleeveScore) ? `${Math.round(careerSleeveScore * 10) / 10}/5` : "0/5";
           status.textContent = `${job.decision || "UNKNOWN"}${FIELD_SEPARATOR}Career Sleeve ${careerSleeveId} ${careerSleeveScoreText}`;
           card.appendChild(status);
@@ -1314,7 +1314,7 @@
           if (!filteredItems.length) {
             const empty = document.createElement("div");
             empty.className = "synergy-empty";
-            empty.textContent = query ? "No matches in this group." : "No sleeves in this group.";
+            empty.textContent = query ? "No matches in this group." : "No Career Sleeves in this group.";
             wrap.appendChild(empty);
           } else {
             filteredItems.forEach((sleeve) => {
@@ -1334,7 +1334,7 @@
                       state.editor.title = value;
                     },
                     () => {
-                      saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
+                      saveDialogEditor().catch(() => setStatus("Could not save Career Sleeve.", "error"));
                     }
                   );
                   row.appendChild(wrap);
@@ -1359,7 +1359,7 @@
                   saveBtn.textContent = getSaveButtonLabel();
                   saveBtn.title = getSaveButtonLabel();
                   saveBtn.addEventListener("click", () => {
-                    saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
+                    saveDialogEditor().catch(() => setStatus("Could not save Career Sleeve.", "error"));
                   });
                   actions.appendChild(saveBtn);
                 } else {
@@ -1383,7 +1383,7 @@
                   deleteBtn.addEventListener("click", (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    deleteCustomSleeveFromDialog(sleeve).catch(() => setStatus("Could not delete custom sleeve.", "error"));
+                    deleteCustomSleeveFromDialog(sleeve).catch(() => setStatus("Could not delete custom Career Sleeve.", "error"));
                   });
                   actions.appendChild(deleteBtn);
                 }
@@ -1426,7 +1426,7 @@
                   state.editor.title = value;
                 },
                 () => {
-                  saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
+                  saveDialogEditor().catch(() => setStatus("Could not save Career Sleeve.", "error"));
                 }
               );
               addRow.appendChild(wrap);
@@ -1439,7 +1439,7 @@
               saveBtn.textContent = getSaveButtonLabel();
               saveBtn.title = getSaveButtonLabel();
               saveBtn.addEventListener("click", () => {
-                saveDialogEditor().catch(() => setStatus("Could not save sleeve.", "error"));
+                saveDialogEditor().catch(() => setStatus("Could not save Career Sleeve.", "error"));
               });
               actions.appendChild(saveBtn);
               addRow.appendChild(actions);
@@ -1448,7 +1448,7 @@
               addBtn.type = "button";
               addBtn.className = "synergy-dialog-add-trigger";
               addBtn.textContent = "+";
-              addBtn.setAttribute("aria-label", "Add custom sleeve");
+              addBtn.setAttribute("aria-label", "Add custom Career Sleeve");
               addBtn.addEventListener("click", () => {
                 resetDialogEditor("add", null, true);
                 renderLoadDialogList();
@@ -1477,7 +1477,7 @@
           state.editor.mode = "edit";
           state.editor.letter = normalizeLetter(sleeve.letter || "");
           state.editor.title = String(sleeve.title || "");
-          state.editor.queries = dedupeQueries(sleeve.terms || []);
+          state.editor.queries = dedupeQueries(sleeve.queries || []);
           state.editor.location_preferences = normalizeLocationPreferences(sleeve.location_preferences);
           state.editor.anchor = `edit:${state.editor.letter}`;
         } else {
@@ -1495,8 +1495,8 @@
       function startEditCustomSleeve(sleeve) {
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
-          setStatus("Only custom sleeves (E-Z) can be edited.", "error");
-          setDialogNote("Only custom sleeves (E-Z) can be edited.", "error");
+          setStatus("Only custom Career Sleeves (E-Z) can be edited.", "error");
+          setDialogNote("Only custom Career Sleeves (E-Z) can be edited.", "error");
           return;
         }
         applySleeveToEditor(sleeve, { silent: true });
@@ -1516,7 +1516,7 @@
         renderDialogQueries();
         syncDialogLocationInputs();
         if (!state.editorVisible) {
-          setDialogNote("Click + to add a custom sleeve.", "info");
+          setDialogNote("Click + to add a custom Career Sleeve.", "info");
           return;
         }
         const editor = collectEditor();
@@ -1528,7 +1528,7 @@
           return;
         }
         setDialogNote(
-          `Adding a new custom sleeve. Next available letter: ${getNextCustomLetter()}. Add at least 1 search query, then save.`,
+          `Adding a new custom Career Sleeve. Next available letter: ${getNextCustomLetter()}. Add at least 1 search query, then save.`,
           "info"
         );
       }
@@ -1539,8 +1539,8 @@
         const editor = collectEditor();
         if (!editor.title) {
           if (!silent) {
-            setStatus("Type a sleeve title before saving.", "error");
-            setDialogNote("Title is required before you can save this sleeve.", "error");
+            setStatus("Type a Career Sleeve title before saving.", "error");
+            setDialogNote("Title is required before you can save this Career Sleeve.", "error");
           }
           return null;
         }
@@ -1554,7 +1554,7 @@
 
         const payloadBody = {
           title: editor.title,
-          terms: editor.queries,
+          queries: editor.queries,
           location_preferences: editor.location_preferences,
         };
         if (editor.mode === "edit" && isCustomLetter(editor.letter)) {
@@ -1570,7 +1570,7 @@
         const payload = await res.json();
         if (!res.ok) {
           if (!silent) {
-            const errorMessage = payload.error || "Could not save sleeve.";
+            const errorMessage = payload.error || "Could not save Career Sleeve.";
             setStatus(errorMessage, "error");
             setDialogNote(errorMessage, "error");
           }
@@ -1596,8 +1596,8 @@
       async function deleteCustomSleeveFromDialog(sleeve) {
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
-          setStatus("Only custom sleeves (E-Z) can be deleted.", "error");
-          setDialogNote("Only custom sleeves (E-Z) can be deleted.", "error");
+          setStatus("Only custom Career Sleeves (E-Z) can be deleted.", "error");
+          setDialogNote("Only custom Career Sleeves (E-Z) can be deleted.", "error");
           return;
         }
         const confirmed = window.confirm(`Delete Career Sleeve ${letter}?`);
@@ -1611,7 +1611,7 @@
         });
         const payload = await res.json();
         if (!res.ok) {
-          const errorMessage = payload.error || "Could not delete custom sleeve.";
+          const errorMessage = payload.error || "Could not delete custom Career Sleeve.";
           setStatus(errorMessage, "error");
           setDialogNote(errorMessage, "error");
           return;
@@ -1640,7 +1640,7 @@
       async function loadCatalog() {
         const res = await fetch("/synergy-sleeves", { headers: { Accept: "application/json" } });
         const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error || "Could not load sleeves.");
+        if (!res.ok) throw new Error(payload.error || "Could not load Career Sleeves.");
         state.catalog = payload;
         renderLoadDialogList();
       }
@@ -1722,7 +1722,7 @@
 
         const params = new URLSearchParams({
           run_id: runId,
-          sleeve: effectiveSleeve,
+          career_sleeve: effectiveSleeve,
           search_queries: current.queries.join(","),
           strict: "0",
           max_results: "200",
@@ -1826,7 +1826,7 @@
             await loadCatalog();
             openHeaderEditor();
           } catch (error) {
-            setStatus(error.message || "Could not open sleeve dialog.", "error");
+            setStatus(error.message || "Could not open Career Sleeve dialog.", "error");
           }
         });
         els.loadDialog.addEventListener("cancel", (event) => {
@@ -1863,9 +1863,9 @@
             ];
             renderEvents();
           }
-          setStatus("Catalog loaded. Use Change Career Sleeve to switch sleeves.", "success");
+          setStatus("Catalog loaded. Use Change Career Sleeve to switch Career Sleeves.", "success");
         } catch (error) {
-          setStatus(error.message || "Could not load sleeve catalog.", "error");
+          setStatus(error.message || "Could not load Career Sleeve catalog.", "error");
         }
       }
       init();
@@ -1874,3 +1874,4 @@
   <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+

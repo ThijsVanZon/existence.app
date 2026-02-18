@@ -124,7 +124,7 @@ a:focus-visible {
 select,
 .job-link-btn,
 button,
-.terms-input {
+.queries-input {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 }
@@ -163,8 +163,8 @@ button,
 
 .toolbar-field select,
 .sleeve-panel > button,
-.terms-reset-btn,
-.terms-input {
+.queries-reset-btn,
+.queries-input {
   width: 100%;
   max-width: 340px;
 }
@@ -241,7 +241,7 @@ button {
   opacity: 0.88;
 }
 
-button:not(.term-chip-remove):hover {
+button:not(.query-chip-remove):hover {
   filter: brightness(0.98);
   transform: translateY(-1px);
   opacity: 1;
@@ -260,7 +260,7 @@ button:active {
 }
 
 select,
-.terms-input {
+.queries-input {
   border: none;
   border-radius: 8px;
   padding: 7px 9px;
@@ -269,26 +269,26 @@ select,
   font-weight: 400;
 }
 
-.terms-editor {
+.queries-editor {
   display: grid;
   gap: 6px;
   margin-bottom: 10px;
 }
 
-.terms-label {
+.queries-label {
   font-size: 0.82rem;
   color: var(--ink-muted);
   font-weight: 600;
 }
 
-.terms-chip-list {
+.queries-chip-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   min-height: 28px;
 }
 
-.term-chip {
+.query-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -303,18 +303,18 @@ select,
   transition: background 0.16s ease;
 }
 
-.term-chip:hover {
+.query-chip:hover {
   background: rgba(var(--amethyst-rgb), 0.2);
 }
 
-.term-chip-label {
+.query-chip-label {
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.term-chip-remove {
+.query-chip-remove {
   border: none;
   border-radius: 999px;
   width: 18px;
@@ -333,27 +333,27 @@ select,
   transition: background 0.14s ease;
 }
 
-.term-chip-remove:hover {
+.query-chip-remove:hover {
   transform: none;
   background: rgba(var(--amethyst-rgb), 0.22);
 }
 
-.term-chip-empty {
+.query-chip-empty {
   font-size: 0.78rem;
   color: var(--ink-muted);
   font-weight: 600;
 }
 
-.terms-input {
+.queries-input {
   margin-bottom: 0;
 }
 
-.terms-actions {
+.queries-actions {
   display: flex;
   justify-content: flex-end;
 }
 
-.terms-reset-btn {
+.queries-reset-btn {
   width: auto;
   max-width: none;
   padding: 5px 9px;
@@ -834,3 +834,5 @@ iframe {
     overflow: visible;
   }
 }
+
+
