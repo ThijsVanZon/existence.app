@@ -29,13 +29,41 @@ For cPanel Python App, use:
 
 Do not track `passenger_wsgi.py` in this repository. cPanel can manage that file server-side, and tracking it in Git can cause pull conflicts on the server.
 
+## Authentication & account modes
+
+The app supports:
+
+- email/password accounts
+- email verification
+- password reset via email
+- TOTP 2FA (Google Authenticator / Microsoft Authenticator)
+
+Environment variables:
+
+- `AUTH_ENFORCE=1` to require login for Synergy/Enlightenment/scrape endpoints
+- `AUTH_ADMIN_EMAIL=thijs.vanzon@existenceinitiative.com` for admin account behavior
+- `FLASK_SECRET_KEY` (required in production)
+- `PUBLIC_BASE_URL` for absolute email links (example: `https://existence.app`)
+- SMTP settings for real email delivery:
+  - `AUTH_EMAIL_FROM`
+  - `AUTH_SMTP_HOST`
+  - `AUTH_SMTP_PORT`
+  - `AUTH_SMTP_USERNAME`
+  - `AUTH_SMTP_PASSWORD`
+  - `AUTH_SMTP_USE_TLS=1`
+
+Account behavior:
+
+- Admin account (`AUTH_ADMIN_EMAIL`): fixed Career Sleeves `A-D` + custom sleeves.
+- Other accounts: only custom sleeves (`A-Z`) and uniform custom ranking profile.
+
 ## Scraper endpoint
 
 `GET /scrape`
 
 Required query params:
 
-- `career_sleeve` = `A|B|C|D|E`
+- `career_sleeve` = one letter `A-Z` (admin uses fixed/custom semantics; non-admin uses custom semantics)
 
 Useful optional query params:
 
@@ -53,6 +81,11 @@ Useful optional query params:
 - `state_window_days` = retention window for incremental seen-state (default: `14`)
 - `search_queries` = comma-separated custom search queries; backend expands EN/NL variants for querying and matching
 - abroad extraction/scoring uses EN/NL variants for travel context + geo; returned job openings include `abroad_identifiers` and `abroad_summary`
+
+Auth-aware scrape behavior:
+
+- Non-admin accounts always score with generic profile `E` (summary field: `scoring_profile_career_sleeve`).
+- Admin keeps fixed profile behavior (`A-D`) plus custom mode for custom sleeves.
 
 Current MVP backend behavior:
 

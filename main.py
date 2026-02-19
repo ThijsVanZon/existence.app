@@ -1,10 +1,13 @@
 """Main Flask application for existence.app."""
 
-from flask import Flask, request, redirect, render_template, url_for, jsonify
+from flask import Flask, request, redirect, render_template, url_for, jsonify, session
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import base64
 import html
+import hashlib
+import hmac
 import ipaddress
 import itertools
 import json
@@ -12,20 +15,40 @@ import math
 import os
 import random
 import requests
+import secrets
+import smtplib
+import sqlite3
+import struct
 import time
 import re
 import threading
 import uuid
 import xml.etree.ElementTree as ET
+from email.message import EmailMessage
+from functools import wraps
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 from parsel import Selector
+from werkzeug.security import generate_password_hash, check_password_hash
 import career_sleeves as sleeves
 
 # Create an instance of the Flask class
 app = Flask(__name__)
 # cPanel/Passenger compatibility: some setups expect "application".
 application = app
+app.config["SECRET_KEY"] = (
+    os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or secrets.token_urlsafe(48)
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = str(os.getenv("SESSION_COOKIE_SECURE", "0")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # Cache the latest XKCD id to avoid hardcoded limits and repeated API calls
 latest_comic_cache = {"id": None, "fetched_at": 0}
@@ -334,6 +357,42 @@ scrape_progress_lock = threading.Lock()
 custom_sleeves_lock = threading.Lock()
 source_cache_lock = threading.Lock()
 source_health_lock = threading.Lock()
+auth_db_lock = threading.Lock()
+
+AUTH_ENFORCE = str(os.getenv("AUTH_ENFORCE", "0")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+AUTH_ADMIN_EMAIL = str(
+    os.getenv("AUTH_ADMIN_EMAIL", "thijs.vanzon@existenceinitiative.com")
+).strip().lower()
+AUTH_DB_PATH = STATE_DIR / "auth_state.sqlite3"
+PUBLIC_BASE_URL = str(os.getenv("PUBLIC_BASE_URL", "")).strip().rstrip("/")
+AUTH_PASSWORD_MIN_LENGTH = max(10, int(os.getenv("AUTH_PASSWORD_MIN_LENGTH", "12")))
+AUTH_VERIFY_TOKEN_TTL_SECONDS = max(
+    600,
+    int(os.getenv("AUTH_VERIFY_TOKEN_TTL_SECONDS", str(48 * 3600))),
+)
+AUTH_RESET_TOKEN_TTL_SECONDS = max(
+    600,
+    int(os.getenv("AUTH_RESET_TOKEN_TTL_SECONDS", str(2 * 3600))),
+)
+AUTH_TOTP_INTERVAL_SECONDS = 30
+AUTH_TOTP_DIGITS = 6
+AUTH_TOTP_WINDOW = 1
+AUTH_EMAIL_FROM = str(os.getenv("AUTH_EMAIL_FROM", "noreply@existenceinitiative.com")).strip()
+AUTH_SMTP_HOST = str(os.getenv("AUTH_SMTP_HOST", "")).strip()
+AUTH_SMTP_PORT = int(os.getenv("AUTH_SMTP_PORT", "587"))
+AUTH_SMTP_USERNAME = str(os.getenv("AUTH_SMTP_USERNAME", "")).strip()
+AUTH_SMTP_PASSWORD = str(os.getenv("AUTH_SMTP_PASSWORD", "")).strip()
+AUTH_SMTP_USE_TLS = str(os.getenv("AUTH_SMTP_USE_TLS", "1")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def _normalize_text(*parts):
@@ -588,6 +647,70 @@ def _save_json_file(path, payload):
         return False
 
 
+def _auth_db_connection():
+    _ensure_state_dir()
+    connection = sqlite3.connect(str(AUTH_DB_PATH))
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def _ensure_auth_tables():
+    with auth_db_lock:
+        connection = _auth_db_connection()
+        try:
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    is_verified INTEGER NOT NULL DEFAULT 0,
+                    is_admin INTEGER NOT NULL DEFAULT 0,
+                    totp_secret TEXT NOT NULL DEFAULT '',
+                    pending_totp_secret TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_login_at TEXT NOT NULL DEFAULT ''
+                );
+
+                CREATE TABLE IF NOT EXISTS auth_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    purpose TEXT NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS career_sleeves (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_key TEXT NOT NULL,
+                    letter TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    queries_json TEXT NOT NULL,
+                    location_preferences_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(owner_key, letter)
+                );
+                """
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+
+def _normalize_email(value):
+    return _clean_value(value, "").strip().lower()
+
+
+def _is_valid_email(value):
+    email = _normalize_email(value)
+    if not email:
+        return False
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
 def _normalize_career_sleeve_letter(value):
     cleaned = _clean_value(value, "").strip().upper()
     if len(cleaned) != 1 or not cleaned.isalpha():
@@ -596,17 +719,17 @@ def _normalize_career_sleeve_letter(value):
 
 
 def _is_fixed_career_sleeve_letter(letter):
-    return letter in FIXED_SYNERGY_SLEEVE_LETTERS
+    return _normalize_career_sleeve_letter(letter) in FIXED_SYNERGY_SLEEVE_LETTERS
 
 
-def _is_custom_career_sleeve_letter(letter):
-    if not letter or len(letter) != 1:
+def _is_custom_career_sleeve_letter(letter, min_letter=CUSTOM_SYNERGY_MIN_LETTER):
+    normalized = _normalize_career_sleeve_letter(letter)
+    lower_bound = _normalize_career_sleeve_letter(min_letter) or CUSTOM_SYNERGY_MIN_LETTER
+    if not normalized:
         return False
-    if not letter.isalpha():
+    if lower_bound > "A" and _is_fixed_career_sleeve_letter(normalized):
         return False
-    if _is_fixed_career_sleeve_letter(letter):
-        return False
-    return ord(CUSTOM_SYNERGY_MIN_LETTER) <= ord(letter) <= ord(CUSTOM_SYNERGY_MAX_LETTER)
+    return ord(lower_bound) <= ord(normalized) <= ord(CUSTOM_SYNERGY_MAX_LETTER)
 
 
 def _parse_queries_for_storage(raw_queries):
@@ -674,16 +797,400 @@ def _parse_custom_location_preferences(raw_payload):
     }
 
 
-def _next_available_custom_career_sleeve_letter(records):
+def _password_validation_error(password):
+    candidate = str(password or "")
+    if len(candidate) < AUTH_PASSWORD_MIN_LENGTH:
+        return f"Password must be at least {AUTH_PASSWORD_MIN_LENGTH} characters."
+    return ""
+
+
+def _totp_generate_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+
+def _totp_decode_secret(secret):
+    normalized = str(secret or "").strip().replace(" ", "").upper()
+    if not normalized:
+        return b""
+    padding = "=" * ((8 - (len(normalized) % 8)) % 8)
+    try:
+        return base64.b32decode(f"{normalized}{padding}", casefold=True)
+    except (base64.binascii.Error, ValueError):
+        return b""
+
+
+def _totp_code(secret, at_epoch=None):
+    key = _totp_decode_secret(secret)
+    if not key:
+        return ""
+    moment = int(time.time() if at_epoch is None else at_epoch)
+    counter = int(moment // AUTH_TOTP_INTERVAL_SECONDS)
+    payload = struct.pack(">Q", counter)
+    digest = hmac.new(key, payload, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    binary = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(binary % (10 ** AUTH_TOTP_DIGITS)).zfill(AUTH_TOTP_DIGITS)
+
+
+def _verify_totp(secret, code):
+    normalized_code = re.sub(r"\D+", "", str(code or "").strip())
+    if len(normalized_code) != AUTH_TOTP_DIGITS:
+        return False
+    now = int(time.time())
+    for window in range(-AUTH_TOTP_WINDOW, AUTH_TOTP_WINDOW + 1):
+        if _totp_code(secret, now + (window * AUTH_TOTP_INTERVAL_SECONDS)) == normalized_code:
+            return True
+    return False
+
+
+def _totp_otpauth_uri(email, secret):
+    issuer = "existence.app"
+    label = f"{issuer}:{_normalize_email(email)}"
+    query = urlencode(
+        {
+            "secret": secret,
+            "issuer": issuer,
+            "algorithm": "SHA1",
+            "digits": str(AUTH_TOTP_DIGITS),
+            "period": str(AUTH_TOTP_INTERVAL_SECONDS),
+        }
+    )
+    return f"otpauth://totp/{label}?{query}"
+
+
+def _hash_token(raw_token):
+    return hashlib.sha256(str(raw_token or "").encode("utf-8")).hexdigest()
+
+
+def _send_email(to_email, subject, body_text):
+    recipient = _normalize_email(to_email)
+    if not recipient:
+        return False
+    if not AUTH_SMTP_HOST:
+        _log_event(
+            "email_stub",
+            to=recipient,
+            subject=_clean_value(subject, ""),
+            preview=_clean_value(body_text, "")[:200],
+        )
+        return True
+
+    message = EmailMessage()
+    message["From"] = AUTH_EMAIL_FROM
+    message["To"] = recipient
+    message["Subject"] = _clean_value(subject, "")
+    message.set_content(_clean_value(body_text, ""))
+
+    try:
+        with smtplib.SMTP(AUTH_SMTP_HOST, AUTH_SMTP_PORT, timeout=12) as smtp:
+            if AUTH_SMTP_USE_TLS:
+                smtp.starttls()
+            if AUTH_SMTP_USERNAME:
+                smtp.login(AUTH_SMTP_USERNAME, AUTH_SMTP_PASSWORD)
+            smtp.send_message(message)
+        return True
+    except (OSError, smtplib.SMTPException):
+        return False
+
+
+def _auth_user_from_row(row):
+    if not row:
+        return None
+    return {
+        "id": int(row["id"]),
+        "email": _normalize_email(row["email"]),
+        "password_hash": _clean_value(row["password_hash"], ""),
+        "is_verified": bool(int(row["is_verified"] or 0)),
+        "is_admin": bool(int(row["is_admin"] or 0)),
+        "totp_secret": _clean_value(row["totp_secret"], ""),
+        "pending_totp_secret": _clean_value(row["pending_totp_secret"], ""),
+        "created_at": _clean_value(row["created_at"], ""),
+        "updated_at": _clean_value(row["updated_at"], ""),
+        "last_login_at": _clean_value(row["last_login_at"], ""),
+    }
+
+
+def _auth_user_by_id(user_id):
+    try:
+        numeric = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        row = connection.execute(
+            "SELECT * FROM users WHERE id = ?",
+            (numeric,),
+        ).fetchone()
+        return _auth_user_from_row(row)
+    finally:
+        connection.close()
+
+
+def _auth_user_by_email(email):
+    normalized = _normalize_email(email)
+    if not normalized:
+        return None
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        row = connection.execute(
+            "SELECT * FROM users WHERE email = ?",
+            (normalized,),
+        ).fetchone()
+        return _auth_user_from_row(row)
+    finally:
+        connection.close()
+
+
+def _create_auth_user(email, password):
+    normalized_email = _normalize_email(email)
+    password_error = _password_validation_error(password)
+    if not _is_valid_email(normalized_email):
+        return None, "Enter a valid email address."
+    if password_error:
+        return None, password_error
+    if _auth_user_by_email(normalized_email):
+        return None, "An account with this email already exists."
+
+    now_stamp = _now_utc_stamp()
+    is_admin = 1 if normalized_email == AUTH_ADMIN_EMAIL else 0
+    password_hash = generate_password_hash(password)
+
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        cursor = connection.execute(
+            """
+            INSERT INTO users (email, password_hash, is_verified, is_admin, totp_secret, pending_totp_secret, created_at, updated_at, last_login_at)
+            VALUES (?, ?, 0, ?, '', '', ?, ?, '')
+            """,
+            (normalized_email, password_hash, is_admin, now_stamp, now_stamp),
+        )
+        connection.commit()
+        return _auth_user_by_id(cursor.lastrowid), ""
+    except sqlite3.IntegrityError:
+        return None, "An account with this email already exists."
+    finally:
+        connection.close()
+
+
+def _create_auth_token(user_id, purpose, ttl_seconds):
+    _ensure_auth_tables()
+    token = secrets.token_urlsafe(36)
+    token_hash = _hash_token(token)
+    now_epoch = int(time.time())
+    expires_epoch = now_epoch + max(60, int(ttl_seconds))
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            """
+            INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at, consumed_at, created_at)
+            VALUES (?, ?, ?, ?, 0, ?)
+            """,
+            (int(user_id), _clean_value(purpose, ""), token_hash, expires_epoch, now_epoch),
+        )
+        connection.commit()
+        return token
+    finally:
+        connection.close()
+
+
+def _consume_auth_token(token, purpose):
+    token_hash = _hash_token(token)
+    if not token_hash:
+        return None
+    now_epoch = int(time.time())
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        row = connection.execute(
+            """
+            SELECT id, user_id FROM auth_tokens
+            WHERE token_hash = ? AND purpose = ? AND consumed_at = 0 AND expires_at >= ?
+            LIMIT 1
+            """,
+            (token_hash, _clean_value(purpose, ""), now_epoch),
+        ).fetchone()
+        if not row:
+            return None
+        connection.execute(
+            "UPDATE auth_tokens SET consumed_at = ? WHERE id = ?",
+            (now_epoch, int(row["id"])),
+        )
+        connection.commit()
+        return _auth_user_by_id(int(row["user_id"]))
+    finally:
+        connection.close()
+
+
+def _update_auth_user_password(user_id, password):
+    error = _password_validation_error(password)
+    if error:
+        return error
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (generate_password_hash(password), now_stamp, int(user_id)),
+        )
+        connection.commit()
+        return ""
+    finally:
+        connection.close()
+
+
+def _mark_auth_user_verified(user_id):
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET is_verified = 1, updated_at = ? WHERE id = ?",
+            (now_stamp, int(user_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _set_auth_user_last_login(user_id):
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?",
+            (now_stamp, now_stamp, int(user_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _set_auth_user_pending_totp_secret(user_id, pending_secret):
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET pending_totp_secret = ?, updated_at = ? WHERE id = ?",
+            (_clean_value(pending_secret, ""), now_stamp, int(user_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _enable_auth_user_totp(user_id, confirmed_secret):
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET totp_secret = ?, pending_totp_secret = '', updated_at = ? WHERE id = ?",
+            (_clean_value(confirmed_secret, ""), now_stamp, int(user_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _disable_auth_user_totp(user_id):
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET totp_secret = '', pending_totp_secret = '', updated_at = ? WHERE id = ?",
+            (now_stamp, int(user_id)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _current_authenticated_user():
+    raw_user_id = session.get("auth_user_id")
+    if raw_user_id is None:
+        return None
+    user = _auth_user_by_id(raw_user_id)
+    if not user:
+        session.pop("auth_user_id", None)
+        session.pop("auth_2fa_pending_user_id", None)
+    return user
+
+
+def _guest_owner_key():
+    try:
+        token = _clean_value(session.get("guest_owner_key"), "")
+    except RuntimeError:
+        return "guest:default"
+    if not token:
+        token = secrets.token_hex(12)
+        session["guest_owner_key"] = token
+    return f"guest:{token}"
+
+
+def _auth_context(allow_guest=True):
+    user = _current_authenticated_user()
+    if user:
+        is_admin = bool(user.get("is_admin"))
+        return {
+            "authenticated": True,
+            "user": user,
+            "user_id": int(user["id"]),
+            "email": user["email"],
+            "owner_key": f"user:{int(user['id'])}",
+            "is_admin": is_admin,
+            "fixed_letters": list(FIXED_SYNERGY_SLEEVE_LETTERS) if is_admin else [],
+            "custom_letter_min": CUSTOM_SYNERGY_MIN_LETTER if is_admin else "A",
+            "custom_letter_max": CUSTOM_SYNERGY_MAX_LETTER,
+            "show_scope_labels": bool(is_admin),
+        }
+
+    if AUTH_ENFORCE and not allow_guest:
+        return None
+
+    is_admin_guest = not AUTH_ENFORCE
+    return {
+        "authenticated": False,
+        "user": None,
+        "user_id": 0,
+        "email": "",
+        "owner_key": _guest_owner_key(),
+        "is_admin": bool(is_admin_guest),
+        "fixed_letters": list(FIXED_SYNERGY_SLEEVE_LETTERS) if is_admin_guest else [],
+        "custom_letter_min": CUSTOM_SYNERGY_MIN_LETTER if is_admin_guest else "A",
+        "custom_letter_max": CUSTOM_SYNERGY_MAX_LETTER,
+        "show_scope_labels": bool(is_admin_guest),
+    }
+
+
+def _auth_gate(api=False):
+    if not AUTH_ENFORCE:
+        return None
+    if _current_authenticated_user():
+        return None
+    if api:
+        return jsonify({"error": "Authentication required."}), 401
+    next_url = request.full_path if request.query_string else request.path
+    return redirect(url_for("auth_login", next=next_url))
+
+
+def _next_available_custom_career_sleeve_letter(records, min_letter=CUSTOM_SYNERGY_MIN_LETTER):
+    start_letter = _normalize_career_sleeve_letter(min_letter) or CUSTOM_SYNERGY_MIN_LETTER
     used_letters = set()
     for entry in records or []:
         if not isinstance(entry, dict):
             continue
         letter = _normalize_career_sleeve_letter(entry.get("letter"))
-        if _is_custom_career_sleeve_letter(letter):
+        if _is_custom_career_sleeve_letter(letter, min_letter=start_letter):
             used_letters.add(letter)
 
-    for code in range(ord(CUSTOM_SYNERGY_MIN_LETTER), ord(CUSTOM_SYNERGY_MAX_LETTER) + 1):
+    for code in range(ord(start_letter), ord(CUSTOM_SYNERGY_MAX_LETTER) + 1):
         candidate = chr(code)
         if candidate not in used_letters:
             return candidate
@@ -708,44 +1215,72 @@ def _fixed_career_sleeves():
     return records
 
 
-def _load_custom_career_sleeves():
-    payload = _load_json_file(CUSTOM_SLEEVES_STATE_PATH, {"version": "1.0", "custom_sleeves": []})
-    raw_entries = payload.get("custom_sleeves") if isinstance(payload, dict) else []
-    if not isinstance(raw_entries, list):
-        return []
+def _load_custom_career_sleeves(auth_context=None):
+    context = auth_context or _auth_context(allow_guest=True)
+    owner_key = _clean_value((context or {}).get("owner_key"), "guest")
+    min_letter = _normalize_career_sleeve_letter((context or {}).get("custom_letter_min")) or CUSTOM_SYNERGY_MIN_LETTER
 
-    by_letter = {}
-    for entry in raw_entries:
-        if not isinstance(entry, dict):
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        rows = connection.execute(
+            """
+            SELECT letter, title, queries_json, location_preferences_json, updated_at
+            FROM career_sleeves
+            WHERE owner_key = ?
+            ORDER BY letter ASC
+            """,
+            (owner_key,),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    custom = []
+    for row in rows:
+        letter = _normalize_career_sleeve_letter(row["letter"])
+        if not _is_custom_career_sleeve_letter(letter, min_letter=min_letter):
             continue
-        letter = _normalize_career_sleeve_letter(entry.get("letter"))
-        if not _is_custom_career_sleeve_letter(letter):
-            continue
-        title = _clean_value(entry.get("title"), "")[:120]
-        queries = _parse_queries_for_storage(entry.get("queries"))
-        location_preferences = _parse_custom_location_preferences(entry.get("location_preferences"))
+        title = _clean_value(row["title"], "")[:120]
+        queries_raw = []
+        try:
+            queries_raw = json.loads(row["queries_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            queries_raw = []
+        queries = _parse_queries_for_storage(queries_raw)
+        location_raw = {}
+        try:
+            location_raw = json.loads(row["location_preferences_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            location_raw = {}
+        location_preferences = _parse_custom_location_preferences(location_raw)
         if not title:
             continue
-        by_letter[letter] = {
-            "letter": letter,
-            "title": title,
-            "queries": queries,
-            "location_preferences": location_preferences,
-            "locked": False,
-            "scope": "custom",
-            "updated_at": _clean_value(entry.get("updated_at"), _now_utc_stamp()),
-        }
+        custom.append(
+            {
+                "letter": letter,
+                "title": title,
+                "queries": queries,
+                "location_preferences": location_preferences,
+                "locked": False,
+                "scope": "custom",
+                "updated_at": _clean_value(row["updated_at"], _now_utc_stamp()),
+            }
+        )
 
-    return [by_letter[key] for key in sorted(by_letter)]
+    return custom
 
 
-def _save_custom_career_sleeves(records):
+def _save_custom_career_sleeves(records, auth_context=None):
+    context = auth_context or _auth_context(allow_guest=True)
+    owner_key = _clean_value((context or {}).get("owner_key"), "guest")
+    min_letter = _normalize_career_sleeve_letter((context or {}).get("custom_letter_min")) or CUSTOM_SYNERGY_MIN_LETTER
+
     serializable = []
     for entry in records or []:
         if not isinstance(entry, dict):
             continue
         letter = _normalize_career_sleeve_letter(entry.get("letter"))
-        if not _is_custom_career_sleeve_letter(letter):
+        if not _is_custom_career_sleeve_letter(letter, min_letter=min_letter):
             continue
         title = _clean_value(entry.get("title"), "")[:120]
         queries = _parse_queries_for_storage(entry.get("queries"))
@@ -763,25 +1298,138 @@ def _save_custom_career_sleeves(records):
         )
 
     serializable.sort(key=lambda item: item.get("letter", ""))
-    payload = {
-        "version": "1.0",
-        "updated_at": _now_utc_stamp(),
-        "custom_sleeves": serializable,
-    }
-    return _save_json_file(CUSTOM_SLEEVES_STATE_PATH, payload)
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "DELETE FROM career_sleeves WHERE owner_key = ?",
+            (owner_key,),
+        )
+        for item in serializable:
+            connection.execute(
+                """
+                INSERT INTO career_sleeves (owner_key, letter, title, queries_json, location_preferences_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    owner_key,
+                    item["letter"],
+                    item["title"],
+                    json.dumps(item["queries"], ensure_ascii=False),
+                    json.dumps(item["location_preferences"], ensure_ascii=False),
+                    item["updated_at"],
+                ),
+            )
+        connection.commit()
+        return True
+    except sqlite3.Error:
+        return False
+    finally:
+        connection.close()
 
 
-def _career_sleeve_catalog():
-    fixed = _fixed_career_sleeves()
-    custom = _load_custom_career_sleeves()
+def _career_sleeve_catalog(auth_context=None):
+    context = auth_context or _auth_context(allow_guest=True)
+    fixed = _fixed_career_sleeves() if bool((context or {}).get("is_admin")) else []
+    custom = _load_custom_career_sleeves(context)
     all_entries = list(fixed) + list(custom)
     return {
         "fixed": fixed,
         "custom": custom,
         "all": all_entries,
-        "locked_letters": list(FIXED_SYNERGY_SLEEVE_LETTERS),
-        "custom_letter_min": CUSTOM_SYNERGY_MIN_LETTER,
-        "custom_letter_max": CUSTOM_SYNERGY_MAX_LETTER,
+        "locked_letters": list((context or {}).get("fixed_letters") or []),
+        "custom_letter_min": _clean_value((context or {}).get("custom_letter_min"), CUSTOM_SYNERGY_MIN_LETTER),
+        "custom_letter_max": _clean_value((context or {}).get("custom_letter_max"), CUSTOM_SYNERGY_MAX_LETTER),
+        "show_scope_labels": bool((context or {}).get("show_scope_labels", True)),
+        "auth": {
+            "enforced": bool(AUTH_ENFORCE),
+            "authenticated": bool((context or {}).get("authenticated")),
+            "email": _clean_value((context or {}).get("email"), ""),
+            "is_admin": bool((context or {}).get("is_admin")),
+        },
+    }
+
+
+def _absolute_url(path):
+    safe_path = str(path or "").strip()
+    if not safe_path.startswith("/"):
+        safe_path = f"/{safe_path}"
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}{safe_path}"
+    root = _clean_value(getattr(request, "url_root", ""), "").rstrip("/")
+    return f"{root}{safe_path}" if root else safe_path
+
+
+def _send_verification_email(user):
+    if not user:
+        return False
+    token = _create_auth_token(
+        user_id=int(user["id"]),
+        purpose="verify_email",
+        ttl_seconds=AUTH_VERIFY_TOKEN_TTL_SECONDS,
+    )
+    verify_url = _absolute_url(url_for("auth_verify_email", token=token))
+    subject = "Confirm your existence.app account"
+    body = (
+        "Welcome to existence.app.\n\n"
+        "Confirm your account by opening this link:\n"
+        f"{verify_url}\n\n"
+        "If you did not create this account, you can ignore this email."
+    )
+    return _send_email(user["email"], subject, body)
+
+
+def _send_password_reset_email(user):
+    if not user:
+        return False
+    token = _create_auth_token(
+        user_id=int(user["id"]),
+        purpose="reset_password",
+        ttl_seconds=AUTH_RESET_TOKEN_TTL_SECONDS,
+    )
+    reset_url = _absolute_url(url_for("auth_reset_password", token=token))
+    subject = "Reset your existence.app password"
+    body = (
+        "A password reset was requested for your existence.app account.\n\n"
+        "Open this link to set a new password:\n"
+        f"{reset_url}\n\n"
+        "If you did not request this, you can ignore this email."
+    )
+    return _send_email(user["email"], subject, body)
+
+
+def _auth_login_user(user):
+    session["auth_user_id"] = int(user["id"])
+    session.pop("auth_2fa_pending_user_id", None)
+    session.pop("auth_2fa_next", None)
+    _set_auth_user_last_login(int(user["id"]))
+
+
+def _auth_logout_user():
+    session.pop("auth_user_id", None)
+    session.pop("auth_2fa_pending_user_id", None)
+    session.pop("auth_2fa_next", None)
+
+
+def _auth_public_user():
+    user = _current_authenticated_user()
+    if not user:
+        return None
+    return {
+        "id": int(user["id"]),
+        "email": user["email"],
+        "is_verified": bool(user["is_verified"]),
+        "is_admin": bool(user["is_admin"]),
+        "has_2fa": bool(user["totp_secret"]),
+    }
+
+
+@app.context_processor
+def _inject_auth_context():
+    current = _auth_public_user()
+    return {
+        "auth_user": current,
+        "auth_enforce": bool(AUTH_ENFORCE),
     }
 
 
@@ -5293,6 +5941,253 @@ def _public_scrape_config():
     }
 
 
+def _safe_next_url(raw_value):
+    candidate = _clean_value(raw_value, "")
+    if not candidate:
+        return ""
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return ""
+    if not candidate.startswith("/") or candidate.startswith("//"):
+        return ""
+    return candidate
+
+
+@app.route('/auth/register', methods=['GET', 'POST'])
+def auth_register():
+    _ensure_auth_tables()
+    error = ""
+    info = ""
+    email_value = _clean_value(request.form.get("email"), "")
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+        if password != password_confirm:
+            error = "Passwords do not match."
+        else:
+            user, create_error = _create_auth_user(email_value, password)
+            if create_error:
+                error = create_error
+            elif user:
+                _send_verification_email(user)
+                info = (
+                    "Account created. Check your email to verify your account "
+                    "before logging in."
+                )
+
+    return render_template(
+        "auth_register.html",
+        email=email_value,
+        error=error,
+        info=info,
+        min_password_len=AUTH_PASSWORD_MIN_LENGTH,
+    )
+
+
+@app.route('/auth/login', methods=['GET', 'POST'])
+def auth_login():
+    _ensure_auth_tables()
+    next_url = _safe_next_url(request.values.get("next"))
+    error = ""
+    info = ""
+    email_value = _clean_value(request.form.get("email"), "")
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        user = _auth_user_by_email(email_value)
+        if not user or not check_password_hash(user.get("password_hash", ""), password):
+            error = "Invalid email or password."
+        elif not user.get("is_verified"):
+            error = "Please verify your email address before logging in."
+        elif user.get("totp_secret"):
+            session["auth_2fa_pending_user_id"] = int(user["id"])
+            session["auth_2fa_next"] = next_url or url_for("show_synergy")
+            return redirect(url_for("auth_two_factor"))
+        else:
+            _auth_login_user(user)
+            return redirect(next_url or url_for("show_synergy"))
+
+    return render_template(
+        "auth_login.html",
+        email=email_value,
+        error=error,
+        info=info,
+        next_url=next_url,
+    )
+
+
+@app.route('/auth/logout', methods=['GET', 'POST'])
+def auth_logout():
+    _auth_logout_user()
+    return redirect(url_for("index"))
+
+
+@app.route('/auth/verify-email')
+def auth_verify_email():
+    _ensure_auth_tables()
+    token = _clean_value(request.args.get("token"), "")
+    user = _consume_auth_token(token, "verify_email") if token else None
+    if user:
+        _mark_auth_user_verified(int(user["id"]))
+        message = "Email address verified. You can now log in."
+        tone = "success"
+    else:
+        message = "Verification link is invalid or expired."
+        tone = "error"
+    return render_template("auth_message.html", title="Email Verification", message=message, tone=tone)
+
+
+@app.route('/auth/resend-verification', methods=['POST'])
+def auth_resend_verification():
+    _ensure_auth_tables()
+    email = _clean_value(request.form.get("email"), "")
+    user = _auth_user_by_email(email)
+    if user and not user.get("is_verified"):
+        _send_verification_email(user)
+    message = "If that account exists, a verification email has been sent."
+    return render_template("auth_message.html", title="Verification Email", message=message, tone="info")
+
+
+@app.route('/auth/forgot-password', methods=['GET', 'POST'])
+def auth_forgot_password():
+    _ensure_auth_tables()
+    info = ""
+    email_value = _clean_value(request.form.get("email"), "")
+    if request.method == "POST":
+        user = _auth_user_by_email(email_value)
+        if user:
+            _send_password_reset_email(user)
+        info = "If that account exists, a password reset email has been sent."
+    return render_template("auth_forgot_password.html", email=email_value, info=info)
+
+
+@app.route('/auth/reset-password', methods=['GET', 'POST'])
+def auth_reset_password():
+    _ensure_auth_tables()
+    token = _clean_value(request.values.get("token"), "")
+    error = ""
+    info = ""
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+        if password != password_confirm:
+            error = "Passwords do not match."
+        else:
+            user = _consume_auth_token(token, "reset_password") if token else None
+            if not user:
+                error = "Reset link is invalid or expired."
+            else:
+                update_error = _update_auth_user_password(int(user["id"]), password)
+                if update_error:
+                    error = update_error
+                else:
+                    info = "Password updated successfully. You can now log in."
+    return render_template(
+        "auth_reset_password.html",
+        token=token,
+        error=error,
+        info=info,
+        min_password_len=AUTH_PASSWORD_MIN_LENGTH,
+    )
+
+
+@app.route('/auth/2fa', methods=['GET', 'POST'])
+def auth_two_factor():
+    pending_user_id = session.get("auth_2fa_pending_user_id")
+    pending_user = _auth_user_by_id(pending_user_id) if pending_user_id else None
+    if not pending_user or not pending_user.get("totp_secret"):
+        session.pop("auth_2fa_pending_user_id", None)
+        session.pop("auth_2fa_next", None)
+        return redirect(url_for("auth_login"))
+
+    error = ""
+    if request.method == "POST":
+        code = request.form.get("code", "")
+        if _verify_totp(pending_user.get("totp_secret", ""), code):
+            _auth_login_user(pending_user)
+            next_url = _safe_next_url(session.pop("auth_2fa_next", ""))
+            return redirect(next_url or url_for("show_synergy"))
+        error = "Invalid 2FA code."
+
+    return render_template("auth_two_factor.html", error=error)
+
+
+@app.route('/auth/account', methods=['GET'])
+def auth_account():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+    user = _current_authenticated_user()
+    return render_template("auth_account.html", user=_auth_public_user(), has_2fa=bool(user and user.get("totp_secret")))
+
+
+@app.route('/auth/2fa-setup', methods=['GET', 'POST'])
+def auth_two_factor_setup():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+
+    user = _current_authenticated_user()
+    if not user:
+        return redirect(url_for("auth_login"))
+
+    error = ""
+    info = ""
+    pending_secret = _clean_value(user.get("pending_totp_secret"), "")
+    enabled_secret = _clean_value(user.get("totp_secret"), "")
+    is_enabled = bool(enabled_secret)
+
+    if request.method == "POST":
+        action = _clean_value(request.form.get("action"), "enable")
+        code = request.form.get("code", "")
+
+        if action == "disable":
+            if not is_enabled:
+                error = "2FA is not enabled for this account."
+            elif not _verify_totp(enabled_secret, code):
+                error = "Invalid 2FA code."
+            else:
+                _disable_auth_user_totp(int(user["id"]))
+                info = "2FA disabled."
+                user = _auth_user_by_id(int(user["id"]))
+                pending_secret = _clean_value(user.get("pending_totp_secret"), "")
+                enabled_secret = _clean_value(user.get("totp_secret"), "")
+                is_enabled = bool(enabled_secret)
+        else:
+            if is_enabled:
+                error = "2FA is already enabled."
+            else:
+                if not pending_secret:
+                    pending_secret = _totp_generate_secret()
+                    _set_auth_user_pending_totp_secret(int(user["id"]), pending_secret)
+                if not _verify_totp(pending_secret, code):
+                    error = "Invalid authenticator code."
+                else:
+                    _enable_auth_user_totp(int(user["id"]), pending_secret)
+                    info = "2FA enabled. Future logins will require authenticator codes."
+                    user = _auth_user_by_id(int(user["id"]))
+                    pending_secret = _clean_value(user.get("pending_totp_secret"), "")
+                    enabled_secret = _clean_value(user.get("totp_secret"), "")
+                    is_enabled = bool(enabled_secret)
+
+    if not is_enabled and not pending_secret:
+        pending_secret = _totp_generate_secret()
+        _set_auth_user_pending_totp_secret(int(user["id"]), pending_secret)
+
+    setup_secret = enabled_secret if is_enabled else pending_secret
+    otpauth_uri = _totp_otpauth_uri(user.get("email", ""), setup_secret) if setup_secret else ""
+    return render_template(
+        "auth_two_factor_setup.html",
+        user=_auth_public_user(),
+        error=error,
+        info=info,
+        is_enabled=is_enabled,
+        setup_secret=setup_secret,
+        otpauth_uri=otpauth_uri,
+    )
+
+
 # Root URL maps to this function
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -5323,29 +6218,49 @@ def show_aspiration():
 
 @app.route('/enlightenment')
 def show_enlightenment():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+    context = _auth_context(allow_guest=True)
+    if not context.get("is_admin"):
+        return redirect(url_for("show_synergy"))
     return render_template('enlightenment.html')
 
 
 @app.route('/synergy')
 def show_synergy():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
     return render_template('synergy.html')
 
 
 @app.route('/synergy-sleeves', methods=['GET'])
 def synergy_sleeves():
+    gated = _auth_gate(api=True)
+    if gated is not None:
+        return gated
+    context = _auth_context(allow_guest=True)
     with custom_sleeves_lock:
-        payload = _career_sleeve_catalog()
+        payload = _career_sleeve_catalog(context)
     return jsonify(payload)
 
 
 @app.route('/synergy-sleeves', methods=['POST'])
 def save_synergy_sleeve():
+    gated = _auth_gate(api=True)
+    if gated is not None:
+        return gated
+    context = _auth_context(allow_guest=True)
+    custom_letter_min = _clean_value(context.get("custom_letter_min"), CUSTOM_SYNERGY_MIN_LETTER)
+    fixed_letters = set(context.get("fixed_letters") or [])
+
     payload = request.get_json(silent=True) or {}
     requested_letter = _normalize_career_sleeve_letter(payload.get("letter"))
-    if requested_letter and _is_fixed_career_sleeve_letter(requested_letter):
+    if requested_letter and requested_letter in fixed_letters:
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be overwritten."}), 409
-    if requested_letter and not _is_custom_career_sleeve_letter(requested_letter):
-        return jsonify({"error": "Only letters E-Z can be saved as custom Career Sleeves."}), 400
+    if requested_letter and not _is_custom_career_sleeve_letter(requested_letter, min_letter=custom_letter_min):
+        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be saved as Career Sleeves."}), 400
 
     title = _clean_value(payload.get("title"), "")[:120]
     if not title:
@@ -5358,7 +6273,7 @@ def save_synergy_sleeve():
     allow_overwrite = bool(payload.get("allow_overwrite"))
 
     with custom_sleeves_lock:
-        existing = _load_custom_career_sleeves()
+        existing = _load_custom_career_sleeves(context)
         existing_map = {
             _normalize_career_sleeve_letter(entry.get("letter")): entry
             for entry in existing
@@ -5367,12 +6282,12 @@ def save_synergy_sleeve():
         if requested_letter:
             letter = requested_letter
         else:
-            letter = _next_available_custom_career_sleeve_letter(existing)
+            letter = _next_available_custom_career_sleeve_letter(existing, min_letter=custom_letter_min)
             if not letter:
-                return jsonify({"error": "No custom Career Sleeve letters available (E-Z are all in use)."}), 409
+                return jsonify({"error": f"No Career Sleeve letters available ({custom_letter_min}-Z are all in use)."}), 409
 
         if letter in existing_map and not allow_overwrite:
-            return jsonify({"error": f"Custom Career Sleeve {letter} already exists. Use another letter."}), 409
+            return jsonify({"error": f"Career Sleeve {letter} already exists. Use another letter."}), 409
 
         record = {
             "letter": letter,
@@ -5386,34 +6301,41 @@ def save_synergy_sleeve():
         filtered = [entry for entry in existing if _normalize_career_sleeve_letter(entry.get("letter")) != letter]
         filtered.append(record)
         filtered.sort(key=lambda entry: entry.get("letter", ""))
-        if not _save_custom_career_sleeves(filtered):
+        if not _save_custom_career_sleeves(filtered, context):
             return jsonify({"error": "Could not persist custom Career Sleeve state."}), 500
-        catalog = _career_sleeve_catalog()
+        catalog = _career_sleeve_catalog(context)
 
     return jsonify({"ok": True, "saved": record, "catalog": catalog})
 
 
 @app.route('/synergy-sleeves/<letter>', methods=['DELETE'])
 def delete_synergy_sleeve(letter):
+    gated = _auth_gate(api=True)
+    if gated is not None:
+        return gated
+    context = _auth_context(allow_guest=True)
+    custom_letter_min = _clean_value(context.get("custom_letter_min"), CUSTOM_SYNERGY_MIN_LETTER)
+    fixed_letters = set(context.get("fixed_letters") or [])
+
     normalized_letter = _normalize_career_sleeve_letter(letter)
     if not normalized_letter:
         return jsonify({"error": "Invalid Career Sleeve letter."}), 400
-    if _is_fixed_career_sleeve_letter(normalized_letter):
+    if normalized_letter in fixed_letters:
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be deleted."}), 409
-    if not _is_custom_career_sleeve_letter(normalized_letter):
-        return jsonify({"error": "Only letters E-Z can be deleted as custom Career Sleeves."}), 400
+    if not _is_custom_career_sleeve_letter(normalized_letter, min_letter=custom_letter_min):
+        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be deleted as Career Sleeves."}), 400
 
     with custom_sleeves_lock:
-        existing = _load_custom_career_sleeves()
+        existing = _load_custom_career_sleeves(context)
         filtered = [
             entry for entry in existing
             if _normalize_career_sleeve_letter(entry.get("letter")) != normalized_letter
         ]
         if len(filtered) == len(existing):
             return jsonify({"error": f"Custom Career Sleeve {normalized_letter} was not found."}), 404
-        if not _save_custom_career_sleeves(filtered):
+        if not _save_custom_career_sleeves(filtered, context):
             return jsonify({"error": "Could not persist custom Career Sleeve state."}), 500
-        catalog = _career_sleeve_catalog()
+        catalog = _career_sleeve_catalog(context)
 
     return jsonify({"ok": True, "deleted": normalized_letter, "catalog": catalog})
 
@@ -5604,16 +6526,37 @@ def company_opening():
 # Route to trigger scraping
 @app.route('/scrape')
 def scrape():
+    gated = _auth_gate(api=True)
+    if gated is not None:
+        return gated
+    auth_context = _auth_context(allow_guest=True)
+    is_admin_context = bool((auth_context or {}).get("is_admin"))
+
     run_id = _clean_value(request.args.get("run_id"), "") or uuid.uuid4().hex[:12]
     profile = SCRAPE_MODE
-    career_sleeve_key = request.args.get("career_sleeve", "").upper().strip()
-    if career_sleeve_key not in sleeves.VALID_CAREER_SLEEVES:
+    requested_career_sleeve = _normalize_career_sleeve_letter(
+        request.args.get("career_sleeve", "")
+    )
+    if not requested_career_sleeve:
+        return jsonify({"error": "Invalid Career Sleeve letter."}), 400
+    if is_admin_context and requested_career_sleeve not in sleeves.VALID_CAREER_SLEEVES:
         allowed = ", ".join(sorted(sleeves.VALID_CAREER_SLEEVES))
         return jsonify({"error": f"Invalid Career Sleeve. Use one of: {allowed}."}), 400
 
     location_mode = MVP_LOCATION_MODE
 
-    strict_career_sleeve = request.args.get("strict", "0") == "1"
+    requested_custom_mode = request.args.get("custom_mode", "0") == "1"
+    requested_custom_letter = _normalize_career_sleeve_letter(
+        request.args.get("custom_letter", "")
+    )
+    scoring_profile_career_sleeve = (
+        requested_career_sleeve
+        if is_admin_context
+        else "E"
+    )
+    custom_mode = bool(requested_custom_mode or not is_admin_context)
+    custom_letter = requested_custom_letter or (requested_career_sleeve if custom_mode else "")
+    strict_career_sleeve = (request.args.get("strict", "0") == "1") and not custom_mode
     force_refresh = request.args.get("refresh", "0") == "1"
     include_fail = request.args.get("include_fail", "0") == "1"
 
@@ -5689,8 +6632,6 @@ def scrape():
     search_queries = _parse_search_queries(search_queries_param)
     extra_queries_param = request.args.get("extra_queries", "")
     extra_queries = _parse_extra_queries(extra_queries_param)
-    custom_mode = request.args.get("custom_mode", "0") == "1"
-    custom_letter = _normalize_career_sleeve_letter(request.args.get("custom_letter", ""))
     custom_geo_countries = _parse_geo_preferences_for_storage(
         request.args.get("custom_geo_countries", "")
     )
@@ -5723,9 +6664,11 @@ def scrape():
     )
     if custom_mode and custom_letter and not custom_pref_requested:
         with custom_sleeves_lock:
-            for record in _load_custom_career_sleeves():
+            for record in _load_custom_career_sleeves(auth_context):
                 if _normalize_career_sleeve_letter(record.get("letter")) != custom_letter:
                     continue
+                if not search_queries:
+                    search_queries = _parse_queries_for_storage(record.get("queries"))
                 custom_location_preferences = _parse_custom_location_preferences(
                     record.get("location_preferences")
                 )
@@ -5738,17 +6681,18 @@ def scrape():
     _progress_start(
         run_id,
         profile=profile,
-        career_sleeve=career_sleeve_key,
+        career_sleeve=requested_career_sleeve,
         location_mode=location_mode,
     )
     _progress_update(
         run_id,
         "start",
         (
-            f"Scrape started for Career Sleeve {career_sleeve_key} "
-            f"({location_mode}, profile {profile}, variant {scrape_variant})"
+            f"Scrape started for Career Sleeve {requested_career_sleeve} "
+            f"(scoring profile {scoring_profile_career_sleeve}, {location_mode}, profile {profile}, variant {scrape_variant})"
         ),
-        career_sleeve=career_sleeve_key,
+        career_sleeve=requested_career_sleeve,
+        scoring_profile_career_sleeve=scoring_profile_career_sleeve,
         location_mode=location_mode,
         scrape_variant=scrape_variant,
         selected_sources=selected_sources,
@@ -5767,7 +6711,7 @@ def scrape():
 
     items, fetch_errors, used_sources, fetch_diagnostics = fetch_jobs_from_sources(
         selected_sources,
-        career_sleeve_key,
+        scoring_profile_career_sleeve,
         location_mode=location_mode,
         force_refresh=force_refresh,
         max_pages=max_pages,
@@ -5802,7 +6746,7 @@ def scrape():
     _progress_update(run_id, "ranking-start", "Ranking and filtering started")
     ranking_result = rank_and_filter_jobs(
         items,
-        target_career_sleeve=career_sleeve_key,
+        target_career_sleeve=scoring_profile_career_sleeve,
         min_target_score=sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
         location_mode=location_mode,
         strict_career_sleeve=strict_career_sleeve,
@@ -5823,9 +6767,11 @@ def scrape():
         "run_id": run_id,
         "profile": profile,
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
-        "career_sleeve": career_sleeve_key,
+        "career_sleeve": requested_career_sleeve,
+        "scoring_profile_career_sleeve": scoring_profile_career_sleeve,
         "location_mode": location_mode,
         "scrape_variant": scrape_variant,
+        "is_admin_context": bool(is_admin_context),
         "requested_sources": requested_sources,
         "enforced_sources": selected_sources,
         "enforce_mvp_bundle": bool(enforce_mvp_bundle),
@@ -5893,7 +6839,8 @@ def scrape():
     _log_event(
         "scrape_summary",
         run_id=run_id,
-        career_sleeve=career_sleeve_key,
+        career_sleeve=requested_career_sleeve,
+        scoring_profile_career_sleeve=scoring_profile_career_sleeve,
         location_mode=location_mode,
         raw=summary["raw_count"],
         deduped=summary["deduped_count"],

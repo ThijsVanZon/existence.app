@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create Account</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <h2>Create account</h2>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if info %}<p>{{ info }}</p>{% endif %}
+
+  <form method="post" action="{{ url_for('auth_register') }}">
+    <p>
+      <label for="email">Email</label><br>
+      <input id="email" name="email" type="email" autocomplete="email" required value="{{ email or '' }}">
+    </p>
+    <p>
+      <label for="password">Password (min {{ min_password_len }})</label><br>
+      <input id="password" name="password" type="password" autocomplete="new-password" required minlength="{{ min_password_len }}">
+    </p>
+    <p>
+      <label for="password_confirm">Confirm password</label><br>
+      <input id="password_confirm" name="password_confirm" type="password" autocomplete="new-password" required minlength="{{ min_password_len }}">
+    </p>
+    <p><button type="submit">Create account</button></p>
+  </form>
+
+  <p><a href="{{ url_for('auth_login') }}">Already have an account? Log in</a></p>
+</body>
+</html>

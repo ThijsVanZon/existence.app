@@ -11,6 +11,16 @@
 <body>
   <header>
     <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+    <p>
+      {% if auth_user %}
+        Signed in as <strong>{{ auth_user.email }}</strong>.
+        <a href="{{ url_for('auth_account') }}">Account</a>
+        <a href="{{ url_for('auth_logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('auth_login') }}">Log in</a>
+        <a href="{{ url_for('auth_register') }}">Create account</a>
+      {% endif %}
+    </p>
   </header>
 
   <main>

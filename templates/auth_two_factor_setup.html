@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage 2FA</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <h2>Manage two-factor authentication</h2>
+  <p>Use Google Authenticator or Microsoft Authenticator.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if info %}<p>{{ info }}</p>{% endif %}
+
+  {% if is_enabled %}
+    <p><strong>2FA is enabled.</strong></p>
+    <form method="post" action="{{ url_for('auth_two_factor_setup') }}">
+      <input type="hidden" name="action" value="disable">
+      <p>
+        <label for="disable_code">Authenticator code to disable</label><br>
+        <input id="disable_code" name="code" type="text" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6">
+      </p>
+      <p><button type="submit">Disable 2FA</button></p>
+    </form>
+  {% else %}
+    <p><strong>2FA is not enabled.</strong></p>
+    {% if setup_secret %}
+      <p>1. Open your authenticator app.</p>
+      <p>2. Add account manually with this secret key:</p>
+      <p><code>{{ setup_secret }}</code></p>
+      <p>Alternative URI:</p>
+      <p><code>{{ otpauth_uri }}</code></p>
+      <form method="post" action="{{ url_for('auth_two_factor_setup') }}">
+        <input type="hidden" name="action" value="enable">
+        <p>
+          <label for="enable_code">6-digit code from app</label><br>
+          <input id="enable_code" name="code" type="text" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6">
+        </p>
+        <p><button type="submit">Enable 2FA</button></p>
+      </form>
+    {% else %}
+      <p class="error">Could not generate a setup secret.</p>
+    {% endif %}
+  {% endif %}
+
+  <p><a href="{{ url_for('auth_account') }}">Back to account</a></p>
+</body>
+</html>

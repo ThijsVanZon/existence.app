@@ -489,7 +489,7 @@
     <div id="loadDialogList" class="synergy-dialog-list"></div>
     <section id="dialogEditorSection" class="synergy-dialog-inline-editor synergy-dialog-custom-create is-hidden">
       <div class="synergy-query-box">
-        <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a custom Career Sleeve.</div>
+        <div id="dialogCustomNote" class="synergy-dialog-custom-note is-info">Click + to add a Career Sleeve.</div>
         <div class="synergy-query-section-title">SEARCH QUERIES</div>
         <div id="dialogQueryChipList" class="synergy-query-chip-list"></div>
         <div class="synergy-inline">
@@ -576,8 +576,6 @@
       };
 
       const normalizeLetter = (v) => (/^[A-Z]$/.test(String(v || "").trim().toUpperCase()) ? String(v || "").trim().toUpperCase() : "");
-      const isFixedLetter = (l) => ["A", "B", "C", "D"].includes(l);
-      const isCustomLetter = (l) => /^[A-Z]$/.test(l || "") && l >= "E";
       const LAST_SLEEVE_STORAGE_KEY = "existence.synergy.last_sleeve.v1";
       const dedupeQueries = (arr) => {
         const seen = new Set();
@@ -638,18 +636,58 @@
           return "";
         }
       };
+      const catalogMeta = () => {
+        const rawLocked = Array.isArray(state.catalog.locked_letters) ? state.catalog.locked_letters : [];
+        const lockedLetters = rawLocked.map((letter) => normalizeLetter(letter)).filter(Boolean);
+        const minLetter = normalizeLetter(state.catalog.custom_letter_min || "E") || "E";
+        const maxLetterRaw = normalizeLetter(state.catalog.custom_letter_max || "Z") || "Z";
+        const maxLetter = maxLetterRaw < minLetter ? minLetter : maxLetterRaw;
+        return {
+          lockedLetters,
+          customLetterMin: minLetter,
+          customLetterMax: maxLetter,
+          showScopeLabels: Boolean(state.catalog.show_scope_labels !== false),
+        };
+      };
+      const isFixedLetter = (letterValue) => {
+        const letter = normalizeLetter(letterValue);
+        if (!letter) return false;
+        return catalogMeta().lockedLetters.includes(letter);
+      };
+      const isCustomLetter = (letterValue) => {
+        const letter = normalizeLetter(letterValue);
+        if (!letter || isFixedLetter(letter)) return false;
+        const meta = catalogMeta();
+        return letter >= meta.customLetterMin && letter <= meta.customLetterMax;
+      };
+      const scopedCareerSleeveLabel = (type = "generic", capitalize = true) => {
+        const meta = catalogMeta();
+        const base = capitalize ? "Career Sleeve" : "career sleeve";
+        if (type !== "custom") return base;
+        if (!meta.showScopeLabels) return base;
+        return capitalize ? "Custom Career Sleeve" : "custom Career Sleeve";
+      };
+      const customLetterRangeLabel = () => {
+        const meta = catalogMeta();
+        return `${meta.customLetterMin}-${meta.customLetterMax}`;
+      };
       const findSleeveByLetter = (letter) =>
         (state.catalog.all || []).find((entry) => normalizeLetter(entry && entry.letter) === normalizeLetter(letter)) || null;
-      const findCustom = (l) => (state.catalog.custom || []).find((x) => x.letter === l) || null;
       const ICON_EDIT = "\u270E";
       const ICON_REMOVE = "\u00D7";
       const getNextCustomLetter = () => {
+        const meta = catalogMeta();
         const usedCustomLetters = new Set(
           (state.catalog.custom || [])
             .map((entry) => normalizeLetter(entry && entry.letter))
             .filter(Boolean)
         );
-        for (let code = 69; code <= 90; code += 1) {
+        for (const fixedLetter of meta.lockedLetters) {
+          usedCustomLetters.add(fixedLetter);
+        }
+        const startCode = meta.customLetterMin.charCodeAt(0);
+        const endCode = meta.customLetterMax.charCodeAt(0);
+        for (let code = startCode; code <= endCode; code += 1) {
           const letter = String.fromCharCode(code);
           if (!usedCustomLetters.has(letter)) return letter;
         }
@@ -850,7 +888,7 @@
         els.dialogEditorSection.classList.toggle("is-hidden", !state.editorVisible);
         els.dialogEditorSection.classList.toggle("is-open", state.editorVisible);
         if (!state.editorVisible) {
-          setDialogNote("Click + to add a custom Career Sleeve.", "info");
+          setDialogNote(`Click + to add a ${scopedCareerSleeveLabel("custom", false)}.`, "info");
         }
       }
 
@@ -871,9 +909,11 @@
         persistLastLoadedSleeve(state.current.letter);
         updateHeaderPreview();
         if (!options.silent) {
-          const suffix = sleeve.locked ? "(fixed)" : "(custom)";
-          setStatus(`Loaded Career Sleeve ${sleeve.letter} ${suffix}.`, "success");
-          setDialogNote(`Loaded Career Sleeve ${sleeve.letter} ${suffix}.`, "success");
+          const meta = catalogMeta();
+          const suffix = meta.showScopeLabels ? (sleeve.locked ? "(fixed)" : "(custom)") : "";
+          const suffixText = suffix ? ` ${suffix}` : "";
+          setStatus(`Loaded Career Sleeve ${sleeve.letter}${suffixText}.`, "success");
+          setDialogNote(`Loaded Career Sleeve ${sleeve.letter}${suffixText}.`, "success");
         }
       }
 
@@ -1295,10 +1335,23 @@
         const activeEditorKey = state.editorVisible
           ? (state.editor.mode === "edit" ? `edit:${normalizeLetter(state.editor.letter)}` : "add")
           : "";
-        const groups = [
-          { title: "FIXED CAREER SLEEVES (A-D)", items: state.catalog.fixed || [], scope: "fixed" },
-          { title: "CUSTOM CAREER SLEEVES (E-Z)", items: state.catalog.custom || [], scope: "custom" },
-        ];
+        const meta = catalogMeta();
+        const fixedItems = Array.isArray(state.catalog.fixed) ? state.catalog.fixed : [];
+        const customItems = Array.isArray(state.catalog.custom) ? state.catalog.custom : [];
+        const groups = [];
+        if (meta.showScopeLabels && fixedItems.length) {
+          const fixedRange = `${meta.lockedLetters[0]}-${meta.lockedLetters[meta.lockedLetters.length - 1]}`;
+          groups.push({
+            title: `FIXED CAREER SLEEVES (${fixedRange})`,
+            items: fixedItems,
+            scope: "fixed",
+          });
+        }
+        groups.push({
+          title: meta.showScopeLabels ? `CUSTOM CAREER SLEEVES (${customLetterRangeLabel()})` : "CAREER SLEEVES",
+          items: customItems,
+          scope: "custom",
+        });
         groups.forEach((group) => {
           const wrap = document.createElement("div");
           wrap.className = "synergy-dialog-group";
@@ -1383,7 +1436,7 @@
                   deleteBtn.addEventListener("click", (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    deleteCustomSleeveFromDialog(sleeve).catch(() => setStatus("Could not delete custom Career Sleeve.", "error"));
+                    deleteCustomSleeveFromDialog(sleeve).catch(() => setStatus(`Could not delete ${scopedCareerSleeveLabel("custom", false)}.`, "error"));
                   });
                   actions.appendChild(deleteBtn);
                 }
@@ -1448,7 +1501,7 @@
               addBtn.type = "button";
               addBtn.className = "synergy-dialog-add-trigger";
               addBtn.textContent = "+";
-              addBtn.setAttribute("aria-label", "Add custom Career Sleeve");
+              addBtn.setAttribute("aria-label", `Add ${scopedCareerSleeveLabel("custom", false)}`);
               addBtn.addEventListener("click", () => {
                 resetDialogEditor("add", null, true);
                 renderLoadDialogList();
@@ -1495,8 +1548,9 @@
       function startEditCustomSleeve(sleeve) {
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
-          setStatus("Only custom Career Sleeves (E-Z) can be edited.", "error");
-          setDialogNote("Only custom Career Sleeves (E-Z) can be edited.", "error");
+          const label = scopedCareerSleeveLabel("custom");
+          setStatus(`Only ${label}s (${customLetterRangeLabel()}) can be edited.`, "error");
+          setDialogNote(`Only ${label}s (${customLetterRangeLabel()}) can be edited.`, "error");
           return;
         }
         applySleeveToEditor(sleeve, { silent: true });
@@ -1516,7 +1570,7 @@
         renderDialogQueries();
         syncDialogLocationInputs();
         if (!state.editorVisible) {
-          setDialogNote("Click + to add a custom Career Sleeve.", "info");
+          setDialogNote(`Click + to add a ${scopedCareerSleeveLabel("custom", false)}.`, "info");
           return;
         }
         const editor = collectEditor();
@@ -1528,7 +1582,7 @@
           return;
         }
         setDialogNote(
-          `Adding a new custom Career Sleeve. Next available letter: ${getNextCustomLetter()}. Add at least 1 search query, then save.`,
+          `Adding a new ${scopedCareerSleeveLabel("custom", false)}. Next available letter: ${getNextCustomLetter()}. Add at least 1 search query, then save.`,
           "info"
         );
       }
@@ -1586,7 +1640,7 @@
         if (!silent) {
           const successMessage = wasEdit
             ? `Saved edits to Career Sleeve ${saved.letter || "?"}.`
-            : `Added custom Career Sleeve ${saved.letter || "?"}.`;
+            : `Added ${scopedCareerSleeveLabel("custom", false)} ${saved.letter || "?"}.`;
           setStatus(successMessage, "success");
           setDialogNote(successMessage, "success");
         }
@@ -1596,8 +1650,9 @@
       async function deleteCustomSleeveFromDialog(sleeve) {
         const letter = normalizeLetter(sleeve ? sleeve.letter : "");
         if (!letter || !isCustomLetter(letter)) {
-          setStatus("Only custom Career Sleeves (E-Z) can be deleted.", "error");
-          setDialogNote("Only custom Career Sleeves (E-Z) can be deleted.", "error");
+          const label = scopedCareerSleeveLabel("custom");
+          setStatus(`Only ${label}s (${customLetterRangeLabel()}) can be deleted.`, "error");
+          setDialogNote(`Only ${label}s (${customLetterRangeLabel()}) can be deleted.`, "error");
           return;
         }
         const confirmed = window.confirm(`Delete Career Sleeve ${letter}?`);
@@ -1611,7 +1666,7 @@
         });
         const payload = await res.json();
         if (!res.ok) {
-          const errorMessage = payload.error || "Could not delete custom Career Sleeve.";
+          const errorMessage = payload.error || `Could not delete ${scopedCareerSleeveLabel("custom", false)}.`;
           setStatus(errorMessage, "error");
           setDialogNote(errorMessage, "error");
           return;
@@ -1619,7 +1674,10 @@
 
         state.catalog = payload.catalog || state.catalog;
         if (normalizeLetter(state.current.letter) === letter) {
-          const fallbackSleeve = findSleeveByLetter(loadLastLoadedSleeve()) || findSleeveByLetter("A");
+          const rememberedLetter = loadLastLoadedSleeve();
+          const fallbackSleeve =
+            findSleeveByLetter(rememberedLetter) ||
+            (Array.isArray(state.catalog.all) && state.catalog.all.length ? state.catalog.all[0] : null);
           if (fallbackSleeve) {
             applySleeveToEditor(fallbackSleeve, { silent: true });
           } else {
@@ -1652,10 +1710,13 @@
           applySleeveToEditor(rememberedSleeve, { silent: true });
           return rememberedSleeve;
         }
-        const defaultSleeveA = findSleeveByLetter("A");
-        if (defaultSleeveA) {
-          applySleeveToEditor(defaultSleeveA, { silent: true });
-          return defaultSleeveA;
+        const meta = catalogMeta();
+        if (meta.lockedLetters.length) {
+          const defaultFixedSleeve = findSleeveByLetter(meta.lockedLetters[0]);
+          if (defaultFixedSleeve) {
+            applySleeveToEditor(defaultFixedSleeve, { silent: true });
+            return defaultFixedSleeve;
+          }
         }
         const firstAvailable = Array.isArray(state.catalog.all) && state.catalog.all.length ? state.catalog.all[0] : null;
         if (firstAvailable) {

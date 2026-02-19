@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <h2>Account</h2>
+  {% if user %}
+    <p><strong>Email:</strong> {{ user.email }}</p>
+    <p><strong>Email verified:</strong> {{ "Yes" if user.is_verified else "No" }}</p>
+    <p><strong>Admin:</strong> {{ "Yes" if user.is_admin else "No" }}</p>
+    <p><strong>2FA:</strong> {{ "Enabled" if has_2fa else "Disabled" }}</p>
+    <p><a href="{{ url_for('auth_two_factor_setup') }}">Manage 2FA</a></p>
+    <p><a href="{{ url_for('show_synergy') }}">Open Synergy</a></p>
+    {% if user.is_admin %}
+      <p><a href="{{ url_for('show_enlightenment') }}">Open Enlightenment</a></p>
+    {% endif %}
+    <p><a href="{{ url_for('auth_logout') }}">Log out</a></p>
+  {% else %}
+    <p class="error">No authenticated user found.</p>
+    <p><a href="{{ url_for('auth_login') }}">Log in</a></p>
+  {% endif %}
+</body>
+</html>
