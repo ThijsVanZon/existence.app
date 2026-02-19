@@ -358,6 +358,15 @@ custom_sleeves_lock = threading.Lock()
 source_cache_lock = threading.Lock()
 source_health_lock = threading.Lock()
 auth_db_lock = threading.Lock()
+email_runtime_lock = threading.Lock()
+email_runtime_state = {
+    "last_attempt_at": "",
+    "last_success_at": "",
+    "last_error_at": "",
+    "last_to": "",
+    "last_subject": "",
+    "last_error": "",
+}
 
 AUTH_ENFORCE = str(os.getenv("AUTH_ENFORCE", "0")).strip().lower() in {
     "1",
@@ -897,13 +906,30 @@ def _hash_token(raw_token):
 
 def _send_email(to_email, subject, body_text):
     recipient = _normalize_email(to_email)
+    sanitized_subject = _clean_value(subject, "")
+    now_stamp = _now_utc_stamp()
+
+    def _record_email_attempt(success, error_text=""):
+        with email_runtime_lock:
+            email_runtime_state["last_attempt_at"] = now_stamp
+            email_runtime_state["last_to"] = recipient
+            email_runtime_state["last_subject"] = sanitized_subject[:160]
+            if success:
+                email_runtime_state["last_success_at"] = now_stamp
+                email_runtime_state["last_error"] = ""
+            else:
+                email_runtime_state["last_error_at"] = now_stamp
+                email_runtime_state["last_error"] = _clean_value(error_text, "")[:600]
+
     if not recipient:
+        _record_email_attempt(False, "missing_recipient")
         return False
     if not AUTH_SMTP_HOST:
+        _record_email_attempt(True, "stub_mode")
         _log_event(
             "email_stub",
             to=recipient,
-            subject=_clean_value(subject, ""),
+            subject=sanitized_subject,
             preview=_clean_value(body_text, "")[:200],
         )
         return True
@@ -911,7 +937,7 @@ def _send_email(to_email, subject, body_text):
     message = EmailMessage()
     message["From"] = AUTH_EMAIL_FROM
     message["To"] = recipient
-    message["Subject"] = _clean_value(subject, "")
+    message["Subject"] = sanitized_subject
     message.set_content(_clean_value(body_text, ""))
 
     try:
@@ -921,8 +947,28 @@ def _send_email(to_email, subject, body_text):
             if AUTH_SMTP_USERNAME:
                 smtp.login(AUTH_SMTP_USERNAME, AUTH_SMTP_PASSWORD)
             smtp.send_message(message)
+        _record_email_attempt(True)
+        _log_event(
+            "email_sent",
+            to=recipient,
+            subject=sanitized_subject,
+            smtp_host=AUTH_SMTP_HOST,
+            smtp_port=AUTH_SMTP_PORT,
+            from_email=AUTH_EMAIL_FROM,
+        )
         return True
-    except (OSError, smtplib.SMTPException):
+    except (OSError, smtplib.SMTPException) as exc:
+        _record_email_attempt(False, str(exc))
+        _log_event(
+            "email_send_error",
+            to=recipient,
+            subject=sanitized_subject,
+            smtp_host=AUTH_SMTP_HOST,
+            smtp_port=AUTH_SMTP_PORT,
+            smtp_username=AUTH_SMTP_USERNAME,
+            from_email=AUTH_EMAIL_FROM,
+            error=str(exc),
+        )
         return False
 
 
@@ -1520,6 +1566,21 @@ def _auth_customer_list(limit=1000):
         return customers
     finally:
         connection.close()
+
+
+def _smtp_health_snapshot():
+    with email_runtime_lock:
+        runtime_copy = dict(email_runtime_state)
+    return {
+        "smtp_host": AUTH_SMTP_HOST,
+        "smtp_port": int(AUTH_SMTP_PORT),
+        "smtp_use_tls": bool(AUTH_SMTP_USE_TLS),
+        "smtp_username": AUTH_SMTP_USERNAME,
+        "email_from": AUTH_EMAIL_FROM,
+        "signup_notify_to": AUTH_SIGNUP_NOTIFY_TO,
+        "password_configured": bool(AUTH_SMTP_PASSWORD),
+        "runtime": runtime_copy,
+    }
 
 
 def _auth_login_user(user):
@@ -6269,6 +6330,47 @@ def auth_customers():
         return redirect(url_for("show_synergy"))
     customers = _auth_customer_list()
     return render_template("auth_customers.html", customers=customers)
+
+
+@app.route('/auth/smtp-health', methods=['GET', 'POST'])
+def auth_smtp_health():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+    user = _current_authenticated_user()
+    if not user or not user.get("is_admin"):
+        return redirect(url_for("show_synergy"))
+
+    snapshot = _smtp_health_snapshot()
+    if request.method == "GET":
+        return jsonify(
+            {
+                "ok": True,
+                "smtp": snapshot,
+            }
+        )
+
+    payload = request.get_json(silent=True) or {}
+    target = _normalize_email(payload.get("to") or AUTH_SIGNUP_NOTIFY_TO or AUTH_ADMIN_EMAIL)
+    if not target:
+        return jsonify({"ok": False, "error": "No test recipient configured."}), 400
+    subject = _clean_value(
+        payload.get("subject"),
+        "existence.app SMTP health test",
+    )
+    body = _clean_value(
+        payload.get("body"),
+        (
+            "This is a SMTP health test from existence.app.\n\n"
+            f"Triggered by: {user.get('email', '')}\n"
+            f"Timestamp (UTC): {_now_utc_stamp()}\n"
+            f"From: {AUTH_EMAIL_FROM}\n"
+            f"SMTP host: {AUTH_SMTP_HOST}:{AUTH_SMTP_PORT}\n"
+        ),
+    )
+    sent = _send_email(target, subject, body)
+    status = 200 if sent else 500
+    return jsonify({"ok": bool(sent), "to": target, "smtp": _smtp_health_snapshot()}), status
 
 
 @app.route('/auth/2fa-setup', methods=['GET', 'POST'])

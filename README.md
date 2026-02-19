@@ -58,6 +58,7 @@ Account behavior:
 - Admin account (`AUTH_ADMIN_EMAIL`): fixed Career Sleeves `A-D` + custom sleeves.
 - Other accounts: only custom sleeves (`A-Z`) and uniform custom ranking profile.
 - Registration now stores `first_name` + `last_name` in the auth database and exposes an admin customer list at `/auth/customers`.
+- Admin SMTP diagnostics endpoint: `GET/POST /auth/smtp-health` (POST sends a test email).
 
 ## Scraper endpoint
 
