@@ -44,21 +44,23 @@ Environment variables:
 - `AUTH_ADMIN_EMAIL=thijs.vanzon@existenceinitiative.com` for admin account behavior
 - `FLASK_SECRET_KEY` (required in production)
 - `PUBLIC_BASE_URL` for absolute email links (example: `https://existence.app`)
-- SMTP settings for real email delivery:
+- Email delivery settings:
 - `AUTH_EMAIL_FROM`
 - `AUTH_SIGNUP_NOTIFY_TO` (admin notification recipient for new signups)
-- `AUTH_SMTP_HOST`
-- `AUTH_SMTP_PORT`
-- `AUTH_SMTP_USERNAME`
-- `AUTH_SMTP_PASSWORD`
-- `AUTH_SMTP_USE_TLS=1`
+- `AUTH_EMAIL_STUB_MODE=0` for real delivery (`1` = debug stub mode, no external send)
+- Microsoft Graph OAuth settings:
+- `AUTH_GRAPH_TENANT_ID`
+- `AUTH_GRAPH_CLIENT_ID`
+- `AUTH_GRAPH_CLIENT_SECRET`
+- `AUTH_GRAPH_SCOPE=https://graph.microsoft.com/.default`
+- `AUTH_GRAPH_SENDER=app@existenceinitiative.com` (or another licensed/shared mailbox in your tenant)
 
 Account behavior:
 
 - Admin account (`AUTH_ADMIN_EMAIL`): fixed Career Sleeves `A-D` + custom sleeves.
 - Other accounts: only custom sleeves (`A-Z`) and uniform custom ranking profile.
 - Registration now stores `first_name` + `last_name` in the auth database and exposes an admin customer list at `/auth/customers`.
-- Admin SMTP diagnostics endpoint: `GET/POST /auth/smtp-health` (POST sends a test email).
+- Admin email diagnostics endpoint: `GET/POST /auth/email-health` (POST sends a test email).
 
 ## Scraper endpoint
 

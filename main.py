@@ -16,7 +16,6 @@ import os
 import random
 import requests
 import secrets
-import smtplib
 import sqlite3
 import struct
 import time
@@ -27,7 +26,7 @@ import xml.etree.ElementTree as ET
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
-from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 from parsel import Selector
 from werkzeug.security import generate_password_hash, check_password_hash
 import career_sleeves as sleeves
@@ -365,7 +364,13 @@ email_runtime_state = {
     "last_error_at": "",
     "last_to": "",
     "last_subject": "",
+    "last_provider": "",
     "last_error": "",
+}
+graph_token_lock = threading.Lock()
+graph_token_cache = {
+    "access_token": "",
+    "expires_at": 0,
 }
 
 AUTH_ENFORCE = str(os.getenv("AUTH_ENFORCE", "0")).strip().lower() in {
@@ -395,16 +400,23 @@ AUTH_EMAIL_FROM = str(os.getenv("AUTH_EMAIL_FROM", "app@existenceinitiative.com"
 AUTH_SIGNUP_NOTIFY_TO = str(
     os.getenv("AUTH_SIGNUP_NOTIFY_TO", "app@existenceinitiative.com")
 ).strip()
-AUTH_SMTP_HOST = str(os.getenv("AUTH_SMTP_HOST", "")).strip()
-AUTH_SMTP_PORT = int(os.getenv("AUTH_SMTP_PORT", "587"))
-AUTH_SMTP_USERNAME = str(os.getenv("AUTH_SMTP_USERNAME", "")).strip()
-AUTH_SMTP_PASSWORD = str(os.getenv("AUTH_SMTP_PASSWORD", "")).strip()
-AUTH_SMTP_USE_TLS = str(os.getenv("AUTH_SMTP_USE_TLS", "1")).strip().lower() in {
+AUTH_EMAIL_STUB_MODE = str(os.getenv("AUTH_EMAIL_STUB_MODE", "0")).strip().lower() in {
     "1",
     "true",
     "yes",
     "on",
 }
+AUTH_GRAPH_TENANT_ID = str(os.getenv("AUTH_GRAPH_TENANT_ID", "")).strip()
+AUTH_GRAPH_CLIENT_ID = str(os.getenv("AUTH_GRAPH_CLIENT_ID", "")).strip()
+AUTH_GRAPH_CLIENT_SECRET = str(os.getenv("AUTH_GRAPH_CLIENT_SECRET", "")).strip()
+AUTH_GRAPH_SCOPE = str(
+    os.getenv("AUTH_GRAPH_SCOPE", "https://graph.microsoft.com/.default")
+).strip()
+AUTH_GRAPH_API_BASE = str(
+    os.getenv("AUTH_GRAPH_API_BASE", "https://graph.microsoft.com/v1.0")
+).strip().rstrip("/")
+AUTH_GRAPH_SENDER = str(os.getenv("AUTH_GRAPH_SENDER", AUTH_EMAIL_FROM)).strip()
+AUTH_GRAPH_TIMEOUT_SECONDS = max(5, int(os.getenv("AUTH_GRAPH_TIMEOUT_SECONDS", "15")))
 
 
 def _normalize_text(*parts):
@@ -904,16 +916,127 @@ def _hash_token(raw_token):
     return hashlib.sha256(str(raw_token or "").encode("utf-8")).hexdigest()
 
 
+def _graph_email_ready():
+    return bool(
+        AUTH_GRAPH_TENANT_ID
+        and AUTH_GRAPH_CLIENT_ID
+        and AUTH_GRAPH_CLIENT_SECRET
+    )
+
+
+def _graph_access_token():
+    if not _graph_email_ready():
+        return "", "graph_not_configured"
+
+    now_epoch = int(time.time())
+    with graph_token_lock:
+        cached_token = _clean_value(graph_token_cache.get("access_token"), "")
+        cached_expires_at = int(graph_token_cache.get("expires_at") or 0)
+        if cached_token and cached_expires_at - now_epoch > 90:
+            return cached_token, ""
+
+    token_url = (
+        "https://login.microsoftonline.com/"
+        f"{quote(AUTH_GRAPH_TENANT_ID, safe='')}/oauth2/v2.0/token"
+    )
+    payload = {
+        "client_id": AUTH_GRAPH_CLIENT_ID,
+        "client_secret": AUTH_GRAPH_CLIENT_SECRET,
+        "scope": AUTH_GRAPH_SCOPE or "https://graph.microsoft.com/.default",
+        "grant_type": "client_credentials",
+    }
+    try:
+        response = requests.post(
+            token_url,
+            data=payload,
+            timeout=AUTH_GRAPH_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        return "", f"graph_token_request_error:{exc}"
+
+    if response.status_code != 200:
+        snippet = _clean_value(response.text, "")[:320]
+        return "", f"graph_token_http_{response.status_code}:{snippet}"
+
+    try:
+        token_payload = response.json() or {}
+    except ValueError:
+        return "", "graph_token_invalid_json"
+
+    access_token = _clean_value(token_payload.get("access_token"), "")
+    if not access_token:
+        return "", "graph_token_missing_access_token"
+
+    try:
+        expires_in = max(60, int(token_payload.get("expires_in") or 3600))
+    except (TypeError, ValueError):
+        expires_in = 3600
+
+    with graph_token_lock:
+        graph_token_cache["access_token"] = access_token
+        graph_token_cache["expires_at"] = now_epoch + expires_in
+
+    return access_token, ""
+
+
+def _send_email_via_graph(recipient, subject, body_text):
+    sender = _normalize_email(AUTH_GRAPH_SENDER or AUTH_EMAIL_FROM)
+    if not sender:
+        return False, "graph_missing_sender"
+
+    access_token, token_error = _graph_access_token()
+    if not access_token:
+        return False, token_error or "graph_token_unavailable"
+
+    endpoint = (
+        f"{AUTH_GRAPH_API_BASE or 'https://graph.microsoft.com/v1.0'}"
+        f"/users/{quote(sender, safe='')}/sendMail"
+    )
+    payload = {
+        "message": {
+            "subject": _clean_value(subject, ""),
+            "body": {
+                "contentType": "Text",
+                "content": _clean_value(body_text, ""),
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": recipient}},
+            ],
+        },
+        "saveToSentItems": True,
+    }
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+    try:
+        response = requests.post(
+            endpoint,
+            json=payload,
+            headers=headers,
+            timeout=AUTH_GRAPH_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        return False, f"graph_send_request_error:{exc}"
+
+    if response.status_code not in {200, 202}:
+        snippet = _clean_value(response.text, "")[:320]
+        return False, f"graph_send_http_{response.status_code}:{snippet}"
+
+    return True, ""
+
+
 def _send_email(to_email, subject, body_text):
     recipient = _normalize_email(to_email)
     sanitized_subject = _clean_value(subject, "")
     now_stamp = _now_utc_stamp()
 
-    def _record_email_attempt(success, error_text=""):
+    def _record_email_attempt(success, error_text="", provider_name="graph"):
         with email_runtime_lock:
             email_runtime_state["last_attempt_at"] = now_stamp
             email_runtime_state["last_to"] = recipient
             email_runtime_state["last_subject"] = sanitized_subject[:160]
+            email_runtime_state["last_provider"] = _clean_value(provider_name, "") or "graph"
             if success:
                 email_runtime_state["last_success_at"] = now_stamp
                 email_runtime_state["last_error"] = ""
@@ -922,54 +1045,43 @@ def _send_email(to_email, subject, body_text):
                 email_runtime_state["last_error"] = _clean_value(error_text, "")[:600]
 
     if not recipient:
-        _record_email_attempt(False, "missing_recipient")
+        _record_email_attempt(False, "missing_recipient", "graph")
         return False
-    if not AUTH_SMTP_HOST:
-        _record_email_attempt(True, "stub_mode")
+    if AUTH_EMAIL_STUB_MODE:
+        _record_email_attempt(True, "stub_mode", "stub")
         _log_event(
             "email_stub",
+            provider="stub",
             to=recipient,
             subject=sanitized_subject,
             preview=_clean_value(body_text, "")[:200],
         )
         return True
 
-    message = EmailMessage()
-    message["From"] = AUTH_EMAIL_FROM
-    message["To"] = recipient
-    message["Subject"] = sanitized_subject
-    message.set_content(_clean_value(body_text, ""))
-
-    try:
-        with smtplib.SMTP(AUTH_SMTP_HOST, AUTH_SMTP_PORT, timeout=12) as smtp:
-            if AUTH_SMTP_USE_TLS:
-                smtp.starttls()
-            if AUTH_SMTP_USERNAME:
-                smtp.login(AUTH_SMTP_USERNAME, AUTH_SMTP_PASSWORD)
-            smtp.send_message(message)
-        _record_email_attempt(True)
+    sent, error_text = _send_email_via_graph(
+        recipient=recipient,
+        subject=sanitized_subject,
+        body_text=body_text,
+    )
+    _record_email_attempt(bool(sent), error_text, "graph")
+    if sent:
         _log_event(
             "email_sent",
+            provider="graph",
             to=recipient,
             subject=sanitized_subject,
-            smtp_host=AUTH_SMTP_HOST,
-            smtp_port=AUTH_SMTP_PORT,
-            from_email=AUTH_EMAIL_FROM,
+            from_email=_normalize_email(AUTH_GRAPH_SENDER or AUTH_EMAIL_FROM),
         )
         return True
-    except (OSError, smtplib.SMTPException) as exc:
-        _record_email_attempt(False, str(exc))
-        _log_event(
-            "email_send_error",
-            to=recipient,
-            subject=sanitized_subject,
-            smtp_host=AUTH_SMTP_HOST,
-            smtp_port=AUTH_SMTP_PORT,
-            smtp_username=AUTH_SMTP_USERNAME,
-            from_email=AUTH_EMAIL_FROM,
-            error=str(exc),
-        )
-        return False
+    _log_event(
+        "email_send_error",
+        provider="graph",
+        to=recipient,
+        subject=sanitized_subject,
+        from_email=_normalize_email(AUTH_GRAPH_SENDER or AUTH_EMAIL_FROM),
+        error=error_text,
+    )
+    return False
 
 
 def _auth_user_from_row(row):
@@ -1588,17 +1700,18 @@ def _auth_customer_list(limit=1000):
         connection.close()
 
 
-def _smtp_health_snapshot():
+def _email_health_snapshot():
     with email_runtime_lock:
         runtime_copy = dict(email_runtime_state)
     return {
-        "smtp_host": AUTH_SMTP_HOST,
-        "smtp_port": int(AUTH_SMTP_PORT),
-        "smtp_use_tls": bool(AUTH_SMTP_USE_TLS),
-        "smtp_username": AUTH_SMTP_USERNAME,
+        "delivery_mode": "stub" if AUTH_EMAIL_STUB_MODE else "graph",
         "email_from": AUTH_EMAIL_FROM,
         "signup_notify_to": AUTH_SIGNUP_NOTIFY_TO,
-        "password_configured": bool(AUTH_SMTP_PASSWORD),
+        "graph_api_base": AUTH_GRAPH_API_BASE,
+        "graph_tenant_id_configured": bool(AUTH_GRAPH_TENANT_ID),
+        "graph_client_id_configured": bool(AUTH_GRAPH_CLIENT_ID),
+        "graph_client_secret_configured": bool(AUTH_GRAPH_CLIENT_SECRET),
+        "graph_sender": _normalize_email(AUTH_GRAPH_SENDER),
         "runtime": runtime_copy,
     }
 
@@ -6460,8 +6573,8 @@ def auth_customers():
     return render_template("auth_customers.html", customers=customers)
 
 
-@app.route('/auth/smtp-health', methods=['GET', 'POST'])
-def auth_smtp_health():
+@app.route('/auth/email-health', methods=['GET', 'POST'])
+def auth_email_health():
     gated = _auth_gate(api=False)
     if gated is not None:
         return gated
@@ -6469,12 +6582,12 @@ def auth_smtp_health():
     if not user or not user.get("is_admin"):
         return redirect(url_for("show_synergy"))
 
-    snapshot = _smtp_health_snapshot()
+    snapshot = _email_health_snapshot()
     if request.method == "GET":
         return jsonify(
             {
                 "ok": True,
-                "smtp": snapshot,
+                "email": snapshot,
             }
         )
 
@@ -6484,21 +6597,22 @@ def auth_smtp_health():
         return jsonify({"ok": False, "error": "No test recipient configured."}), 400
     subject = _clean_value(
         payload.get("subject"),
-        "existence.app SMTP health test",
+        "existence.app email health test",
     )
     body = _clean_value(
         payload.get("body"),
         (
-            "This is a SMTP health test from existence.app.\n\n"
+            "This is an email health test from existence.app.\n\n"
             f"Triggered by: {user.get('email', '')}\n"
             f"Timestamp (UTC): {_now_utc_stamp()}\n"
             f"From: {AUTH_EMAIL_FROM}\n"
-            f"SMTP host: {AUTH_SMTP_HOST}:{AUTH_SMTP_PORT}\n"
+            f"Delivery mode: {'stub' if AUTH_EMAIL_STUB_MODE else 'graph'}\n"
+            f"Graph sender: {_normalize_email(AUTH_GRAPH_SENDER)}\n"
         ),
     )
     sent = _send_email(target, subject, body)
     status = 200 if sent else 500
-    return jsonify({"ok": bool(sent), "to": target, "smtp": _smtp_health_snapshot()}), status
+    return jsonify({"ok": bool(sent), "to": target, "email": _email_health_snapshot()}), status
 
 
 @app.route('/auth/2fa-setup', methods=['GET', 'POST'])
