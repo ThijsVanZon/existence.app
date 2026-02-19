@@ -382,7 +382,10 @@ AUTH_RESET_TOKEN_TTL_SECONDS = max(
 AUTH_TOTP_INTERVAL_SECONDS = 30
 AUTH_TOTP_DIGITS = 6
 AUTH_TOTP_WINDOW = 1
-AUTH_EMAIL_FROM = str(os.getenv("AUTH_EMAIL_FROM", "noreply@existenceinitiative.com")).strip()
+AUTH_EMAIL_FROM = str(os.getenv("AUTH_EMAIL_FROM", "app@existenceinitiative.com")).strip()
+AUTH_SIGNUP_NOTIFY_TO = str(
+    os.getenv("AUTH_SIGNUP_NOTIFY_TO", "app@existenceinitiative.com")
+).strip()
 AUTH_SMTP_HOST = str(os.getenv("AUTH_SMTP_HOST", "")).strip()
 AUTH_SMTP_PORT = int(os.getenv("AUTH_SMTP_PORT", "587"))
 AUTH_SMTP_USERNAME = str(os.getenv("AUTH_SMTP_USERNAME", "")).strip()
@@ -663,6 +666,8 @@ def _ensure_auth_tables():
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT NOT NULL UNIQUE,
+                    first_name TEXT NOT NULL DEFAULT '',
+                    last_name TEXT NOT NULL DEFAULT '',
                     password_hash TEXT NOT NULL,
                     is_verified INTEGER NOT NULL DEFAULT 0,
                     is_admin INTEGER NOT NULL DEFAULT 0,
@@ -695,6 +700,19 @@ def _ensure_auth_tables():
                 );
                 """
             )
+            user_columns = {
+                str(row["name"]).strip().lower()
+                for row in connection.execute("PRAGMA table_info(users)").fetchall()
+                if row and row["name"]
+            }
+            if "first_name" not in user_columns:
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN first_name TEXT NOT NULL DEFAULT ''"
+                )
+            if "last_name" not in user_columns:
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN last_name TEXT NOT NULL DEFAULT ''"
+                )
             connection.commit()
         finally:
             connection.close()
@@ -709,6 +727,11 @@ def _is_valid_email(value):
     if not email:
         return False
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+
+
+def _normalize_person_name(value):
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    return cleaned[:80]
 
 
 def _normalize_career_sleeve_letter(value):
@@ -804,6 +827,16 @@ def _password_validation_error(password):
     return ""
 
 
+def _person_name_validation_error(first_name, last_name):
+    normalized_first_name = _normalize_person_name(first_name)
+    normalized_last_name = _normalize_person_name(last_name)
+    if not normalized_first_name:
+        return "First name is required."
+    if not normalized_last_name:
+        return "Last name is required."
+    return ""
+
+
 def _totp_generate_secret():
     return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
 
@@ -896,9 +929,20 @@ def _send_email(to_email, subject, body_text):
 def _auth_user_from_row(row):
     if not row:
         return None
+    row_keys = {str(key) for key in row.keys()}
+    first_name = _normalize_person_name(
+        row["first_name"] if "first_name" in row_keys else ""
+    )
+    last_name = _normalize_person_name(
+        row["last_name"] if "last_name" in row_keys else ""
+    )
+    full_name = _clean_value(f"{first_name} {last_name}".strip(), "")
     return {
         "id": int(row["id"]),
         "email": _normalize_email(row["email"]),
+        "first_name": first_name,
+        "last_name": last_name,
+        "full_name": full_name,
         "password_hash": _clean_value(row["password_hash"], ""),
         "is_verified": bool(int(row["is_verified"] or 0)),
         "is_admin": bool(int(row["is_admin"] or 0)),
@@ -943,11 +987,16 @@ def _auth_user_by_email(email):
         connection.close()
 
 
-def _create_auth_user(email, password):
+def _create_auth_user(email, password, first_name, last_name):
     normalized_email = _normalize_email(email)
+    normalized_first_name = _normalize_person_name(first_name)
+    normalized_last_name = _normalize_person_name(last_name)
+    name_error = _person_name_validation_error(normalized_first_name, normalized_last_name)
     password_error = _password_validation_error(password)
     if not _is_valid_email(normalized_email):
         return None, "Enter a valid email address."
+    if name_error:
+        return None, name_error
     if password_error:
         return None, password_error
     if _auth_user_by_email(normalized_email):
@@ -962,10 +1011,30 @@ def _create_auth_user(email, password):
     try:
         cursor = connection.execute(
             """
-            INSERT INTO users (email, password_hash, is_verified, is_admin, totp_secret, pending_totp_secret, created_at, updated_at, last_login_at)
-            VALUES (?, ?, 0, ?, '', '', ?, ?, '')
+            INSERT INTO users (
+                email,
+                first_name,
+                last_name,
+                password_hash,
+                is_verified,
+                is_admin,
+                totp_secret,
+                pending_totp_secret,
+                created_at,
+                updated_at,
+                last_login_at
+            )
+            VALUES (?, ?, ?, ?, 0, ?, '', '', ?, ?, '')
             """,
-            (normalized_email, password_hash, is_admin, now_stamp, now_stamp),
+            (
+                normalized_email,
+                normalized_first_name,
+                normalized_last_name,
+                password_hash,
+                is_admin,
+                now_stamp,
+                now_stamp,
+            ),
         )
         connection.commit()
         return _auth_user_by_id(cursor.lastrowid), ""
@@ -1398,6 +1467,61 @@ def _send_password_reset_email(user):
     return _send_email(user["email"], subject, body)
 
 
+def _send_signup_notification(user):
+    if not user:
+        return False
+    notify_recipient = _normalize_email(AUTH_SIGNUP_NOTIFY_TO)
+    if not notify_recipient:
+        return False
+    full_name = _clean_value(user.get("full_name"), "")
+    subject = f"New existence.app signup: {user.get('email', 'unknown')}"
+    body = (
+        "A new account has been created on existence.app.\n\n"
+        f"First name: {user.get('first_name', '')}\n"
+        f"Last name: {user.get('last_name', '')}\n"
+        f"Full name: {full_name or 'n/a'}\n"
+        f"Email: {user.get('email', '')}\n"
+        f"Created at (UTC): {user.get('created_at', '')}\n"
+    )
+    return _send_email(notify_recipient, subject, body)
+
+
+def _auth_customer_list(limit=1000):
+    _ensure_auth_tables()
+    max_limit = max(1, min(int(limit or 1000), 5000))
+    connection = _auth_db_connection()
+    try:
+        rows = connection.execute(
+            """
+            SELECT id, first_name, last_name, email, is_verified, is_admin, created_at, last_login_at
+            FROM users
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max_limit,),
+        ).fetchall()
+        customers = []
+        for row in rows:
+            first_name = _normalize_person_name(row["first_name"])
+            last_name = _normalize_person_name(row["last_name"])
+            customers.append(
+                {
+                    "id": int(row["id"]),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "full_name": _clean_value(f"{first_name} {last_name}".strip(), ""),
+                    "email": _normalize_email(row["email"]),
+                    "is_verified": bool(int(row["is_verified"] or 0)),
+                    "is_admin": bool(int(row["is_admin"] or 0)),
+                    "created_at": _clean_value(row["created_at"], ""),
+                    "last_login_at": _clean_value(row["last_login_at"], ""),
+                }
+            )
+        return customers
+    finally:
+        connection.close()
+
+
 def _auth_login_user(user):
     session["auth_user_id"] = int(user["id"])
     session.pop("auth_2fa_pending_user_id", None)
@@ -1417,6 +1541,9 @@ def _auth_public_user():
         return None
     return {
         "id": int(user["id"]),
+        "first_name": user.get("first_name", ""),
+        "last_name": user.get("last_name", ""),
+        "full_name": user.get("full_name", ""),
         "email": user["email"],
         "is_verified": bool(user["is_verified"]),
         "is_admin": bool(user["is_admin"]),
@@ -5958,6 +6085,8 @@ def auth_register():
     _ensure_auth_tables()
     error = ""
     info = ""
+    first_name_value = _normalize_person_name(request.form.get("first_name"))
+    last_name_value = _normalize_person_name(request.form.get("last_name"))
     email_value = _clean_value(request.form.get("email"), "")
 
     if request.method == "POST":
@@ -5966,11 +6095,17 @@ def auth_register():
         if password != password_confirm:
             error = "Passwords do not match."
         else:
-            user, create_error = _create_auth_user(email_value, password)
+            user, create_error = _create_auth_user(
+                email_value,
+                password,
+                first_name_value,
+                last_name_value,
+            )
             if create_error:
                 error = create_error
             elif user:
                 _send_verification_email(user)
+                _send_signup_notification(user)
                 info = (
                     "Account created. Check your email to verify your account "
                     "before logging in."
@@ -5978,6 +6113,8 @@ def auth_register():
 
     return render_template(
         "auth_register.html",
+        first_name=first_name_value,
+        last_name=last_name_value,
         email=email_value,
         error=error,
         info=info,
@@ -6120,6 +6257,18 @@ def auth_account():
         return gated
     user = _current_authenticated_user()
     return render_template("auth_account.html", user=_auth_public_user(), has_2fa=bool(user and user.get("totp_secret")))
+
+
+@app.route('/auth/customers', methods=['GET'])
+def auth_customers():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+    user = _current_authenticated_user()
+    if not user or not user.get("is_admin"):
+        return redirect(url_for("show_synergy"))
+    customers = _auth_customer_list()
+    return render_template("auth_customers.html", customers=customers)
 
 
 @app.route('/auth/2fa-setup', methods=['GET', 'POST'])

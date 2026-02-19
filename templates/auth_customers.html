@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customers</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+  <h2>Customer list</h2>
+  <p>Total accounts: {{ (customers or [])|length }}</p>
+  {% if customers %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>First name</th>
+          <th>Last name</th>
+          <th>Email</th>
+          <th>Verified</th>
+          <th>Admin</th>
+          <th>Created (UTC)</th>
+          <th>Last login (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in customers %}
+          <tr>
+            <td>{{ customer.id }}</td>
+            <td>{{ customer.first_name }}</td>
+            <td>{{ customer.last_name }}</td>
+            <td>{{ customer.email }}</td>
+            <td>{{ "Yes" if customer.is_verified else "No" }}</td>
+            <td>{{ "Yes" if customer.is_admin else "No" }}</td>
+            <td>{{ customer.created_at }}</td>
+            <td>{{ customer.last_login_at or "-" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No customers found.</p>
+  {% endif %}
+  <p><a href="{{ url_for('auth_account') }}">Back to account</a></p>
+</body>
+</html>

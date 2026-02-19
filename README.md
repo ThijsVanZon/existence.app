@@ -45,17 +45,19 @@ Environment variables:
 - `FLASK_SECRET_KEY` (required in production)
 - `PUBLIC_BASE_URL` for absolute email links (example: `https://existence.app`)
 - SMTP settings for real email delivery:
-  - `AUTH_EMAIL_FROM`
-  - `AUTH_SMTP_HOST`
-  - `AUTH_SMTP_PORT`
-  - `AUTH_SMTP_USERNAME`
-  - `AUTH_SMTP_PASSWORD`
-  - `AUTH_SMTP_USE_TLS=1`
+- `AUTH_EMAIL_FROM`
+- `AUTH_SIGNUP_NOTIFY_TO` (admin notification recipient for new signups)
+- `AUTH_SMTP_HOST`
+- `AUTH_SMTP_PORT`
+- `AUTH_SMTP_USERNAME`
+- `AUTH_SMTP_PASSWORD`
+- `AUTH_SMTP_USE_TLS=1`
 
 Account behavior:
 
 - Admin account (`AUTH_ADMIN_EMAIL`): fixed Career Sleeves `A-D` + custom sleeves.
 - Other accounts: only custom sleeves (`A-Z`) and uniform custom ranking profile.
+- Registration now stores `first_name` + `last_name` in the auth database and exposes an admin customer list at `/auth/customers`.
 
 ## Scraper endpoint
 

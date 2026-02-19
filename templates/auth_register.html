@@ -14,6 +14,14 @@
 
   <form method="post" action="{{ url_for('auth_register') }}">
     <p>
+      <label for="first_name">First name</label><br>
+      <input id="first_name" name="first_name" type="text" autocomplete="given-name" required value="{{ first_name or '' }}">
+    </p>
+    <p>
+      <label for="last_name">Last name</label><br>
+      <input id="last_name" name="last_name" type="text" autocomplete="family-name" required value="{{ last_name or '' }}">
+    </p>
+    <p>
       <label for="email">Email</label><br>
       <input id="email" name="email" type="email" autocomplete="email" required value="{{ email or '' }}">
     </p>

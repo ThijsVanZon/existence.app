@@ -22,7 +22,12 @@ class TestAuthAccountModes(unittest.TestCase):
         self._temp_dir.cleanup()
 
     def _create_verified_user(self, email):
-        user, error = main._create_auth_user(email, "StrongPass123!")
+        user, error = main._create_auth_user(
+            email,
+            "StrongPass123!",
+            "Test",
+            "User",
+        )
         self.assertIsNone(error or None)
         self.assertIsNotNone(user)
         main._mark_auth_user_verified(int(user["id"]))
@@ -91,6 +96,52 @@ class TestAuthAccountModes(unittest.TestCase):
         self.assertEqual(summary.get("career_sleeve"), "A")
         self.assertEqual(summary.get("scoring_profile_career_sleeve"), "E")
         self.assertTrue(summary.get("custom_mode"))
+
+    def test_register_requires_first_and_last_name(self):
+        response = self.client.post(
+            "/auth/register",
+            data={
+                "first_name": "",
+                "last_name": "",
+                "email": "newperson@example.com",
+                "password": "StrongPass123!",
+                "password_confirm": "StrongPass123!",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("First name is required", body)
+
+    def test_register_persists_name_and_notifies_signup_email(self):
+        with patch("main._send_verification_email", return_value=True):
+            with patch("main._send_signup_notification", return_value=True) as mocked_notify:
+                response = self.client.post(
+                    "/auth/register",
+                    data={
+                        "first_name": "Ada",
+                        "last_name": "Lovelace",
+                        "email": "ada@example.com",
+                        "password": "StrongPass123!",
+                        "password_confirm": "StrongPass123!",
+                    },
+                )
+        self.assertEqual(response.status_code, 200)
+        created = main._auth_user_by_email("ada@example.com")
+        self.assertIsNotNone(created)
+        self.assertEqual(created.get("first_name"), "Ada")
+        self.assertEqual(created.get("last_name"), "Lovelace")
+        mocked_notify.assert_called_once()
+
+    def test_admin_customer_list_is_available(self):
+        admin = self._create_verified_user("thijs.vanzon@existenceinitiative.com")
+        self._create_verified_user("person@example.com")
+        with self.client.session_transaction() as session_state:
+            session_state["auth_user_id"] = int(admin["id"])
+        response = self.client.get("/auth/customers")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Customer list", body)
+        self.assertIn("person@example.com", body)
 
 
 if __name__ == "__main__":
