@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  {% include '_account_nav.html' %}
   <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
   <h2>Customer list</h2>
   <p>Total accounts: {{ (customers or [])|length }}</p>

@@ -1,0 +1,60 @@
+<style>
+  .global-account-nav {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: min(92vw, 820px);
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+    font-size: 0.92rem;
+    line-height: 1.2;
+  }
+
+  .global-account-nav a {
+    color: #5f3af8;
+    font-weight: 700;
+  }
+
+  .global-account-nav-user {
+    color: rgba(0, 0, 0, 0.72);
+    font-weight: 700;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 720px) {
+    .global-account-nav {
+      left: 8px;
+      right: 8px;
+      top: 8px;
+      justify-content: flex-start;
+    }
+
+    .global-account-nav-user {
+      max-width: 180px;
+    }
+  }
+</style>
+<nav class="global-account-nav" aria-label="Account navigation">
+  {% if auth_user %}
+    <span class="global-account-nav-user">{{ auth_user.full_name or auth_user.email }}</span>
+    <a href="{{ url_for('auth_account') }}">Account settings</a>
+    <a href="{{ url_for('auth_logout') }}">Log out</a>
+  {% else %}
+    <a href="{{ url_for('auth_login') }}">Log in</a>
+    <a href="{{ url_for('auth_register') }}">Create account</a>
+  {% endif %}
+</nav>

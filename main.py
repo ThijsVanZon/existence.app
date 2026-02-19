@@ -1157,6 +1157,26 @@ def _update_auth_user_password(user_id, password):
         connection.close()
 
 
+def _update_auth_user_name(user_id, first_name, last_name):
+    normalized_first_name = _normalize_person_name(first_name)
+    normalized_last_name = _normalize_person_name(last_name)
+    name_error = _person_name_validation_error(normalized_first_name, normalized_last_name)
+    if name_error:
+        return name_error
+    now_stamp = _now_utc_stamp()
+    _ensure_auth_tables()
+    connection = _auth_db_connection()
+    try:
+        connection.execute(
+            "UPDATE users SET first_name = ?, last_name = ?, updated_at = ? WHERE id = ?",
+            (normalized_first_name, normalized_last_name, now_stamp, int(user_id)),
+        )
+        connection.commit()
+        return ""
+    finally:
+        connection.close()
+
+
 def _mark_auth_user_verified(user_id):
     now_stamp = _now_utc_stamp()
     _ensure_auth_tables()
@@ -6146,6 +6166,7 @@ def auth_register():
     _ensure_auth_tables()
     error = ""
     info = ""
+    warning = ""
     first_name_value = _normalize_person_name(request.form.get("first_name"))
     last_name_value = _normalize_person_name(request.form.get("last_name"))
     email_value = _clean_value(request.form.get("email"), "")
@@ -6165,12 +6186,22 @@ def auth_register():
             if create_error:
                 error = create_error
             elif user:
-                _send_verification_email(user)
-                _send_signup_notification(user)
-                info = (
-                    "Account created. Check your email to verify your account "
-                    "before logging in."
-                )
+                verification_sent = _send_verification_email(user)
+                signup_notification_sent = _send_signup_notification(user)
+                if verification_sent:
+                    info = (
+                        "Account created. Verification email sent. "
+                        "Check inbox/spam before logging in."
+                    )
+                else:
+                    warning = (
+                        "Account created, but verification email could not be sent right now. "
+                        "Try 'Resend verification email' shortly."
+                    )
+                if AUTH_SIGNUP_NOTIFY_TO and not signup_notification_sent:
+                    warning = (
+                        f"{warning} Internal signup notification failed."
+                    ).strip()
 
     return render_template(
         "auth_register.html",
@@ -6179,6 +6210,7 @@ def auth_register():
         email=email_value,
         error=error,
         info=info,
+        warning=warning,
         min_password_len=AUTH_PASSWORD_MIN_LENGTH,
     )
 
@@ -6240,24 +6272,59 @@ def auth_verify_email():
 def auth_resend_verification():
     _ensure_auth_tables()
     email = _clean_value(request.form.get("email"), "")
-    user = _auth_user_by_email(email)
-    if user and not user.get("is_verified"):
-        _send_verification_email(user)
-    message = "If that account exists, a verification email has been sent."
-    return render_template("auth_message.html", title="Verification Email", message=message, tone="info")
+    tone = "info"
+    message = "If that account exists and is not verified, a verification email request has been processed."
+    detail = (
+        "For security we do not confirm account existence. "
+        "Inbox delivery is not guaranteed; check spam/junk."
+    )
+    if not _is_valid_email(email):
+        message = "Enter a valid email address."
+        tone = "error"
+    else:
+        user = _auth_user_by_email(email)
+        sent = None
+        if user and not user.get("is_verified"):
+            sent = _send_verification_email(user)
+        if sent is False:
+            tone = "error"
+            detail = "Request accepted, but mail server reported a send error. Try again later."
+    return render_template(
+        "auth_message.html",
+        title="Verification Email",
+        message=message,
+        detail=detail,
+        tone=tone,
+    )
 
 
 @app.route('/auth/forgot-password', methods=['GET', 'POST'])
 def auth_forgot_password():
     _ensure_auth_tables()
+    error = ""
     info = ""
+    detail = (
+        "For security we do not confirm account existence. "
+        "Inbox delivery is not guaranteed; check spam/junk."
+    )
     email_value = _clean_value(request.form.get("email"), "")
     if request.method == "POST":
-        user = _auth_user_by_email(email_value)
-        if user:
-            _send_password_reset_email(user)
-        info = "If that account exists, a password reset email has been sent."
-    return render_template("auth_forgot_password.html", email=email_value, info=info)
+        if not _is_valid_email(email_value):
+            error = "Enter a valid email address."
+        else:
+            user = _auth_user_by_email(email_value)
+            info = "If that account exists, a password reset email request has been processed."
+            if user:
+                sent = _send_password_reset_email(user)
+                if not sent:
+                    error = "Request accepted, but mail server reported a send error. Try again later."
+    return render_template(
+        "auth_forgot_password.html",
+        email=email_value,
+        error=error,
+        info=info,
+        detail=detail,
+    )
 
 
 @app.route('/auth/reset-password', methods=['GET', 'POST'])
@@ -6311,13 +6378,74 @@ def auth_two_factor():
     return render_template("auth_two_factor.html", error=error)
 
 
-@app.route('/auth/account', methods=['GET'])
+@app.route('/auth/account', methods=['GET', 'POST'])
 def auth_account():
     gated = _auth_gate(api=False)
     if gated is not None:
         return gated
     user = _current_authenticated_user()
-    return render_template("auth_account.html", user=_auth_public_user(), has_2fa=bool(user and user.get("totp_secret")))
+    account_error = ""
+    account_info = ""
+    name_error = ""
+    name_info = ""
+    password_error = ""
+    password_info = ""
+    first_name_value = _normalize_person_name((user or {}).get("first_name", ""))
+    last_name_value = _normalize_person_name((user or {}).get("last_name", ""))
+
+    if request.method == "POST" and user:
+        action = _clean_value(request.form.get("action"), "")
+        if action == "change_name":
+            first_name_value = _normalize_person_name(request.form.get("first_name"))
+            last_name_value = _normalize_person_name(request.form.get("last_name"))
+            update_error = _update_auth_user_name(
+                int(user["id"]),
+                first_name_value,
+                last_name_value,
+            )
+            if update_error:
+                name_error = update_error
+            else:
+                name_info = "Name updated."
+                user = _auth_user_by_id(int(user["id"])) or user
+                first_name_value = _normalize_person_name(user.get("first_name", ""))
+                last_name_value = _normalize_person_name(user.get("last_name", ""))
+        elif action == "change_password":
+            current_password = request.form.get("current_password", "")
+            new_password = request.form.get("new_password", "")
+            new_password_confirm = request.form.get("new_password_confirm", "")
+            if not check_password_hash(user.get("password_hash", ""), current_password):
+                password_error = "Current password is incorrect."
+            elif new_password != new_password_confirm:
+                password_error = "New passwords do not match."
+            else:
+                update_error = _update_auth_user_password(int(user["id"]), new_password)
+                if update_error:
+                    password_error = update_error
+                else:
+                    password_info = "Password updated."
+        else:
+            account_error = "Unknown account action."
+
+    if user and not user.get("is_verified"):
+        account_info = (
+            "This account is not verified yet. Use resend verification from the login page."
+        )
+
+    return render_template(
+        "auth_account.html",
+        user=_auth_public_user(),
+        has_2fa=bool(user and user.get("totp_secret")),
+        account_error=account_error,
+        account_info=account_info,
+        name_error=name_error,
+        name_info=name_info,
+        password_error=password_error,
+        password_info=password_info,
+        first_name=first_name_value,
+        last_name=last_name_value,
+        min_password_len=AUTH_PASSWORD_MIN_LENGTH,
+    )
 
 
 @app.route('/auth/customers', methods=['GET'])

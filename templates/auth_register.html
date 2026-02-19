@@ -7,10 +7,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  {% include '_account_nav.html' %}
   <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
   <h2>Create account</h2>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if info %}<p>{{ info }}</p>{% endif %}
+  {% if warning %}<p class="error">{{ warning }}</p>{% endif %}
 
   <form method="post" action="{{ url_for('auth_register') }}">
     <p>

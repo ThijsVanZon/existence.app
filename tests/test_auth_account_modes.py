@@ -143,6 +143,75 @@ class TestAuthAccountModes(unittest.TestCase):
         self.assertIn("Customer list", body)
         self.assertIn("person@example.com", body)
 
+    def test_account_can_change_name(self):
+        user = self._create_verified_user("namechange@example.com")
+        with self.client.session_transaction() as session_state:
+            session_state["auth_user_id"] = int(user["id"])
+
+        response = self.client.post(
+            "/auth/account",
+            data={
+                "action": "change_name",
+                "first_name": "New",
+                "last_name": "Name",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Name updated.", body)
+        updated = main._auth_user_by_email("namechange@example.com")
+        self.assertEqual(updated.get("first_name"), "New")
+        self.assertEqual(updated.get("last_name"), "Name")
+
+    def test_account_password_change_requires_valid_current_password(self):
+        user = self._create_verified_user("passwordchange@example.com")
+        with self.client.session_transaction() as session_state:
+            session_state["auth_user_id"] = int(user["id"])
+
+        response = self.client.post(
+            "/auth/account",
+            data={
+                "action": "change_password",
+                "current_password": "WrongPass123!",
+                "new_password": "StrongerPass123!",
+                "new_password_confirm": "StrongerPass123!",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Current password is incorrect.", body)
+
+    def test_resend_verification_reports_mail_send_failure(self):
+        user, error = main._create_auth_user(
+            "verifyme@example.com",
+            "StrongPass123!",
+            "Verify",
+            "Me",
+        )
+        self.assertIsNone(error or None)
+        self.assertIsNotNone(user)
+        with patch("main._send_verification_email", return_value=False):
+            response = self.client.post(
+                "/auth/resend-verification",
+                data={"email": "verifyme@example.com"},
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("mail server reported a send error", body)
+
+    def test_forgot_password_reports_mail_send_success(self):
+        user = self._create_verified_user("forgotsuccess@example.com")
+        self.assertIsNotNone(user)
+        with patch("main._send_password_reset_email", return_value=True):
+            response = self.client.post(
+                "/auth/forgot-password",
+                data={"email": "forgotsuccess@example.com"},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("password reset email request has been processed", body.lower())
+        self.assertIn("do not confirm account existence", body.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

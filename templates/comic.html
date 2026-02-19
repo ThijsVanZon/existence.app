@@ -9,6 +9,7 @@
 </head>
 
 <body>
+  {% include '_account_nav.html' %}
   <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
 
   {% if invalid_id %}

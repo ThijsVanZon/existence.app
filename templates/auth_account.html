@@ -7,15 +7,56 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  {% include '_account_nav.html' %}
   <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
-  <h2>Account</h2>
+  <h2>Account settings</h2>
+
+  {% if account_error %}<p class="error">{{ account_error }}</p>{% endif %}
+  {% if account_info %}<p>{{ account_info }}</p>{% endif %}
+
   {% if user %}
-    <p><strong>Name:</strong> {{ user.full_name or "-" }}</p>
     <p><strong>Email:</strong> {{ user.email }}</p>
     <p><strong>Email verified:</strong> {{ "Yes" if user.is_verified else "No" }}</p>
     <p><strong>Admin:</strong> {{ "Yes" if user.is_admin else "No" }}</p>
     <p><strong>2FA:</strong> {{ "Enabled" if has_2fa else "Disabled" }}</p>
     <p><a href="{{ url_for('auth_two_factor_setup') }}">Manage 2FA</a></p>
+
+    <h3>Change name</h3>
+    {% if name_error %}<p class="error">{{ name_error }}</p>{% endif %}
+    {% if name_info %}<p>{{ name_info }}</p>{% endif %}
+    <form method="post" action="{{ url_for('auth_account') }}">
+      <input type="hidden" name="action" value="change_name">
+      <p>
+        <label for="first_name">First name</label><br>
+        <input id="first_name" name="first_name" type="text" autocomplete="given-name" required value="{{ first_name or '' }}">
+      </p>
+      <p>
+        <label for="last_name">Last name</label><br>
+        <input id="last_name" name="last_name" type="text" autocomplete="family-name" required value="{{ last_name or '' }}">
+      </p>
+      <p><button type="submit">Save name</button></p>
+    </form>
+
+    <h3>Change password</h3>
+    {% if password_error %}<p class="error">{{ password_error }}</p>{% endif %}
+    {% if password_info %}<p>{{ password_info }}</p>{% endif %}
+    <form method="post" action="{{ url_for('auth_account') }}">
+      <input type="hidden" name="action" value="change_password">
+      <p>
+        <label for="current_password">Current password</label><br>
+        <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+      </p>
+      <p>
+        <label for="new_password">New password (min {{ min_password_len }})</label><br>
+        <input id="new_password" name="new_password" type="password" autocomplete="new-password" required minlength="{{ min_password_len }}">
+      </p>
+      <p>
+        <label for="new_password_confirm">Confirm new password</label><br>
+        <input id="new_password_confirm" name="new_password_confirm" type="password" autocomplete="new-password" required minlength="{{ min_password_len }}">
+      </p>
+      <p><button type="submit">Save password</button></p>
+    </form>
+
     <p><a href="{{ url_for('show_synergy') }}">Open Synergy</a></p>
     {% if user.is_admin %}
       <p><a href="{{ url_for('show_enlightenment') }}">Open Enlightenment</a></p>

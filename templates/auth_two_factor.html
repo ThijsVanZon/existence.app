@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  {% include '_account_nav.html' %}
   <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
   <h2>Two-factor authentication</h2>
   <p>Enter the 6-digit code from Google Authenticator or Microsoft Authenticator.</p>
