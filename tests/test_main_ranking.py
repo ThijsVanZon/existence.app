@@ -324,8 +324,8 @@ class TestMainRanking(unittest.TestCase):
     def test_score_abroad_accepts_dutch_variants_of_english_signals(self):
         nl_text = "Hybride rol met internationaal reizen en klantlocaties."
         en_text = "Hybrid role with international travel and client sites."
-        nl_score, _, _ = main.sleeves.score_abroad(nl_text)
-        en_score, _, _ = main.sleeves.score_abroad(en_text)
+        nl_score, _, _ = main.c_sleeves.score_abroad(nl_text)
+        en_score, _, _ = main.c_sleeves.score_abroad(en_text)
         self.assertGreater(nl_score, 0)
         self.assertGreater(en_score, 0)
 

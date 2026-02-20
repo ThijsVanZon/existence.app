@@ -97,6 +97,17 @@ Current MVP backend behavior:
 - `location_mode` is enforced to `nl_vn` (Netherlands + Vietnam abroad/local mix)
 - sources are enforced to `indeed_web` + `linkedin_web` + `nl_web_openings`
 
+## Wage Calculator
+
+- UI page: `GET /wagecalculator`
+- API endpoint: `POST /wagecalculator/calculate`
+- Modes:
+- `payroll` (payroll inputs to derive freelance + expenses)
+- `expenses` (expenses target to derive payroll + freelance)
+- `freelance` (freelance inputs to derive payroll + expenses)
+
+The core logic lives in `wage_calculator.py` and is intentionally decoupled from Flask routes for easier testing.
+
 ## Debugging & observability
 
 The scraper now reports:

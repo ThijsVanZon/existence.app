@@ -29,7 +29,8 @@ from pathlib import Path
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 from parsel import Selector
 from werkzeug.security import generate_password_hash, check_password_hash
-import career_sleeves as sleeves
+import career_sleeves as c_sleeves
+import wage_calculator as wagecalc
 
 # Create an instance of the Flask class
 app = Flask(__name__)
@@ -1447,12 +1448,12 @@ def _next_available_custom_career_sleeve_letter(records, min_letter=CUSTOM_SYNER
 def _fixed_career_sleeves():
     records = []
     for letter in FIXED_SYNERGY_SLEEVE_LETTERS:
-        config = sleeves.CAREER_SLEEVE_CONFIG.get(letter, {})
+        config = c_sleeves.CAREER_SLEEVE_CONFIG.get(letter, {})
         records.append(
             {
                 "letter": letter,
                 "title": _clean_value(config.get("name"), f"Career Sleeve {letter}"),
-                "queries": _dedupe_queries(sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(letter, [])),
+                "queries": _dedupe_queries(c_sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(letter, [])),
                 "location_preferences": _default_custom_location_preferences(),
                 "locked": True,
                 "scope": "fixed",
@@ -1759,10 +1760,10 @@ def _load_runtime_config():
         "config_version": "1.0",
         "query_overrides": {},
         "threshold_overrides": {
-            "min_primary_score": sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
-            "min_total_hits": sleeves.MIN_TOTAL_HITS_TO_SHOW,
-            "min_maybe_primary_score": sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
-            "min_maybe_total_hits": sleeves.MIN_TOTAL_HITS_TO_MAYBE,
+            "min_primary_score": c_sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
+            "min_total_hits": c_sleeves.MIN_TOTAL_HITS_TO_SHOW,
+            "min_maybe_primary_score": c_sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
+            "min_maybe_total_hits": c_sleeves.MIN_TOTAL_HITS_TO_MAYBE,
         },
         "detail_fetch": {
             "base_budget_per_page": DEFAULT_DETAIL_FETCH_BASE_BUDGET,
@@ -1922,15 +1923,15 @@ def _extract_job_id_from_url(url):
 
 
 def _build_dedupe_key(item):
-    title_key = sleeves.normalize_for_match(item.get("title"))
-    company_key = sleeves.normalize_for_match(item.get("company"))
+    title_key = c_sleeves.normalize_for_match(item.get("title"))
+    company_key = c_sleeves.normalize_for_match(item.get("company"))
     raw_url = _clean_value(item.get("link") or item.get("url"), "")
     canonical_url = _canonicalize_url(raw_url)
     job_id = _clean_value(item.get("job_id"), "") or _extract_job_id_from_url(canonical_url or raw_url)
     anchor = job_id or canonical_url
     if not anchor:
-        location_key = sleeves.normalize_for_match(item.get("location"))
-        date_key = sleeves.normalize_for_match(item.get("date") or item.get("date_posted"))
+        location_key = c_sleeves.normalize_for_match(item.get("location"))
+        date_key = c_sleeves.normalize_for_match(item.get("date") or item.get("date_posted"))
         anchor = f"{location_key}|{date_key}"
     return (title_key, company_key, anchor), canonical_url, job_id
 
@@ -2288,7 +2289,7 @@ def _context_has_abroad_keywords(raw_text, start, end):
     text = str(raw_text or "").lower()
     left = max(0, start - 64)
     right = min(len(text), end + 64)
-    context = sleeves.normalize_for_match(text[left:right])
+    context = c_sleeves.normalize_for_match(text[left:right])
     if not context:
         return False
     return any(keyword in context for keyword in _expanded_abroad_percent_context_keywords())
@@ -2375,15 +2376,15 @@ def _extract_abroad_percentage(raw_text):
 
 
 def _has_abroad_context(raw_text):
-    text = sleeves.normalize_for_match(raw_text)
+    text = c_sleeves.normalize_for_match(raw_text)
     if not text:
         return False
     return any(term in text for term in _expanded_abroad_context_terms())
 
 
 def _alias_has_abroad_context(raw_text, alias):
-    text = sleeves.normalize_for_match(raw_text)
-    alias_text = sleeves.normalize_for_match(alias)
+    text = c_sleeves.normalize_for_match(raw_text)
+    alias_text = c_sleeves.normalize_for_match(alias)
     if not text or not alias_text:
         return False
     parts = [re.escape(part) for part in alias_text.split()]
@@ -2397,12 +2398,12 @@ def _alias_has_abroad_context(raw_text, alias):
 
 
 def _extract_abroad_geo_mentions(raw_text):
-    prepared_text = sleeves.prepare_text(raw_text)
+    prepared_text = c_sleeves.prepare_text(raw_text)
     has_context = _has_abroad_context(raw_text)
     geo = {"countries": [], "regions": [], "continents": []}
     for category in ("countries", "regions", "continents"):
         for label, aliases in _expanded_abroad_geo_terms().get(category, []):
-            hits = sleeves.find_hits(prepared_text, aliases)
+            hits = c_sleeves.find_hits(prepared_text, aliases)
             if not hits:
                 continue
             if label == "Netherlands":
@@ -2468,7 +2469,7 @@ def _enhance_abroad_score(base_score, base_badges, abroad_meta, raw_text):
             badges.append("geo_scope")
             seen.add("geo_scope")
 
-    score = max(0.0, min(float(sleeves.ABROAD_SCORE_CAP), round(score, 2)))
+    score = max(0.0, min(float(c_sleeves.ABROAD_SCORE_CAP), round(score, 2)))
     return score, badges
 
 
@@ -2477,7 +2478,7 @@ def _derive_abroad_identifiers(percentage, locations, raw_text, badges=None):
     seen = set()
 
     def add_identifier(value):
-        normalized = sleeves.normalize_for_match(value)
+        normalized = c_sleeves.normalize_for_match(value)
         if not normalized:
             return
         slug = normalized.replace(" ", "_")
@@ -2602,14 +2603,14 @@ def _is_vietnam_job(*parts):
 
 def _location_passes_for_mode(location_mode):
     mode = _normalized_location_mode(location_mode)
-    pass_ids = sleeves.LOCATION_MODE_PASSES.get(
+    pass_ids = c_sleeves.LOCATION_MODE_PASSES.get(
         mode,
-        sleeves.LOCATION_MODE_PASSES.get(MVP_LOCATION_MODE, ["nl", "vn"]),
+        c_sleeves.LOCATION_MODE_PASSES.get(MVP_LOCATION_MODE, ["nl", "vn"]),
     )
     locations = []
     seen = set()
     for pass_id in pass_ids:
-        for location in sleeves.SEARCH_LOCATIONS.get(pass_id, []):
+        for location in c_sleeves.SEARCH_LOCATIONS.get(pass_id, []):
             cleaned = _clean_value(location, "")
             if not cleaned:
                 continue
@@ -2701,7 +2702,7 @@ _BILINGUAL_PHRASE_GROUPS = [
 
 
 def _build_bilingual_lookup(groups):
-    return sleeves._build_bilingual_lookup(groups)
+    return c_sleeves._build_bilingual_lookup(groups)
 
 
 _BILINGUAL_TOKEN_LOOKUP = _build_bilingual_lookup(_BILINGUAL_TOKEN_GROUPS)
@@ -2709,7 +2710,7 @@ _BILINGUAL_PHRASE_LOOKUP = _build_bilingual_lookup(_BILINGUAL_PHRASE_GROUPS)
 
 
 def _bilingual_query_variants(term, max_variants=24):
-    normalized_term = sleeves.normalize_for_match(term)
+    normalized_term = c_sleeves.normalize_for_match(term)
     if not normalized_term:
         return []
 
@@ -2722,7 +2723,7 @@ def _bilingual_query_variants(term, max_variants=24):
             token_variants = _BILINGUAL_TOKEN_LOOKUP.get(token, [token])
             per_token_options.append(list(token_variants)[:4])
         for option_tuple in itertools.product(*per_token_options):
-            candidate = sleeves.normalize_for_match(" ".join(option_tuple))
+            candidate = c_sleeves.normalize_for_match(" ".join(option_tuple))
             if candidate:
                 variants.add(candidate)
             if len(variants) >= limit:
@@ -2734,7 +2735,7 @@ def _bilingual_query_variants(term, max_variants=24):
         for phrase_variant in phrase_group:
             if phrase_variant == phrase:
                 continue
-            candidate = sleeves.normalize_for_match(normalized_term.replace(phrase, phrase_variant))
+            candidate = c_sleeves.normalize_for_match(normalized_term.replace(phrase, phrase_variant))
             if candidate:
                 variants.add(candidate)
             if len(variants) >= limit:
@@ -2747,7 +2748,7 @@ def _bilingual_query_variants(term, max_variants=24):
 def _expand_terms_with_bilingual_variants(queries):
     expanded = []
     for query in queries or []:
-        normalized_term = sleeves.normalize_for_match(query)
+        normalized_term = c_sleeves.normalize_for_match(query)
         if not normalized_term:
             continue
         expanded.append(normalized_term)
@@ -2769,7 +2770,7 @@ def _parse_search_queries(raw_value):
         cleaned = _clean_value(part, "")
         if len(cleaned) < 2:
             continue
-        normalized = sleeves.normalize_for_match(cleaned)
+        normalized = c_sleeves.normalize_for_match(cleaned)
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
@@ -2788,7 +2789,7 @@ def _dedupe_queries(queries):
         cleaned = _clean_value(query, "")
         if len(cleaned) < 2:
             continue
-        normalized = sleeves.normalize_for_match(cleaned)
+        normalized = c_sleeves.normalize_for_match(cleaned)
         if not normalized or normalized in seen:
             continue
         seen.add(normalized)
@@ -2802,7 +2803,7 @@ def _search_query_bundle_for_career_sleeve(career_sleeve_key, search_queries=Non
     base_queries = (
         overrides
         if isinstance(overrides, list) and overrides
-        else sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(career_sleeve, [])
+        else c_sleeves.CAREER_SLEEVE_SEARCH_QUERIES.get(career_sleeve, [])
     )
     ordered_queries = _dedupe_queries(search_queries if search_queries else base_queries)
     ordered_queries = _expand_terms_with_bilingual_variants(ordered_queries)
@@ -3045,7 +3046,7 @@ def _warmup_indeed_session(
         return False
     if response.status_code in {401, 403, 429}:
         return False
-    return not sleeves.detect_blocked_html(response.text)
+    return not c_sleeves.detect_blocked_html(response.text)
 
 
 def _fetch_indeed_rss_fallback(
@@ -3073,7 +3074,7 @@ def _fetch_indeed_rss_fallback(
     body = response.text if response is not None else ""
     blocked = bool(
         status in {401, 403, 429}
-        or sleeves.detect_blocked_html(body)
+        or c_sleeves.detect_blocked_html(body)
     )
     if blocked:
         _record_blocked(diagnostics, "Indeed")
@@ -3488,7 +3489,7 @@ def _fetch_detail_page_text(
     if source_name == "LinkedIn":
         blocked = response.status_code in {401, 403, 429, 999} or _detect_linkedin_blocked(response.text)
     else:
-        blocked = response.status_code in {401, 403, 429} or sleeves.detect_blocked_html(response.text)
+        blocked = response.status_code in {401, 403, 429} or c_sleeves.detect_blocked_html(response.text)
     if blocked:
         _record_blocked(diagnostics, source_name)
         _save_html_snapshot(
@@ -3706,7 +3707,7 @@ def _fetch_indeed_jobs_direct(
                     blocked = bool(
                         status in {401, 403, 429}
                         or (
-                            sleeves.detect_blocked_html(body)
+                            c_sleeves.detect_blocked_html(body)
                             and cards_found == 0
                             and parsed_count == 0
                         )
@@ -3730,7 +3731,7 @@ def _fetch_indeed_jobs_direct(
                         retry_parsed_items = []
                         retry_blocked = bool(
                             retry_status in {401, 403, 429}
-                            or sleeves.detect_blocked_html(retry_body)
+                            or c_sleeves.detect_blocked_html(retry_body)
                         )
                         if retry_response is not None and retry_response.ok:
                             retry_selector = Selector(text=retry_body)
@@ -3743,7 +3744,7 @@ def _fetch_indeed_jobs_direct(
                             retry_blocked = bool(
                                 retry_status in {401, 403, 429}
                                 or (
-                                    sleeves.detect_blocked_html(retry_body)
+                                    c_sleeves.detect_blocked_html(retry_body)
                                     and retry_cards_found == 0
                                     and retry_parsed_count == 0
                                 )
@@ -3834,7 +3835,7 @@ def _fetch_indeed_jobs_direct(
                 else:
                     blocked = bool(
                         status in {401, 403, 429}
-                        or sleeves.detect_blocked_html(body)
+                        or c_sleeves.detect_blocked_html(body)
                     )
                     if blocked:
                         blocked_in_query = True
@@ -4311,7 +4312,7 @@ def _company_name_from_host(url):
 
 
 def _looks_like_job_opening(title, snippet, url):
-    text = sleeves.normalize_for_match(_normalize_text(title, snippet, url))
+    text = c_sleeves.normalize_for_match(_normalize_text(title, snippet, url))
     if not text:
         return False
     if "openingstijden" in text:
@@ -4504,7 +4505,7 @@ def _fetch_nl_web_openings_direct(
                 if response is not None and response.ok:
                     blocked = bool(
                         status in {401, 403, 429}
-                        or sleeves.detect_blocked_html(body)
+                        or c_sleeves.detect_blocked_html(body)
                     )
                     if blocked:
                         blocked_in_query = True
@@ -4819,7 +4820,7 @@ def rank_and_filter_jobs(
     if custom_mode:
         normalized_custom_queries = _dedupe_queries(
             [
-                sleeves.normalize_for_match(term)
+                c_sleeves.normalize_for_match(term)
                 for term in (custom_search_queries or [])
                 if term
             ]
@@ -4833,7 +4834,7 @@ def rank_and_filter_jobs(
         )
         normalized_custom_geo_queries = _dedupe_queries(
             [
-                sleeves.normalize_for_match(term)
+                c_sleeves.normalize_for_match(term)
                 for term in (
                     list(normalized_custom_location_preferences.get("countries") or [])
                     + list(normalized_custom_location_preferences.get("regions") or [])
@@ -4951,7 +4952,7 @@ def rank_and_filter_jobs(
             ),
             "",
         )
-        prepared_text = sleeves.prepare_text(raw_text)
+        prepared_text = c_sleeves.prepare_text(raw_text)
         title_text = _normalize_text(title)
         work_mode = _infer_work_mode(
             _normalize_text(
@@ -4962,8 +4963,8 @@ def rank_and_filter_jobs(
             )
         )
 
-        language_flags, language_notes = sleeves.detect_language_flags(raw_text)
-        career_sleeve_scores, career_sleeve_details = sleeves.score_all_career_sleeves(raw_text, title_text)
+        language_flags, language_notes = c_sleeves.detect_language_flags(raw_text)
+        career_sleeve_scores, career_sleeve_details = c_sleeves.score_all_career_sleeves(raw_text, title_text)
         primary_career_sleeve, natural_primary_score = max(
             career_sleeve_scores.items(),
             key=lambda pair: pair[1],
@@ -4971,7 +4972,7 @@ def rank_and_filter_jobs(
 
         scoring_career_sleeve = (
             target_career_sleeve
-            if target_career_sleeve in sleeves.VALID_CAREER_SLEEVES
+            if target_career_sleeve in c_sleeves.VALID_CAREER_SLEEVES
             else primary_career_sleeve
         )
         primary_score = career_sleeve_scores.get(scoring_career_sleeve, natural_primary_score)
@@ -4989,12 +4990,12 @@ def rank_and_filter_jobs(
         custom_abroad_percent = None
         custom_abroad_percent_in_range = None
         if custom_mode and normalized_custom_queries:
-            prepared_title = sleeves.prepare_text(title_text)
+            prepared_title = c_sleeves.prepare_text(title_text)
             found_queries = set()
             for term in normalized_custom_queries:
                 query_variants = custom_term_variant_map.get(term) or [term]
-                text_variant_hits = sleeves.find_hits(prepared_text, query_variants)
-                title_variant_hits = sleeves.find_hits(prepared_title, query_variants)
+                text_variant_hits = c_sleeves.find_hits(prepared_text, query_variants)
+                title_variant_hits = c_sleeves.find_hits(prepared_title, query_variants)
                 if text_variant_hits:
                     custom_text_hits.append(term)
                     found_queries.add(term)
@@ -5022,8 +5023,8 @@ def rank_and_filter_jobs(
             primary_score = custom_score
             total_positive_hits = custom_hit_count
 
-        hard_reject_reason = sleeves.detect_hard_reject(title, raw_text)
-        abroad_components, abroad_badges, _ = sleeves.score_abroad_components(raw_text)
+        hard_reject_reason = c_sleeves.detect_hard_reject(title, raw_text)
+        abroad_components, abroad_badges, _ = c_sleeves.score_abroad_components(raw_text)
         remote_flex_score = float(abroad_components.get("remote_flex_score", 0.0))
         mobility_score = float(abroad_components.get("mobility_score", 0.0))
         visa_score = float(abroad_components.get("visa_score", 0.0))
@@ -5035,9 +5036,9 @@ def rank_and_filter_jobs(
                 geo_candidates = _expand_terms_with_bilingual_variants(normalized_custom_geo_queries)
                 custom_geo_matches = sorted(
                     {
-                        sleeves.normalize_for_match(hit)
-                        for hit in sleeves.find_hits(prepared_text, geo_candidates)
-                        if sleeves.normalize_for_match(hit)
+                        c_sleeves.normalize_for_match(hit)
+                        for hit in c_sleeves.find_hits(prepared_text, geo_candidates)
+                        if c_sleeves.normalize_for_match(hit)
                     }
                 )
                 if custom_geo_matches:
@@ -5099,11 +5100,11 @@ def rank_and_filter_jobs(
         )
         location_profile = _score_location_proximity(location, raw_text, work_mode)
         location_proximity_score = float(location_profile.get("score", 0))
-        synergy_score, synergy_hits = sleeves.score_synergy(raw_text)
-        penalty_points, penalty_reasons = sleeves.evaluate_soft_penalties(raw_text)
+        synergy_score, synergy_hits = c_sleeves.score_synergy(raw_text)
+        penalty_points, penalty_reasons = c_sleeves.evaluate_soft_penalties(raw_text)
         penalty_reasons = list(penalty_reasons or [])
         required_languages = {
-            sleeves.normalize_for_match(lang)
+            c_sleeves.normalize_for_match(lang)
             for lang in (language_flags.get("extra_languages") or [])
         }
         if language_flags.get("extra_language_required") and {"vietnamese", "vietnamees"} & required_languages:
@@ -5112,7 +5113,7 @@ def rank_and_filter_jobs(
                 "Vietnamese language required; lower priority for visa-friendly international profile."
             )
 
-        weights = sleeves.ranking_weights_for_career_sleeve(scoring_career_sleeve)
+        weights = c_sleeves.ranking_weights_for_career_sleeve(scoring_career_sleeve)
         weighted_score = (
             (visa_score * weights.get("visa_score", 0.30))
             + (mobility_score * weights.get("mobility_score", 0.16))
@@ -5131,7 +5132,7 @@ def rank_and_filter_jobs(
         location_penalty = 0 if location_gate_match else 4
         rank_score = (weighted_score * 20) - penalty_points - location_penalty
 
-        primary_career_sleeve_config = sleeves.CAREER_SLEEVE_CONFIG[scoring_career_sleeve]
+        primary_career_sleeve_config = c_sleeves.CAREER_SLEEVE_CONFIG[scoring_career_sleeve]
         distance_km = location_profile.get("distance_km")
         if distance_km is None:
             proximity_reason = (
@@ -5342,19 +5343,19 @@ def rank_and_filter_jobs(
     threshold_cfg = RUNTIME_CONFIG.get("threshold_overrides", {})
     threshold_career_sleeve = (
         target_career_sleeve
-        if target_career_sleeve in sleeves.VALID_CAREER_SLEEVES
+        if target_career_sleeve in c_sleeves.VALID_CAREER_SLEEVES
         else ""
     )
     if not threshold_career_sleeve and scored_jobs:
         threshold_career_sleeve = _clean_value(scored_jobs[0].get("primary_career_sleeve_id"), "").upper()
-    career_sleeve_threshold_defaults = sleeves.decision_thresholds_for_career_sleeve(
+    career_sleeve_threshold_defaults = c_sleeves.decision_thresholds_for_career_sleeve(
         threshold_career_sleeve or "E"
     )
 
     base_min_total_hits = int(
         threshold_cfg.get(
             "min_total_hits",
-            career_sleeve_threshold_defaults.get("min_total_hits", sleeves.MIN_TOTAL_HITS_TO_SHOW),
+            career_sleeve_threshold_defaults.get("min_total_hits", c_sleeves.MIN_TOTAL_HITS_TO_SHOW),
         )
     )
     base_min_primary = int(
@@ -5366,7 +5367,7 @@ def rank_and_filter_jobs(
     base_min_maybe_total = int(
         threshold_cfg.get(
             "min_maybe_total_hits",
-            career_sleeve_threshold_defaults.get("min_maybe_total_hits", sleeves.MIN_TOTAL_HITS_TO_MAYBE),
+            career_sleeve_threshold_defaults.get("min_maybe_total_hits", c_sleeves.MIN_TOTAL_HITS_TO_MAYBE),
         )
     )
     base_min_maybe_primary = int(
@@ -5374,7 +5375,7 @@ def rank_and_filter_jobs(
             "min_maybe_primary_score",
             career_sleeve_threshold_defaults.get(
                 "min_maybe_primary_score",
-                sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
+                c_sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_MAYBE,
             ),
         )
     )
@@ -5846,13 +5847,13 @@ def _cache_key_for(
     config = SOURCE_REGISTRY[source_key]
     query_key = ""
     if search_queries:
-        normalized_search_queries = [sleeves.normalize_for_match(term) for term in search_queries if term]
+        normalized_search_queries = [c_sleeves.normalize_for_match(term) for term in search_queries if term]
         normalized_search_queries = [term for term in normalized_search_queries if term]
         if normalized_search_queries:
             query_key = f":q{','.join(sorted(set(normalized_search_queries)))}"
     extra_key = ""
     if extra_queries:
-        normalized_extra_queries = [sleeves.normalize_for_match(query) for query in extra_queries if query]
+        normalized_extra_queries = [c_sleeves.normalize_for_match(query) for query in extra_queries if query]
         normalized_extra_queries = [query for query in normalized_extra_queries if query]
         if normalized_extra_queries:
             extra_key = f":x{','.join(sorted(set(normalized_extra_queries)))}"
@@ -6230,7 +6231,7 @@ def _public_scrape_config():
             }
         )
     location_modes = [
-        {"id": MVP_LOCATION_MODE, "label": sleeves.LOCATION_MODE_LABELS[MVP_LOCATION_MODE]},
+        {"id": MVP_LOCATION_MODE, "label": c_sleeves.LOCATION_MODE_LABELS[MVP_LOCATION_MODE]},
     ]
 
     return {
@@ -6240,8 +6241,8 @@ def _public_scrape_config():
         "config_version": RUNTIME_CONFIG.get("config_version", "1.0"),
         "career_sleeve_search_queries_defaults": {
             key: list(value)
-            for key, value in (sleeves.CAREER_SLEEVE_SEARCH_QUERIES or {}).items()
-            if key in sleeves.VALID_CAREER_SLEEVES
+            for key, value in (c_sleeves.CAREER_SLEEVE_SEARCH_QUERIES or {}).items()
+            if key in c_sleeves.VALID_CAREER_SLEEVES
         },
         "defaults": {
             "sources": [source.get("id") for source in sources if source.get("available")],
@@ -6728,6 +6729,29 @@ def show_synergy():
     return render_template('synergy.html')
 
 
+@app.route('/wagecalculator')
+def show_wagecalculator():
+    gated = _auth_gate(api=False)
+    if gated is not None:
+        return gated
+    return render_template('wagecalculator.html')
+
+
+@app.route('/wagecalculator/calculate', methods=['POST'])
+def wagecalculator_calculate():
+    gated = _auth_gate(api=True)
+    if gated is not None:
+        return gated
+    payload = request.get_json(silent=True) or {}
+    result, error = wagecalc.calculate(
+        mode=payload.get("mode"),
+        raw_inputs=payload.get("inputs"),
+    )
+    if error:
+        return jsonify({"ok": False, **error}), 400
+    return jsonify({"ok": True, "result": result})
+
+
 @app.route('/synergy-sleeves', methods=['GET'])
 def synergy_sleeves():
     gated = _auth_gate(api=True)
@@ -6753,7 +6777,7 @@ def save_synergy_sleeve():
     if requested_letter and requested_letter in fixed_letters:
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be overwritten."}), 409
     if requested_letter and not _is_custom_career_sleeve_letter(requested_letter, min_letter=custom_letter_min):
-        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be saved as Career Sleeves."}), 400
+        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be saved as Career c_sleeves."}), 400
 
     title = _clean_value(payload.get("title"), "")[:120]
     if not title:
@@ -6816,7 +6840,7 @@ def delete_synergy_sleeve(letter):
     if normalized_letter in fixed_letters:
         return jsonify({"error": "Career Sleeves A-D are fixed and cannot be deleted."}), 409
     if not _is_custom_career_sleeve_letter(normalized_letter, min_letter=custom_letter_min):
-        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be deleted as Career Sleeves."}), 400
+        return jsonify({"error": f"Only letters {custom_letter_min}-Z can be deleted as Career c_sleeves."}), 400
 
     with custom_sleeves_lock:
         existing = _load_custom_career_sleeves(context)
@@ -7032,8 +7056,8 @@ def scrape():
     )
     if not requested_career_sleeve:
         return jsonify({"error": "Invalid Career Sleeve letter."}), 400
-    if is_admin_context and requested_career_sleeve not in sleeves.VALID_CAREER_SLEEVES:
-        allowed = ", ".join(sorted(sleeves.VALID_CAREER_SLEEVES))
+    if is_admin_context and requested_career_sleeve not in c_sleeves.VALID_CAREER_SLEEVES:
+        allowed = ", ".join(sorted(c_sleeves.VALID_CAREER_SLEEVES))
         return jsonify({"error": f"Invalid Career Sleeve. Use one of: {allowed}."}), 400
 
     location_mode = MVP_LOCATION_MODE
@@ -7240,7 +7264,7 @@ def scrape():
     ranking_result = rank_and_filter_jobs(
         items,
         target_career_sleeve=scoring_profile_career_sleeve,
-        min_target_score=sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
+        min_target_score=c_sleeves.MIN_PRIMARY_CAREER_SLEEVE_SCORE_TO_SHOW,
         location_mode=location_mode,
         strict_career_sleeve=strict_career_sleeve,
         include_fail=include_fail,

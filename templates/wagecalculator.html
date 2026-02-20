@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wage Calculator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    .wage-shell {
+      max-width: 1080px;
+      margin: 18px auto 28px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .wage-fields {
+      display: grid;
+      gap: 10px;
+      margin: 8px 0 10px;
+    }
+
+    .wage-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .wage-field label {
+      font-weight: 700;
+      color: rgba(var(--black-rgb), 0.7);
+      font-size: 0.9rem;
+    }
+
+    .wage-field input,
+    .wage-field select {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: linear-gradient(140deg, rgba(var(--white-rgb), 0.92), rgba(var(--white-rgb), 0.68));
+      color: var(--ink);
+      width: 100%;
+    }
+
+    .wage-hint {
+      margin: 4px 0 0;
+      color: var(--ink-muted);
+      font-size: 0.86rem;
+    }
+
+    .wage-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .wage-status {
+      margin: 8px 0 0;
+      min-height: 20px;
+      color: var(--ink-muted);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .wage-status.error {
+      color: var(--rubellite);
+      font-weight: 800;
+    }
+
+    .wage-result-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .wage-rate-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .wage-rate-cell {
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(var(--black-rgb), 0.04);
+      font-size: 0.84rem;
+      color: rgba(var(--black-rgb), 0.8);
+    }
+
+    .wage-rate-cell strong {
+      display: block;
+      font-size: 0.78rem;
+      color: rgba(var(--black-rgb), 0.58);
+      margin-bottom: 3px;
+    }
+
+    .wage-note-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--ink-muted);
+      font-size: 0.87rem;
+      display: grid;
+      gap: 4px;
+    }
+
+    @media (max-width: 860px) {
+      .wage-shell .sleeve-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  {% include '_account_nav.html' %}
+  <a href="{{ url_for('index') }}"><h1>Timeline</h1></a>
+
+  <main class="wage-shell">
+    <section class="scrape-toolbar">
+      <p class="toolbar-hint">Wage Calculator converts between payroll, freelance, and expenses scenarios with one consistent assumption set.</p>
+      <p class="toolbar-hint">Tax conversion is not guessed automatically. Use your preferred tax calculator for gross-to-net or net-to-gross steps.</p>
+    </section>
+
+    <section class="sleeve-grid">
+      <article class="sleeve-panel" id="panel-A" style="min-height: 700px; height: auto;">
+        <h3>
+          <span class="sleeve-header-name">Wage Calculator</span>
+          <span class="sleeve-header-code">Scenario Inputs</span>
+        </h3>
+
+        <div class="wage-field">
+          <label for="mode">Calculation scenario</label>
+          <select id="mode">
+            <option value="payroll">Payroll -> Freelance + Expenses</option>
+            <option value="expenses">Expenses -> Payroll + Freelance</option>
+            <option value="freelance">Freelance -> Payroll + Expenses</option>
+          </select>
+        </div>
+
+        <div id="wage-fields" class="wage-fields"></div>
+
+        <p class="wage-hint">
+          External tax converters:
+          <a href="https://www.berekenhet.nl/werk-en-inkomen/nettoloon.html" target="_blank" rel="noopener noreferrer">gross to net</a>
+          and
+          <a href="https://www.berekenhet.nl/werk-en-inkomen/brutoloon.html" target="_blank" rel="noopener noreferrer">net to gross</a>.
+        </p>
+
+        <div class="wage-actions">
+          <button id="calculate-btn" type="button">Calculate</button>
+          <button id="reset-btn" type="button">Reset mode inputs</button>
+        </div>
+        <p id="wage-status" class="wage-status"></p>
+      </article>
+
+      <article class="sleeve-panel" id="panel-B" style="min-height: 700px; height: auto;">
+        <h3>
+          <span class="sleeve-header-name">Converted Results</span>
+          <span class="sleeve-header-code">Payroll + Freelance</span>
+        </h3>
+        <div id="results-wage">
+          <p class="sleeve-tagline">Pick a scenario and click Calculate to populate results.</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const modeSelect = document.getElementById("mode");
+      const fieldsWrap = document.getElementById("wage-fields");
+      const statusNode = document.getElementById("wage-status");
+      const resultsWrap = document.getElementById("results-wage");
+      const calculateBtn = document.getElementById("calculate-btn");
+      const resetBtn = document.getElementById("reset-btn");
+      const endpoint = "{{ url_for('wagecalculator_calculate') }}";
+
+      const modeDefinitions = {
+        payroll: {
+          title: "Payroll -> Freelance + Expenses",
+          fields: [
+            { key: "payroll_gross_yearly", label: "Payroll gross yearly", placeholder: "e.g. 85000" },
+            { key: "payroll_net_yearly", label: "Payroll net yearly", placeholder: "e.g. 52000" },
+            { key: "fringe_benefits_yearly", label: "Fringe benefits yearly", placeholder: "e.g. 10000" },
+            { key: "freelance_net_yearly", label: "Freelance net yearly", placeholder: "e.g. 62000" }
+          ]
+        },
+        expenses: {
+          title: "Expenses -> Payroll + Freelance",
+          fields: [
+            { key: "expenses_daily_budget", label: "Expenses daily budget", placeholder: "e.g. 160" },
+            { key: "payroll_gross_yearly", label: "Payroll gross yearly", placeholder: "e.g. 85000" },
+            { key: "fringe_benefits_yearly", label: "Fringe benefits yearly", placeholder: "e.g. 10000" },
+            { key: "freelance_net_yearly", label: "Freelance net yearly", placeholder: "e.g. 62000" }
+          ]
+        },
+        freelance: {
+          title: "Freelance -> Payroll + Expenses",
+          fields: [
+            { key: "freelance_gross_hourly", label: "Freelance gross hourly", placeholder: "e.g. 80" },
+            { key: "freelance_net_yearly", label: "Freelance net yearly", placeholder: "e.g. 90000" },
+            { key: "fringe_benefits_yearly", label: "Fringe benefits yearly", placeholder: "e.g. 12000" },
+            { key: "payroll_net_yearly", label: "Payroll net yearly", placeholder: "e.g. 61000" }
+          ]
+        }
+      };
+
+      const modeState = {
+        payroll: {},
+        expenses: {},
+        freelance: {}
+      };
+
+      function formatMoney(value) {
+        const parsed = Number(value || 0);
+        return `EUR ${parsed.toFixed(2)}`;
+      }
+
+      function setStatus(text, isError) {
+        statusNode.textContent = text || "";
+        statusNode.classList.toggle("error", Boolean(isError));
+      }
+
+      function captureCurrentModeInputs() {
+        const mode = modeSelect.value;
+        const active = modeDefinitions[mode];
+        if (!active) {
+          return;
+        }
+        const captured = {};
+        active.fields.forEach((field) => {
+          const node = document.querySelector(`[data-field="${field.key}"]`);
+          captured[field.key] = node ? node.value : "";
+        });
+        modeState[mode] = captured;
+      }
+
+      function renderFields(mode) {
+        const active = modeDefinitions[mode];
+        if (!active) {
+          fieldsWrap.innerHTML = "";
+          return;
+        }
+        const current = modeState[mode] || {};
+        fieldsWrap.innerHTML = active.fields.map((field) => `
+          <div class="wage-field">
+            <label for="${field.key}">${field.label} (EUR)</label>
+            <input
+              id="${field.key}"
+              data-field="${field.key}"
+              type="number"
+              step="0.01"
+              min="0"
+              value="${current[field.key] || ""}"
+              placeholder="${field.placeholder}"
+            >
+          </div>
+        `).join("");
+      }
+
+      function renderRateGrid(label, rates) {
+        return `
+          <p class="job-company"><strong>${label}</strong></p>
+          <div class="wage-rate-grid">
+            <div class="wage-rate-cell"><strong>Yearly</strong>${formatMoney(rates.yearly)}</div>
+            <div class="wage-rate-cell"><strong>Monthly</strong>${formatMoney(rates.monthly)}</div>
+            <div class="wage-rate-cell"><strong>Hourly</strong>${formatMoney(rates.hourly)}</div>
+          </div>
+        `;
+      }
+
+      function renderRateSection(title, grossRates, netRates, dailyBudget) {
+        return `
+          <article class="job-card">
+            <h3>${title}</h3>
+            ${renderRateGrid("Gross", grossRates)}
+            ${renderRateGrid("Net", netRates)}
+            <p class="job-meta">Expenses daily budget: ${formatMoney(dailyBudget)}</p>
+          </article>
+        `;
+      }
+
+      function renderResult(result) {
+        const notes = (result.notes || []).map((note) => `<li>${note}</li>`).join("");
+        resultsWrap.innerHTML = `
+          <div class="wage-result-grid">
+            ${renderRateSection("Payroll", result.payroll.gross, result.payroll.net, result.payroll.expenses_daily_budget)}
+            ${renderRateSection("Freelance", result.freelance.gross, result.freelance.net, result.freelance.expenses_daily_budget)}
+            <article class="job-card">
+              <h3>Assumptions</h3>
+              <p class="job-company">Work hours/year: ${result.constants.yearly_work_hours}, days/year: ${result.constants.yearly_days}, months/year: ${result.constants.yearly_months}</p>
+              <ul class="wage-note-list">${notes}</ul>
+            </article>
+          </div>
+        `;
+      }
+
+      async function calculate() {
+        captureCurrentModeInputs();
+        const mode = modeSelect.value;
+        const payload = {
+          mode,
+          inputs: modeState[mode] || {}
+        };
+        setStatus("Calculating...", false);
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            setStatus(data.error || "Calculation failed.", true);
+            return;
+          }
+          renderResult(data.result || {});
+          setStatus("Calculation complete.", false);
+        } catch (_error) {
+          setStatus("Request failed. Try again.", true);
+        }
+      }
+
+      modeSelect.addEventListener("change", () => {
+        captureCurrentModeInputs();
+        renderFields(modeSelect.value);
+        setStatus("", false);
+      });
+
+      calculateBtn.addEventListener("click", calculate);
+      resetBtn.addEventListener("click", () => {
+        const mode = modeSelect.value;
+        modeState[mode] = {};
+        renderFields(mode);
+        setStatus("Mode inputs reset.", false);
+      });
+
+      renderFields(modeSelect.value);
+    })();
+  </script>
+</body>
+
+</html>

@@ -51,9 +51,11 @@
 <nav class="global-account-nav" aria-label="Account navigation">
   {% if auth_user %}
     <span class="global-account-nav-user">{{ auth_user.full_name or auth_user.email }}</span>
+    <a href="{{ url_for('show_wagecalculator') }}">Wage calculator</a>
     <a href="{{ url_for('auth_account') }}">Account settings</a>
     <a href="{{ url_for('auth_logout') }}">Log out</a>
   {% else %}
+    <a href="{{ url_for('show_wagecalculator') }}">Wage calculator</a>
     <a href="{{ url_for('auth_login') }}">Log in</a>
     <a href="{{ url_for('auth_register') }}">Create account</a>
   {% endif %}

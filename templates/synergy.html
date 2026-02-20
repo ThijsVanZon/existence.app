@@ -94,7 +94,7 @@
     .synergy-dialog::backdrop { background: rgba(var(--black-rgb), 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
     .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .synergy-dialog-header h3 { margin: 0; font-size: 1.05rem; }
-    .synergy-dialog-list { display: grid; gap: 10px; max-height: 56vh; overflow-y: auto; padding-right: 2px; }
+    .synergy-dialog-list { display: grid; gap: 10px; max-height: none; overflow: visible; padding-right: 0; }
     .synergy-dialog-search {
       width: 100%;
       border: none;
@@ -393,6 +393,7 @@
     }
     .synergy-dialog-close-trigger {
       margin-left: auto;
+      flex: 0 0 auto;
       background: rgba(var(--rubellite-rgb), 0.9);
       color: rgba(var(--white-rgb), 0.98);
       font-size: 1.18rem;
@@ -429,11 +430,36 @@
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }
+    .synergy-dialog-page-mode {
+      position: static;
+      inset: auto;
+      margin: 10px auto 18px;
+      max-width: min(680px, calc(100vw - 18px));
+      width: calc(100vw - 18px);
+      overflow: visible;
+    }
+    .synergy-dialog-page-mode .synergy-dialog-list { max-height: none; overflow: visible; padding-right: 0; }
     @media (max-width: 720px) {
       .synergy-editor-grid { grid-template-columns: 1fr; }
       .synergy-shell { margin-top: 12px; }
       .synergy-location-grid,
       .synergy-location-range { grid-template-columns: 1fr; }
+      .synergy-dialog {
+        width: calc(100vw - 12px);
+        border-radius: 14px;
+        padding: 12px;
+      }
+      .synergy-dialog-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: rgba(var(--white-rgb), 0.95);
+        padding-bottom: 6px;
+      }
+      .synergy-dialog-search {
+        width: auto;
+      }
+      .synergy-dialog-list { max-height: none; overflow: visible; padding-right: 0; }
     }
   </style>
 </head>
@@ -862,10 +888,21 @@
         if (els.loadDialogSearch) {
           els.loadDialogSearch.value = "";
         }
+        if (els.loadDialog.hasAttribute("open")) {
+          if (typeof els.loadDialog.close === "function") {
+            els.loadDialog.close();
+          } else {
+            els.loadDialog.removeAttribute("open");
+          }
+        }
         resetDialogEditor("add", null, false);
         renderLoadDialogList();
-        if (typeof els.loadDialog.showModal === "function") {
-          els.loadDialog.showModal();
+        els.loadDialog.classList.add("synergy-dialog-page-mode");
+        if (typeof els.loadDialog.show === "function") {
+          els.loadDialog.show();
+          setTimeout(() => {
+            els.loadDialog.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 20);
         } else {
           els.loadDialog.setAttribute("open", "open");
         }
@@ -876,7 +913,8 @@
 
       function closeHeaderEditor() {
         setDialogEditorVisible(false);
-        if (typeof els.loadDialog.close === "function") {
+        els.loadDialog.classList.remove("synergy-dialog-page-mode");
+        if (typeof els.loadDialog.close === "function" && els.loadDialog.hasAttribute("open")) {
           els.loadDialog.close();
         } else {
           els.loadDialog.removeAttribute("open");
