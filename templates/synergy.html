@@ -87,11 +87,34 @@
       justify-content: flex-start;
     }
     .synergy-dialog {
-      border: none; border-radius: 20px; padding: 15px; width: min(680px, calc(100vw - 28px));
+      border: none; border-radius: 20px; padding: 15px; width: min(680px, calc(100vw - 48px));
       background: rgba(var(--white-rgb), 0.92);
       box-shadow: 0 20px 44px rgba(var(--black-rgb), 0.24);
     }
     .synergy-dialog::backdrop { background: rgba(var(--black-rgb), 0.3); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .synergy-dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1090;
+      background: rgba(var(--black-rgb), 0.24);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.14s ease;
+    }
+    .synergy-dialog-backdrop.is-visible {
+      opacity: 1;
+    }
+    .synergy-dialog-layer-open {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      margin: 0;
+      z-index: 1100;
+      width: min(680px, calc(100vw - 48px));
+      max-width: min(680px, calc(100vw - 48px));
+    }
     .synergy-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .synergy-dialog-header h3 { margin: 0; font-size: 1.05rem; }
     .synergy-dialog-list { display: grid; gap: 10px; max-height: none; overflow: visible; padding-right: 0; }
@@ -430,15 +453,6 @@
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }
-    .synergy-dialog-page-mode {
-      position: static;
-      inset: auto;
-      margin: 10px auto 18px;
-      max-width: min(680px, calc(100vw - 18px));
-      width: calc(100vw - 18px);
-      overflow: visible;
-    }
-    .synergy-dialog-page-mode .synergy-dialog-list { max-height: none; overflow: visible; padding-right: 0; }
     @media (max-width: 720px) {
       .synergy-editor-grid { grid-template-columns: 1fr; }
       .synergy-shell { margin-top: 12px; }
@@ -460,6 +474,10 @@
         width: auto;
       }
       .synergy-dialog-list { max-height: none; overflow: visible; padding-right: 0; }
+      .synergy-dialog-layer-open {
+        width: calc(100vw - 32px);
+        max-width: calc(100vw - 32px);
+      }
     }
   </style>
 </head>
@@ -502,6 +520,7 @@
     </section>
   </main>
 
+  <div id="loadDialogBackdrop" class="synergy-dialog-backdrop" aria-hidden="true"></div>
   <dialog id="loadDialog" class="synergy-dialog">
     <div class="synergy-dialog-header">
       <input id="loadDialogSearch" class="synergy-dialog-search" type="text" autocomplete="off" placeholder="Search by letter or title...">
@@ -585,6 +604,7 @@
         resultList: document.getElementById("resultList"),
         headerName: document.getElementById("headerName"),
         headerCode: document.getElementById("headerCode"),
+        loadDialogBackdrop: document.getElementById("loadDialogBackdrop"),
         loadDialog: document.getElementById("loadDialog"),
         loadDialogList: document.getElementById("loadDialogList"),
         loadDialogSearch: document.getElementById("loadDialogSearch"),
@@ -888,6 +908,11 @@
         if (els.loadDialogSearch) {
           els.loadDialogSearch.value = "";
         }
+        els.loadDialog.classList.remove("synergy-dialog-layer-open");
+        els.loadDialog.style.top = "";
+        if (els.loadDialogBackdrop) {
+          els.loadDialogBackdrop.classList.remove("is-visible");
+        }
         if (els.loadDialog.hasAttribute("open")) {
           if (typeof els.loadDialog.close === "function") {
             els.loadDialog.close();
@@ -897,7 +922,11 @@
         }
         resetDialogEditor("add", null, false);
         renderLoadDialogList();
-        els.loadDialog.classList.add("synergy-dialog-page-mode");
+        els.loadDialog.classList.add("synergy-dialog-layer-open");
+        els.loadDialog.style.top = `${Math.max(window.scrollY + 12, 12)}px`;
+        if (els.loadDialogBackdrop) {
+          els.loadDialogBackdrop.classList.add("is-visible");
+        }
         if (typeof els.loadDialog.show === "function") {
           els.loadDialog.show();
           setTimeout(() => {
@@ -913,7 +942,11 @@
 
       function closeHeaderEditor() {
         setDialogEditorVisible(false);
-        els.loadDialog.classList.remove("synergy-dialog-page-mode");
+        els.loadDialog.classList.remove("synergy-dialog-layer-open");
+        els.loadDialog.style.top = "";
+        if (els.loadDialogBackdrop) {
+          els.loadDialogBackdrop.classList.remove("is-visible");
+        }
         if (typeof els.loadDialog.close === "function" && els.loadDialog.hasAttribute("open")) {
           els.loadDialog.close();
         } else {
